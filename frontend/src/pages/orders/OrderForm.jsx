@@ -1,94 +1,182 @@
-import { useState } from 'react'
+// Buyurtma hujjati — MoySklad "Заказ покупателя" uslubida
+import { useEffect, useState } from 'react'
 import api, { errorText } from '../../api'
 import { CustomFieldInputs, useCustomFields } from '../../components/CustomFields'
-import { Field, Modal, useForm } from '../../components/ui'
-import { todayISO } from '../../format'
+import { cleanNum, DocField, DocFooter, DocPage, DocTitle, newKey, Positions, useLinesTotal } from '../../components/DocEditor'
+import Icon from '../../components/Icon'
+import { Badge, toast, useFetch } from '../../components/ui'
+import { money, todayISO } from '../../format'
 import { t } from '../../i18n'
 
-export default function OrderForm({ refs, order, fields: fieldsProp, onClose, onSaved }) {
+const toLines = (items) => (items || []).map((i) => ({
+  key: newKey(), product: i.product, name: i.name, code: i.product_code || '', unit: i.unit, qty: cleanNum(i.qty),
+  price: cleanNum(i.price), discount_pct: cleanNum(i.discount_pct), stock: null,
+}))
+
+export default function OrderForm({ refs, order: initial, fields: fieldsProp, onClose, onSaved }) {
   const loaded = useCustomFields(fieldsProp ? null : 'order')
   const fields = fieldsProp || loaded
-  const { values, bind, setValues } = useForm(
-    order || { date: todayISO(), currency: 'UZS', amount: '', volume: '0', plan_date: '', production_date: '', client: '', note: '', extra: {} },
-  )
-  const [newClient, setNewClient] = useState('')
+  const priceTypes = useFetch('/warehouse/price-types/')
+  const [order, setOrder] = useState(initial || null)
+  const [v, setV] = useState(() => ({
+    date: todayISO(), currency: 'UZS', amount: '', volume: '0', plan_date: '', production_date: '', client: '',
+    manager: '', operator: '', note: '', extra: {}, ...(initial || {}),
+  }))
+  const [lines, setLines] = useState(() => toLines(initial?.items))
+  const [newClient, setNewClient] = useState(null) // null — tanlash rejimi
+  const [showMore, setShowMore] = useState(false)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const total = useLinesTotal(lines)
 
-  const submit = async (e) => {
-    e.preventDefault()
+  const set = (k) => (e) => { setV((s) => ({ ...s, [k]: e.target.value })); setDirty(true) }
+  const setL = (fn) => { setLines(fn); setDirty(true) }
+
+  // tovar narxi: mijozning narx turi → valyutasi mos standart narx turi
+  const client = refs.clients.find((c) => String(c.id) === String(v.client))
+  const pts = priceTypes.data || []
+  const pt = pts.find((p) => p.id === client?.price_type && p.currency === v.currency)
+    || pts.find((p) => p.is_default && p.currency === v.currency) || pts.find((p) => p.currency === v.currency)
+  const priceOf = (p) => (pt ? p.prices?.[pt.id] ?? '' : '')
+
+  useEffect(() => {
+    if (!dirty) return undefined
+    const h = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', h)
+    return () => window.removeEventListener('beforeunload', h)
+  }, [dirty])
+
+  const save = async (close) => {
     setBusy(true)
     setError(null)
     try {
-      let client = values.client
-      if (!client && newClient.trim()) {
-        const { data } = await api.post('/crm/counterparties/', { name: newClient.trim(), is_client: true })
-        client = data.id
+      let clientId = v.client
+      if (!clientId && newClient?.trim()) {
+        const { data } = await api.post('/crm/counterparties/', { name: newClient.trim() })
+        clientId = data.id
         refs.reloadClients?.()
       }
-      const payload = { ...values, client, production_date: values.production_date || null, operator: values.operator || null, manager: values.manager || null }
+      const items = lines.filter((l) => l.product || l.name?.trim()).map((l) => ({
+        product: l.product || null, name: l.name || '', qty: l.qty || 0, price: l.price || 0, discount_pct: l.discount_pct || 0,
+      }))
+      const payload = {
+        ...v, client: clientId, items, production_date: v.production_date || null, operator: v.operator || null,
+        manager: v.manager || null, amount: items.length ? undefined : v.amount,
+      }
+      delete payload.items_count
       const { data } = order ? await api.patch(`/orders/${order.id}/`, payload) : await api.post('/orders/', payload)
-      onSaved(data)
+      setOrder(data)
+      setV((s) => ({ ...s, ...data, client: data.client }))
+      setNewClient(null)
+      setDirty(false)
+      setSaved(true)
+      toast(t('Saqlandi'))
+      if (close) onSaved(data)
     } catch (err) {
       setError(errorText(err))
     } finally {
       setBusy(false)
     }
   }
-
-  const operators = refs.users
-  const managers = refs.users
+  const close = () => {
+    if (dirty && !window.confirm(t("Saqlanmagan o'zgarishlar bor. Yopilsinmi?"))) return
+    if (saved) onSaved(order)
+    else onClose()
+  }
+  const canSave = !busy && (v.client || newClient?.trim()) && v.plan_date
 
   return (
-    <Modal title={order ? `Buyurtma ${order.number}` : 'Yangi buyurtma'} onClose={onClose}>
+    <DocPage
+      onClose={close}
+      toolbar={<>
+        <button type="button" className="btn primary" disabled={!canSave} onClick={() => save(false)}><Icon name="save" size={16} /> {busy ? t('Saqlanmoqda…') : t('Saqlash')}</button>
+        <button type="button" className="btn" disabled={!canSave} onClick={() => save(true)}>{t('Saqlash va yopish')}</button>
+        <button type="button" className="btn" onClick={close}>{t('Yopish')}</button>
+        <span className="grow" />
+        {dirty && <span className="small muted">{t("Saqlanmagan o'zgarishlar")}</span>}
+      </>}
+    >
+      <DocTitle label="Buyurtma" number={order?.number} date={v.date} onDate={(d) => { setV((s) => ({ ...s, date: d })); setDirty(true) }}>
+        {order && <Badge kind={order.status}>{order.status_display}</Badge>}
+      </DocTitle>
       {error && <div className="error">{error}</div>}
-      <form className="form" onSubmit={submit}>
-        <Field label={t("Mijoz")} full>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <select {...bind('client')} style={{ flex: 1 }}>
-              <option value="">{t("— tanlang —")}</option>
-              {refs.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            {!values.client && (
-              <input placeholder={t("yoki yangi mijoz nomi")} value={newClient} onChange={(e) => setNewClient(e.target.value)} style={{ flex: 1 }} />
+
+      <div className="doc-grid">
+        <div>
+          <DocField label="Mijoz" required>
+            {newClient === null ? (
+              <div className="inline-pick">
+                <select value={v.client || ''} onChange={set('client')}>
+                  <option value="">{t('— tanlang —')}</option>
+                  {refs.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <button type="button" className="icon-act" title={t('Yangi kontragent')} onClick={() => { setV((s) => ({ ...s, client: '' })); setNewClient('') }}><Icon name="plus" size={18} /></button>
+              </div>
+            ) : (
+              <div className="inline-pick">
+                <input autoFocus placeholder={t('Yangi mijoz nomi')} value={newClient} onChange={(e) => { setNewClient(e.target.value); setDirty(true) }} />
+                <button type="button" className="icon-act" title={t("Ro'yxatdan tanlash")} onClick={() => setNewClient(null)}><Icon name="close" size={16} /></button>
+              </div>
             )}
-          </div>
-        </Field>
-        <Field label={t("Sana")}><input type="date" {...bind('date')} required /></Field>
-        <Field label={t("Valyuta")}>
-          <select {...bind('currency')} disabled={!!order}>
-            <option value="UZS">{t("so'm")}</option>
-            <option value="USD">USD</option>
-          </select>
-        </Field>
-        <Field label={`Summa (${values.currency === 'USD' ? 'USD' : "so'm"})`}>
-          <input type="number" step="0.01" min="0" {...bind('amount')} required />
-        </Field>
-        <Field label={t("Hajm, m² (yuklama uchun)")}><input type="number" step="0.001" min="0" {...bind('volume')} /></Field>
-        <Field label={t("Mijozga topshirish muddati (reja sana)")}><input type="date" {...bind('plan_date')} required /></Field>
-        <Field label={t("Ishlab chiqarish kuni (kalendar)")}><input type="date" {...bind('production_date')} /></Field>
-        <Field label={t("Menejer")}>
-          <select {...bind('manager')}>
-            <option value="">{t("— men —")}</option>
-            {managers.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-          </select>
-        </Field>
-        <Field label={t("Operator")}>
-          <select {...bind('operator')}>
-            <option value="">—</option>
-            {operators.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-          </select>
-        </Field>
-        <Field label={t("Izoh")} full><textarea rows={2} {...bind('note')} /></Field>
-        {fields.length > 0 && <div className="full section-title">{t("Qo'shimcha maydonlar")}</div>}
-        <CustomFieldInputs fields={fields} values={values.extra || {}} onChange={(extra) => setValues((v) => ({ ...v, extra }))} users={refs.users} />
-        <div className="full form-actions">
-          <button type="button" className="btn ghost" onClick={onClose}>{t("Bekor")}</button>
-          <button className="btn primary" disabled={busy || (!values.client && !newClient.trim())}>
-            {busy ? 'Saqlanmoqda…' : 'Saqlash'}
-          </button>
+          </DocField>
+          <DocField label="Menejer">
+            <select value={v.manager || ''} onChange={set('manager')}>
+              <option value="">{t('— men —')}</option>
+              {refs.users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </DocField>
+          <DocField label="Operator">
+            <select value={v.operator || ''} onChange={set('operator')}>
+              <option value="">—</option>
+              {refs.users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </DocField>
         </div>
-      </form>
-    </Modal>
+        <div>
+          <DocField label="Topshirish muddati" required><input type="date" value={v.plan_date || ''} onChange={set('plan_date')} /></DocField>
+          <DocField label="Ishlab chiqarish kuni"><input type="date" value={v.production_date || ''} onChange={set('production_date')} /></DocField>
+          <DocField label="Hajm, m²"><input type="number" step="0.001" min="0" value={v.volume ?? ''} onChange={set('volume')} /></DocField>
+        </div>
+        <div>
+          <DocField label="Valyuta" required>
+            <select value={v.currency} onChange={set('currency')} disabled={!!order}>
+              <option value="UZS">{t("so'm")} (UZS)</option>
+              <option value="USD">{t('dollar')} (USD)</option>
+            </select>
+          </DocField>
+          <DocField label="Narx turi"><input value={pt ? `${pt.name}` : '—'} readOnly className="muted-input" title={t("Mijozning narx turi yoki standart narx turi")} /></DocField>
+        </div>
+      </div>
+
+      {fields.length > 0 && (
+        <div className="doc-more">
+          <button type="button" className="link-btn" onClick={() => setShowMore((s) => !s)}>
+            <Icon name={showMore ? 'chevron' : 'chevron-right'} size={15} /> {t('Boshqa maydonlar')} <span className="muted">({fields.length})</span>
+          </button>
+          {showMore && (
+            <div className="form three" style={{ marginTop: 10 }}>
+              <CustomFieldInputs fields={fields} values={v.extra || {}} onChange={(extra) => { setV((s) => ({ ...s, extra })); setDirty(true) }} users={refs.users} />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="doc-tabs"><span className="active">{t('Pozitsiyalar')}</span></div>
+      <Positions lines={lines} setLines={setL} currency={v.currency} priceOf={priceOf} searchParams={{ for_sale: 1 }} />
+
+      <DocFooter
+        comment={v.note}
+        onComment={(note) => { setV((s) => ({ ...s, note })); setDirty(true) }}
+        rows={lines.length ? [
+          ['Pozitsiyalar', lines.length],
+          ['Jami', money(total, v.currency), true],
+        ] : [
+          ['Summa (pozitsiyasiz)', <input key="a" className="cell num" style={{ width: 160 }} inputMode="decimal" value={v.amount ?? ''} onChange={set('amount')} placeholder="0" />],
+          ['Jami', money(v.amount || 0, v.currency), true],
+        ]}
+      />
+    </DocPage>
   )
 }

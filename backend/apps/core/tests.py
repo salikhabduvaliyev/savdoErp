@@ -254,6 +254,30 @@ class ApiTests(TestCase):
         self.assertEqual(self.api.patch(f"/api/crm/counterparties/{cp.id}/", {"name": "X"}).status_code, 403)
         self.assertEqual(self.api.delete(f"/api/crm/counterparties/{cp.id}/").status_code, 403)
 
+    def test_order_positions(self):
+        """Buyurtma pozitsiyalari: summa = pozitsiyalar yig'indisi (chegirma bilan)."""
+        from apps.warehouse.models import Material
+
+        with tenant_context(self.c1):
+            cp = Counterparty.objects.get()
+            prod = Material.objects.create(name="Rom 1200x1400", type="product", unit="pcs")
+        set_context(None, None)
+        self.api.force_authenticate(self.owner1)
+        payload = {"client": cp.id, "currency": "UZS", "plan_date": "2026-12-01", "items": [
+            {"product": prod.id, "qty": "2", "price": "1000000", "discount_pct": "10"},
+            {"name": "O'rnatish", "qty": "1", "price": "200000"},
+        ]}
+        r = self.api.post("/api/orders/", payload, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        o = r.json()
+        self.assertEqual(D(o["amount"]), D("2000000"))
+        self.assertEqual(o["items"][0]["name"], "Rom 1200x1400")
+        r = self.api.patch(f"/api/orders/{o['id']}/", {"items": [{"name": "X", "qty": "3", "price": "5"}]}, format="json")
+        self.assertEqual(D(r.json()["amount"]), D("15"))
+        # pozitsiyasiz va summasiz — xato
+        bad = self.api.post("/api/orders/", {"client": cp.id, "currency": "UZS", "plan_date": "2026-12-01"}, format="json")
+        self.assertEqual(bad.status_code, 400)
+
     def test_expired_subscription_blocks(self):
         Company.objects.filter(pk=self.c1.pk).update(trial_ends=T - timedelta(days=1))
         self.owner1.refresh_from_db()

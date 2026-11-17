@@ -6,6 +6,7 @@ import { Badge, Loading, Progress, Stat, toast, useFetch } from '../../component
 import { date, money, qty } from '../../format'
 import PaymentForm from '../finance/TransactionForm'
 import Estimate from './Estimate'
+import { Positions } from '../../components/DocEditor'
 import OrderForm from './OrderForm'
 import { STATUSES } from './OrderList'
 import { useRefs } from './OrdersPage'
@@ -84,11 +85,15 @@ export default function OrderDetail() {
       </div>
 
       <div className="tabs">
-        {[['estimate', tr("Smeta (tannarx)")], ['tasks', tr("Ishlab chiqarish")], ['payments', tr("To'lovlar va xarajatlar")], ['materials', tr("Material")]].map(([k, l]) => (
+        {[['items', tr("Pozitsiyalar") + (o.items?.length ? ` (${o.items.length})` : '')], ['estimate', tr("Smeta (tannarx)")], ['tasks', tr("Ishlab chiqarish")], ['payments', tr("To'lovlar va xarajatlar")], ['materials', tr("Material")]].map(([k, l]) => (
           <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
 
+      {tab === 'items' && (o.items?.length ? (
+        <Positions readOnly showStock={false} currency={o.currency} setLines={() => {}}
+          lines={o.items.map((i) => ({ key: i.id, product: i.product, name: i.name, code: i.product_code || '', unit: i.unit, qty: i.qty, price: i.price, discount_pct: i.discount_pct }))} />
+      ) : <div className="card empty">{tr("Pozitsiyalar yo'q — buyurtma umumiy summa bilan kiritilgan.")} <button className="link-btn" onClick={() => setEdit(true)}>{tr("Pozitsiya qo'shish")}</button></div>)}
       {tab === 'estimate' && <Estimate key={stamp} order={o} onChanged={refresh} />}
 
       {tab === 'tasks' && (

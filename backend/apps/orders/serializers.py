@@ -1,10 +1,30 @@
 from decimal import Decimal
 
+from django.db import transaction
 from rest_framework import serializers
 
 from apps.core.money import q2
 
-from .models import Estimate, EstimateMaterial, EstimateService, Order
+from .models import Estimate, EstimateMaterial, EstimateService, Order, OrderItem
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product_code = serializers.CharField(source="product.sku", read_only=True, default=None)
+
+    class Meta:
+        model = OrderItem
+        fields = ["id", "product", "product_code", "name", "unit", "qty", "price", "discount_pct", "amount"]
+        read_only_fields = ["amount"]
+        extra_kwargs = {"name": {"required": False, "allow_blank": True}, "unit": {"required": False}}
+
+    def validate(self, attrs):
+        if attrs.get("qty") is not None and attrs["qty"] <= 0:
+            raise serializers.ValidationError({"qty": "Miqdor musbat bo'lishi kerak"})
+        if attrs.get("price") is not None and attrs["price"] < 0:
+            raise serializers.ValidationError({"price": "Narx manfiy bo'lmaydi"})
+        if attrs.get("product") is None and not attrs.get("name"):
+            raise serializers.ValidationError({"name": "Qatorda tovar yoki nom bo'lishi kerak"})
+        return attrs
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -28,8 +48,46 @@ class OrderSerializer(serializers.ModelSerializer):
             "paid", "debt", "status", "status_display", "stage", "progress",
             "plan_date", "production_date", "delivered_at", "is_overdue", "overdue_days",
             "manager", "manager_name", "operator", "operator_name", "note", "is_sold", "branch", "branch_name", "extra",
+            "items",
         ]
         read_only_fields = ["number", "delivered_at"]
+        extra_kwargs = {"amount": {"required": False}}
+
+    items = OrderItemSerializer(many=True, required=False)
+
+    def validate(self, attrs):
+        items = attrs.get("items")
+        has_items = bool(items) if items is not None else bool(self.instance and self.instance.items.exists())
+        if not has_items:
+            amount = attrs.get("amount", getattr(self.instance, "amount", None))
+            if amount is None or amount <= 0:
+                raise serializers.ValidationError({"amount": "Pozitsiya qo'shing yoki summani kiriting"})
+        return attrs
+
+    def _write_items(self, order, items):
+        order.items.all().delete()
+        for pos, it in enumerate(items):
+            OrderItem.objects.create(order=order, position=pos, **it)
+        if items:
+            order.amount = sum((i.amount for i in order.items.all()), Decimal("0"))
+            order.save(update_fields=["amount", "updated_at"])
+
+    @transaction.atomic
+    def create(self, validated):
+        items = validated.pop("items", None) or []
+        if items and not validated.get("amount"):
+            validated["amount"] = Decimal("0")
+        order = super().create(validated)
+        self._write_items(order, items)
+        return order
+
+    @transaction.atomic
+    def update(self, instance, validated):
+        items = validated.pop("items", None)
+        order = super().update(instance, validated)
+        if items is not None:
+            self._write_items(order, items)
+        return order
 
     def get_paid(self, obj):
         return str(q2(obj.paid))
@@ -46,8 +104,8 @@ class OrderSerializer(serializers.ModelSerializer):
         return clean_extra("order", v, partial=self.partial, existing=getattr(self.instance, "extra", None))
 
     def validate_amount(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Summa musbat bo'lishi kerak")
+        if value < 0:
+            raise serializers.ValidationError("Summa manfiy bo'lmaydi")
         return value
 
 

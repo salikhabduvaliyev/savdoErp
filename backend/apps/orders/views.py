@@ -75,7 +75,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     module = "orders"
 
     def get_queryset(self):
-        qs = Order.objects.select_related("client", "manager", "operator", "branch").prefetch_related("tasks__department")
+        qs = Order.objects.select_related("client", "manager", "operator", "branch").prefetch_related("tasks__department", "items__product")
         bid = current_branch_id()
         if bid:
             qs = qs.filter(branch_id=bid)

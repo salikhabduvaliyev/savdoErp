@@ -1,0 +1,244 @@
+// MoySklad uslubidagi hujjat tahrirlovchisi: tepada amallar, rekvizitlar, pozitsiyalar, pastda jami.
+import { useEffect, useMemo, useRef, useState } from 'react'
+import api from '../api'
+import { money, qty as fmtQty } from '../format'
+import { t } from '../i18n'
+import Icon, { IconBtn } from './Icon'
+import { FullPage, Modal } from './ui'
+
+let keySeq = 0
+export const newKey = () => `k${++keySeq}`
+/** "1650000.00" → "1650000" (tahrirlash uchun qulay) */
+export const cleanNum = (v) => (v === '' || v === null || v === undefined ? '' : String(Number(v)))
+
+export function lineAmount(l) {
+  const a = Number(l.qty || 0) * Number(l.price || 0) * (1 - Number(l.discount_pct || 0) / 100)
+  return Math.round(a * 100) / 100
+}
+
+/** Hujjat sahifasi: to'liq kenglik, tepada asboblar paneli (Saqlash · Yopish · ...). */
+export function DocPage({ onClose, toolbar, children }) {
+  return (
+    <FullPage onClose={onClose} bare wide>
+      <div className="doc-toolbar">{toolbar}</div>
+      {children}
+    </FullPage>
+  )
+}
+
+/** "Buyurtma № [  ] dan [sana]" sarlavhasi */
+export function DocTitle({ label, number, date, onDate, children }) {
+  return (
+    <div className="doc-titlebar">
+      <h1>{t(label)} №</h1>
+      <input className="doc-num" value={number ?? ''} readOnly placeholder={t('avto')} title={t('Raqam saqlanganda beriladi')} />
+      <span className="doc-from">{t('dan')}</span>
+      <input type="date" className="doc-date" value={date || ''} onChange={(e) => onDate?.(e.target.value)} disabled={!onDate} />
+      {children}
+    </div>
+  )
+}
+
+/** Rekvizit qatori: chapda nom, o'ngda maydon (MoySklad formasi) */
+export function DocField({ label, required, children, wide }) {
+  return (
+    <div className={'doc-field' + (wide ? ' wide' : '')}>
+      <label>{required && <span className="req">*</span>}{t(label)}</label>
+      <div className="doc-field-input">{children}</div>
+    </div>
+  )
+}
+
+/** Tovarni nomi/kodi/shtrix-kodi bo'yicha qidirib qo'shish (jadval ostidagi qator). */
+export function ProductSearch({ onPick, onFree, params, disabled }) {
+  const [q, setQ] = useState('')
+  const [items, setItems] = useState([])
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const box = useRef(null)
+
+  useEffect(() => {
+    if (!q.trim()) { setItems([]); return undefined }
+    let alive = true
+    const h = setTimeout(async () => {
+      try {
+        const { data } = await api.get('/warehouse/products/', { params: { search: q.trim(), is_active: true, ...params } })
+        if (alive) { setItems((data.results || data).slice(0, 15)); setActive(0); setOpen(true) }
+      } catch { /* qidiruv xatosi — e'tiborsiz */ }
+    }, 220)
+    return () => { alive = false; clearTimeout(h) }
+  }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const h = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  const pick = (p) => { onPick(p); setQ(''); setItems([]); setOpen(false) }
+  const free = () => { if (q.trim() && onFree) { onFree(q.trim()); setQ(''); setOpen(false) } }
+  const onKey = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, items.length - (onFree ? 0 : 1))) }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)) }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (items[active]) pick(items[active])
+      else free()
+    }
+    if (e.key === 'Escape') { e.stopPropagation(); setOpen(false) }
+  }
+
+  return (
+    <div className="psearch" ref={box}>
+      <Icon name="search" size={16} className="psearch-ic" />
+      <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} onFocus={() => items.length && setOpen(true)}
+        placeholder={t("Pozitsiya qo'shish: nomi, kodi yoki shtrix-kodi…")} disabled={disabled} />
+      {open && q.trim() && (
+        <div className="psearch-list">
+          {items.map((p, i) => (
+            <button type="button" key={p.id} className={'psearch-item' + (i === active ? ' active' : '')} onMouseEnter={() => setActive(i)} onClick={() => pick(p)}>
+              <span className="code">{p.sku || '—'}</span>
+              <span className="name">{p.name}<small>{t(p.type_display)}</small></span>
+              <span className="stock">{p.stock_qty !== null && p.stock_qty !== undefined ? `${fmtQty(p.stock_qty)} ${t(p.unit_display || '')}` : ''}</span>
+            </button>
+          ))}
+          {!items.length && <div className="psearch-empty">{t('Topilmadi')}</div>}
+          {onFree && (
+            <button type="button" className={'psearch-item free' + (active === items.length ? ' active' : '')} onClick={free}>
+              <Icon name="plus" size={15} /> {t('«{q}» nomli qator qo\'shish', { q: q.trim() })}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Ma'lumotnomadan tanlash oynasi */
+function ProductPicker({ onPick, onClose, params }) {
+  const [q, setQ] = useState('')
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    let alive = true
+    const h = setTimeout(async () => {
+      const { data } = await api.get('/warehouse/products/', { params: { search: q || undefined, is_active: true, ...params } })
+      if (alive) setRows(data.results || data)
+    }, 200)
+    return () => { alive = false; clearTimeout(h) }
+  }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <Modal title="Ma'lumotnomadan tanlash" onClose={onClose} wide dialog>
+      <input autoFocus className="input" placeholder={t('Qidirish…')} value={q} onChange={(e) => setQ(e.target.value)} style={{ width: '100%', marginBottom: 10 }} />
+      <div className="table-wrap" style={{ maxHeight: '55vh', overflow: 'auto' }}>
+        <table className="t compact">
+          <thead><tr><th>{t('Kod')}</th><th>{t('Nomi')}</th><th>{t('Turi')}</th><th className="num">{t('Qoldiq')}</th><th /></tr></thead>
+          <tbody>
+            {(rows || []).map((p) => (
+              <tr key={p.id} className="clickable" onClick={() => onPick(p)}>
+                <td className="muted">{p.sku || '—'}</td><td className="bold">{p.name}</td><td className="small">{t(p.type_display)}</td>
+                <td className="num">{p.stock_qty !== null ? `${fmtQty(p.stock_qty)} ${t(p.unit_display)}` : '—'}</td>
+                <td className="num"><Icon name="plus" size={16} /></td>
+              </tr>
+            ))}
+            {rows && !rows.length && <tr><td colSpan={5} className="empty">{t('Topilmadi')}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">{t("Qatorni bosing — pozitsiya qo'shiladi. Oynani yopmasdan bir nechtasini tanlash mumkin.")}</p>
+    </Modal>
+  )
+}
+
+/**
+ * Pozitsiyalar jadvali (MoySklad: "Позиции").
+ * lines: [{ key, product, name, code, unit, qty, price, discount_pct, stock }]
+ */
+export function Positions({ lines, setLines, currency, priceOf, readOnly, showStock = true, allowFree = true, extraRows, searchParams }) {
+  const [picker, setPicker] = useState(false)
+  const set = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)))
+  const add = (p) => {
+    setLines((ls) => {
+      const same = ls.find((l) => l.product && String(l.product) === String(p.id))
+      if (same) return ls.map((l) => (l === same ? { ...l, qty: String(Number(l.qty || 0) + 1) } : l))
+      return [...ls, {
+        key: newKey(), product: p.id, name: p.name, code: p.sku || '', unit: p.unit_display || '', qty: '1',
+        price: cleanNum(priceOf ? priceOf(p) : ''), discount_pct: '0', stock: p.stock_qty,
+      }]
+    })
+  }
+  const addFree = (name) => setLines((ls) => [...ls, { key: newKey(), product: null, name, code: '', unit: '', qty: '1', price: '', discount_pct: '0', stock: null }])
+  const num = (v) => (v === '' || v === null || v === undefined ? '' : v)
+
+  return (
+    <div className="positions">
+      <div className="table-wrap">
+        <table className="t positions-t">
+          <thead>
+            <tr>
+              <th style={{ width: 36 }}>№</th>
+              <th>{t('Nomi')}</th>
+              <th className="num" style={{ width: 110 }}>{t('Miqdor')}</th>
+              <th style={{ width: 70 }}>{t('Birlik')}</th>
+              {showStock && <th className="num" style={{ width: 90 }}>{t('Qoldiq')}</th>}
+              <th className="num" style={{ width: 140 }}>{t('Narx')}</th>
+              <th className="num" style={{ width: 90 }}>{t('Chegirma %')}</th>
+              <th className="num" style={{ width: 150 }}>{t('Summa')}</th>
+              {!readOnly && <th style={{ width: 40 }} />}
+            </tr>
+          </thead>
+          <tbody>
+            {extraRows}
+            {lines.map((l, i) => {
+              const short = showStock && l.stock !== null && l.stock !== undefined && Number(l.qty) > Number(l.stock)
+              return (
+                <tr key={l.key}>
+                  <td className="muted">{i + 1}</td>
+                  <td>
+                    {l.code && <b className="pos-code">{l.code}</b>}
+                    {l.product || readOnly ? <span>{l.name}</span>
+                      : <input className="cell" value={l.name} onChange={(e) => set(l.key, { name: e.target.value })} />}
+                  </td>
+                  <td className="num">
+                    {readOnly ? fmtQty(l.qty) : <input className={'cell num' + (short ? ' warn' : '')} inputMode="decimal" value={num(l.qty)} onChange={(e) => set(l.key, { qty: e.target.value })} title={short ? t('Qoldiq yetarli emas') : undefined} />}
+                  </td>
+                  <td className="muted small">{t(l.unit || '')}</td>
+                  {showStock && <td className={'num small ' + (short ? 'red' : 'muted')}>{l.stock !== null && l.stock !== undefined ? fmtQty(l.stock) : '—'}</td>}
+                  <td className="num">{readOnly ? money(l.price, currency) : <input className="cell num" inputMode="decimal" value={num(l.price)} onChange={(e) => set(l.key, { price: e.target.value })} />}</td>
+                  <td className="num">{readOnly ? `${Number(l.discount_pct || 0)}%` : <input className="cell num" inputMode="decimal" value={num(l.discount_pct)} onChange={(e) => set(l.key, { discount_pct: e.target.value })} />}</td>
+                  <td className="num bold">{money(lineAmount(l), currency)}</td>
+                  {!readOnly && <td className="num"><IconBtn icon="delete" danger title="O'chirish" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} /></td>}
+                </tr>
+              )
+            })}
+            {!lines.length && !extraRows && <tr><td colSpan={9} className="empty">{t("Pozitsiyalar yo'q — pastdagi qidiruv orqali qo'shing")}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {!readOnly && (
+        <div className="positions-add">
+          <ProductSearch onPick={add} onFree={allowFree ? addFree : null} params={searchParams} />
+          <button type="button" className="btn" onClick={() => setPicker(true)}><Icon name="book" size={16} /> {t("Ma'lumotnomadan qo'shish")}</button>
+        </div>
+      )}
+      {picker && <ProductPicker onPick={add} onClose={() => setPicker(false)} params={searchParams} />}
+    </div>
+  )
+}
+
+/** Pastki qism: chapda izoh, o'ngda jami */
+export function DocFooter({ comment, onComment, rows }) {
+  return (
+    <div className="doc-footer">
+      <textarea className="doc-comment" placeholder={t('Izoh')} value={comment || ''} onChange={(e) => onComment?.(e.target.value)} readOnly={!onComment} />
+      <div className="doc-totals">
+        {rows.map(([label, value, big], i) => (
+          <div key={i} className={'row' + (big ? ' big' : '')}><span>{t(label)}:</span><b>{value}</b></div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function useLinesTotal(lines) {
+  return useMemo(() => lines.reduce((a, l) => a + lineAmount(l), 0), [lines])
+}

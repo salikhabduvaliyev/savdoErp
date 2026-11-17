@@ -142,6 +142,32 @@ class Order(TenantModel, TimeStamped):
         return self.estimates.filter(is_active=True).order_by("-version").first()
 
 
+class OrderItem(TenantModel):
+    """Buyurtma pozitsiyasi (MoySklad: "Позиции заказа") — tovar/xizmat/mahsulot, miqdor, narx, chegirma."""
+
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey("warehouse.Material", null=True, blank=True, on_delete=models.PROTECT, related_name="order_items")
+    name = models.CharField(max_length=250)
+    unit = models.CharField(max_length=20, blank=True)
+    qty = qty_field()
+    price = money_field()
+    discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=ZERO)
+    amount = money_field(editable=False)
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def save(self, *args, **kwargs):
+        gross = Decimal(self.qty) * Decimal(self.price)
+        self.amount = (gross * (1 - Decimal(self.discount_pct) / 100)).quantize(Decimal("0.01"))
+        if not self.name and self.product_id:
+            self.name = self.product.name
+        if self.product_id and not self.unit:
+            self.unit = self.product.get_unit_display()
+        super().save(*args, **kwargs)
+
+
 class Estimate(TenantModel, TimeStamped):
     """Smeta (tannarx). Versiyalanadi: v1, v2 ... faqat bittasi faol."""
 

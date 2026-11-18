@@ -1,88 +1,12 @@
 import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { canEdit, useAuth } from '../../auth'
+import { Warehouses } from '../company/CompanyPage'
+import { DocList, Turnover } from './StockDocs'
 import { Link } from 'react-router-dom'
-import api, { errorText } from '../../api'
-import { Badge, Field, Loading, Modal, MoneyBag, useFetch, useForm } from '../../components/ui'
-import { date, money, qty, todayISO } from '../../format'
+import { Badge, Loading, MoneyBag, useFetch } from '../../components/ui'
+import { date, money, qty } from '../../format'
 import { t } from '../../i18n'
-import { curLabel } from '../../currency'
-
-const TYPE_LABEL = { in: 'Kirim', out: 'Chiqim', transfer: "Ichki o'tkazma", adjust: 'Inventarizatsiya' }
-
-function MoveForm({ type, onClose, onSaved }) {
-  const { values, bind } = useForm({ date: todayISO(), type, material: '', warehouse: '', to_warehouse: '', qty: '', price: '', supplier: '', order: '', note: '' })
-  const [error, setError] = useState(null)
-  const materials = useFetch('/warehouse/products/', { type: 'raw,product,goods', is_active: true })
-  const warehouses = useFetch('/warehouse/warehouses/')
-  const suppliers = useFetch('/crm/counterparties/', { role: 'supplier', is_active: true })
-  const orders = useFetch('/orders/', { status: 'confirmed,in_production' })
-  const mat = (materials.data || []).find((m) => String(m.id) === String(values.material))
-
-  const submit = async (e) => {
-    e.preventDefault()
-    const payload = { ...values }
-    for (const k of ['to_warehouse', 'supplier', 'order', 'price']) if (!payload[k]) delete payload[k]
-    try {
-      await api.post('/warehouse/moves/', payload)
-      onSaved()
-    } catch (err) { setError(errorText(err)) }
-  }
-
-  return (
-    <Modal title={TYPE_LABEL[type]} onClose={onClose}>
-      {error && <div className="error">{error}</div>}
-      <form className="form" onSubmit={submit}>
-        <Field label={t("Material")} full>
-          <select {...bind('material')} required>
-            <option value="">{t("— tanlang —")}</option>
-            {(materials.data || []).map((m) => <option key={m.id} value={m.id}>{m.name} ({m.unit_display})</option>)}
-          </select>
-        </Field>
-        <Field label={t("Sana")}><input type="date" {...bind('date')} /></Field>
-        <Field label={type === 'transfer' ? 'Qaysi ombordan' : 'Ombor'}>
-          <select {...bind('warehouse')} required>
-            <option value="">{t("— tanlang —")}</option>
-            {(warehouses.data || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
-        </Field>
-        {type === 'transfer' && (
-          <Field label={t("Qaysi omborga")}>
-            <select {...bind('to_warehouse')} required>
-              <option value="">{t("— tanlang —")}</option>
-              {(warehouses.data || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </Field>
-        )}
-        <Field label={`Miqdor${mat ? `, ${mat.unit_display}` : ''}${type === 'adjust' ? ' (farq: + yoki −)' : ''}`}>
-          <input type="number" step="0.001" {...bind('qty')} required />
-        </Field>
-        {type === 'in' && (
-          <>
-            <Field label={`Narx (${curLabel(mat?.currency)} / birlik)`}><input type="number" step="0.0001" min="0" {...bind('price')} required /></Field>
-            <Field label={t("Yetkazuvchi (kreditor qarzi hisoblanadi)")}>
-              <select {...bind('supplier')}>
-                <option value="">—</option>
-                {(suppliers.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </Field>
-          </>
-        )}
-        {type === 'out' && (
-          <Field label={t("Buyurtma (rezervdan yechiladi)")}>
-            <select {...bind('order')}>
-              <option value="">—</option>
-              {(orders.data?.results || []).map((o) => <option key={o.id} value={o.id}>{o.number} · {o.client_name}</option>)}
-            </select>
-          </Field>
-        )}
-        <Field label={t("Izoh")} full><input {...bind('note')} /></Field>
-        <div className="full form-actions">
-          <button type="button" className="btn ghost" onClick={onClose}>{t("Bekor")}</button>
-          <button className="btn primary">{t("Saqlash")}</button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
 
 function Stocks({ stamp }) {
   const [f, setF] = useState({ warehouse: '', material__group: '', below_min: '' })
@@ -160,25 +84,27 @@ function Moves({ type, stamp }) {
   )
 }
 
+// MoySklad "Склад": Kirimlar · Hisobdan chiqarish · Ko'chirish · Inventarizatsiya · Qoldiqlar · Aylanma · Harakatlar · Omborlar
+const TABS = [
+  ['enter', t('Kirimlar')], ['loss', t('Hisobdan chiqarish')], ['move', t("Ko'chirishlar")], ['inventory', t('Inventarizatsiya')],
+  ['stock', t('Qoldiqlar')], ['turnover', t('Aylanma')], ['moves', t('Harakatlar jurnali')], ['warehouses', t('Omborlar')],
+]
+
 export default function WarehousePage() {
-  const [tab, setTab] = useState('stock')
-  const [form, setForm] = useState(null)
-  const [stamp, setStamp] = useState(0)
-  const tabs = [['stock', t("Qoldiqlar")], ['in', t("Kirim")], ['out', t("Chiqim")], ['transfer', t("O'tkazmalar")], ['adjust', t("Inventarizatsiya")]]
+  const { user } = useAuth()
+  const { tab: tabParam } = useParams()
+  const nav = useNavigate()
+  const tab = TABS.some(([k]) => k === tabParam) ? tabParam : 'stock'
   return (
     <>
-      <div className="page-head">
-        <h1>{t("Ombor")}</h1>
-        <button className="btn primary" onClick={() => setForm('in')}>{t("+ Kirim")}</button>
-        <button className="btn" onClick={() => setForm('out')}>{t("Chiqim")}</button>
-        <button className="btn" onClick={() => setForm('transfer')}>{t("Ichki o'tkazma")}</button>
-        <button className="btn" onClick={() => setForm('adjust')}>{t("Inventarizatsiya")}</button>
+      <div className="tabs section-tabs">
+        {TABS.map(([k, l]) => <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => nav(`/warehouse/${k}`)}>{l}</button>)}
       </div>
-      <div className="tabs">
-        {tabs.map(([k, l]) => <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => setTab(k)}>{l}</button>)}
-      </div>
-      {tab === 'stock' ? <Stocks stamp={stamp} /> : <Moves type={tab} stamp={stamp} />}
-      {form && <MoveForm type={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); setStamp((s) => s + 1) }} />}
+      {['enter', 'loss', 'move', 'inventory'].includes(tab) && <DocList key={tab} type={tab} />}
+      {tab === 'stock' && <><div className="page-head"><h1>{t('Qoldiqlar')}</h1></div><Stocks stamp={0} /></>}
+      {tab === 'turnover' && <><div className="page-head"><h1>{t('Aylanma')}</h1><span className="page-sub">{t("Davr boshidagi qoldiq, kirim, chiqim va davr oxiridagi qoldiq")}</span></div><Turnover /></>}
+      {tab === 'moves' && <><div className="page-head"><h1>{t('Harakatlar jurnali')}</h1></div><Moves stamp={0} /></>}
+      {tab === 'warehouses' && <Warehouses editable={canEdit(user, 'company') || canEdit(user, 'warehouse')} />}
     </>
   )
 }

@@ -20,12 +20,18 @@ export const NAV = [
     ],
   },
   {
-    group: t("Ishlab chiqarish va ombor"),
+    group: t("Xaridlar va ombor"),
+    items: [
+      { to: '/purchases', label: t("Xaridlar"), module: 'purchases', icon: 'purchases' },
+      { to: '/warehouse', label: t("Ombor"), module: 'warehouse' },
+      { to: '/products', label: t("Tovarlar"), module: 'products' },
+    ],
+  },
+  {
+    group: t("Ishlab chiqarish"),
     items: [
       { to: '/production-dashboard', label: t("Ishlab chiqarish dashboard"), module: 'production', icon: 'production-dashboard' },
       { to: '/production', label: t("Ishlab chiqarish"), module: 'production' },
-      { to: '/warehouse', label: t("Ombor"), module: 'warehouse' },
-      { to: '/products', label: t("Tovarlar"), module: 'products' },
     ],
   },
   {

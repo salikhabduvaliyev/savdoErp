@@ -387,7 +387,8 @@ function Branches({ editable }) {
 }
 
 /* ---------------- Omborlar ---------------- */
-function Warehouses({ editable }) {
+// eslint-disable-next-line react-refresh/only-export-components
+export function Warehouses({ editable }) {
   const [stamp, setStamp] = useState(0)
   const { data, error } = useFetch('/warehouse/warehouses/', { stamp })
   const branches = useFetch('/core/branches/')

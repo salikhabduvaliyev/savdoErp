@@ -153,7 +153,7 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
       {fields.length > 0 && (
         <div className="doc-more">
           <button type="button" className="link-btn" onClick={() => setShowMore((s) => !s)}>
-            <Icon name={showMore ? 'chevron' : 'chevron-right'} size={15} /> {t('Boshqa maydonlar')} <span className="muted">({fields.length})</span>
+            <Icon name={showMore ? 'chevron-down' : 'chevron-right'} size={15} /> {t('Boshqa maydonlar')} <span className="muted">({fields.length})</span>
           </button>
           {showMore && (
             <div className="form three" style={{ marginTop: 10 }}>

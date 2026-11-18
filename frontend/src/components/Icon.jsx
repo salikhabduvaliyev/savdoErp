@@ -1,9 +1,9 @@
 // Zamonaviy chiziqli ikonlar (lucide). Nom bo'yicha: <Icon name="edit" />
 import {
-  ArrowLeft, BadgeDollarSign, BookOpen, Building2, Check, ChevronLeft, ChevronRight, Copy, Download, Eye, Factory,
+  ArrowLeft, BadgeDollarSign, BookOpen, Building2, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, Eye, Factory,
   Filter, Gauge, KeyRound, LayoutDashboard, LockKeyhole, LogOut, MapPin, Menu, MoreHorizontal, Package, PanelLeft, Pencil,
   Plus, Printer, ReceiptText, RefreshCw, Save, Search, Server, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal,
-  Trash2, TrendingUp, Upload, User, Users, Wallet, Warehouse, X,
+  Trash2, TrendingUp, Truck, Upload, User, Users, Wallet, Warehouse, X,
 } from 'lucide-react'
 import { t } from '../i18n'
 
@@ -15,6 +15,7 @@ const ICONS = {
   sales: ShoppingCart,
   products: Package,
   production: Factory,
+  purchases: Truck,
   warehouse: Warehouse,
   finance: Wallet,
   hr: TrendingUp,
@@ -35,6 +36,7 @@ const ICONS = {
   currency: BadgeDollarSign,
   book: BookOpen,
   chevron: ChevronLeft,
+  'chevron-down': ChevronDown,
   'chevron-right': ChevronRight,
   back: ArrowLeft,
   plus: Plus,

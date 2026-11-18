@@ -151,7 +151,7 @@ export default function Currencies({ editable }) {
               {data.map((c) => (
                 <Fragment key={c.id}>
                   <tr className={c.is_base ? '' : 'clickable'} onClick={() => !c.is_base && setOpen(open === c.id ? null : c.id)}>
-                    <td className="bold">{!c.is_base && <Icon name={open === c.id ? 'chevron' : 'chevron-right'} size={14} />} {c.code}</td>
+                    <td className="bold">{!c.is_base && <Icon name={open === c.id ? 'chevron-down' : 'chevron-right'} size={14} />} {c.code}</td>
                     <td>{t(c.name)}{c.is_base && <span className="muted small"> · {t('asosiy')}</span>}</td>
                     <td>{c.symbol}</td>
                     <td className="num bold">{c.is_base ? '1' : c.rate ? `${num(c.rate, 2)} ${t("so'm")}` : <span className="red">{t('kiritilmagan')}</span>}</td>

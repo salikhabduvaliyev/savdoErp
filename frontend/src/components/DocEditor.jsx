@@ -153,7 +153,8 @@ function ProductPicker({ onPick, onClose, params }) {
  * Pozitsiyalar jadvali (MoySklad: "Позиции").
  * lines: [{ key, product, name, code, unit, qty, price, discount_pct, stock }]
  */
-export function Positions({ lines, setLines, currency, priceOf, readOnly, showStock = true, allowFree = true, extraRows, searchParams }) {
+export function Positions({ lines, setLines, currency, priceOf, readOnly, showStock = true, allowFree = true, extraRows, searchParams,
+  showPrice = true, showDiscount = true, qtyLabel = 'Miqdor', stockLabel = 'Qoldiq', stockOf, warnShort = true, extraCols }) {
   const [picker, setPicker] = useState(false)
   const set = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)))
   const add = (p) => {
@@ -162,7 +163,7 @@ export function Positions({ lines, setLines, currency, priceOf, readOnly, showSt
       if (same) return ls.map((l) => (l === same ? { ...l, qty: String(Number(l.qty || 0) + 1) } : l))
       return [...ls, {
         key: newKey(), product: p.id, name: p.name, code: p.sku || '', unit: p.unit_display || '', qty: '1',
-        price: cleanNum(priceOf ? priceOf(p) : ''), discount_pct: '0', stock: p.stock_qty,
+        price: cleanNum(priceOf ? priceOf(p) : ''), discount_pct: '0', stock: stockOf ? stockOf(p) : p.stock_qty,
       }]
     })
   }
@@ -177,19 +178,20 @@ export function Positions({ lines, setLines, currency, priceOf, readOnly, showSt
             <tr>
               <th style={{ width: 36 }}>№</th>
               <th>{t('Nomi')}</th>
-              <th className="num" style={{ width: 110 }}>{t('Miqdor')}</th>
+              <th className="num" style={{ width: 120 }}>{t(qtyLabel)}</th>
               <th style={{ width: 70 }}>{t('Birlik')}</th>
-              {showStock && <th className="num" style={{ width: 90 }}>{t('Qoldiq')}</th>}
-              <th className="num" style={{ width: 140 }}>{t('Narx')}</th>
-              <th className="num" style={{ width: 90 }}>{t('Chegirma %')}</th>
-              <th className="num" style={{ width: 150 }}>{t('Summa')}</th>
+              {showStock && <th className="num" style={{ width: 100 }}>{t(stockLabel)}</th>}
+              {extraCols?.head}
+              {showPrice && <th className="num" style={{ width: 140 }}>{t('Narx')}</th>}
+              {showPrice && showDiscount && <th className="num" style={{ width: 90 }}>{t('Chegirma %')}</th>}
+              {showPrice && <th className="num" style={{ width: 150 }}>{t('Summa')}</th>}
               {!readOnly && <th style={{ width: 40 }} />}
             </tr>
           </thead>
           <tbody>
             {extraRows}
             {lines.map((l, i) => {
-              const short = showStock && l.stock !== null && l.stock !== undefined && Number(l.qty) > Number(l.stock)
+              const short = warnShort && showStock && l.stock !== null && l.stock !== undefined && Number(l.qty) > Number(l.stock)
               return (
                 <tr key={l.key}>
                   <td className="muted">{i + 1}</td>
@@ -203,9 +205,10 @@ export function Positions({ lines, setLines, currency, priceOf, readOnly, showSt
                   </td>
                   <td className="muted small">{t(l.unit || '')}</td>
                   {showStock && <td className={'num small ' + (short ? 'red' : 'muted')}>{l.stock !== null && l.stock !== undefined ? fmtQty(l.stock) : '—'}</td>}
-                  <td className="num">{readOnly ? money(l.price, currency) : <input className="cell num" inputMode="decimal" value={num(l.price)} onChange={(e) => set(l.key, { price: e.target.value })} />}</td>
-                  <td className="num">{readOnly ? `${Number(l.discount_pct || 0)}%` : <input className="cell num" inputMode="decimal" value={num(l.discount_pct)} onChange={(e) => set(l.key, { discount_pct: e.target.value })} />}</td>
-                  <td className="num bold">{money(lineAmount(l), currency)}</td>
+                  {extraCols?.cell(l)}
+                  {showPrice && <td className="num">{readOnly ? money(l.price, currency) : <input className="cell num" inputMode="decimal" value={num(l.price)} onChange={(e) => set(l.key, { price: e.target.value })} />}</td>}
+                  {showPrice && showDiscount && <td className="num">{readOnly ? `${Number(l.discount_pct || 0)}%` : <input className="cell num" inputMode="decimal" value={num(l.discount_pct)} onChange={(e) => set(l.key, { discount_pct: e.target.value })} />}</td>}
+                  {showPrice && <td className="num bold">{money(lineAmount(l), currency)}</td>}
                   {!readOnly && <td className="num"><IconBtn icon="delete" danger title="O'chirish" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} /></td>}
                 </tr>
               )

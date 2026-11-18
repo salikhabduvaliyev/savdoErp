@@ -10,6 +10,7 @@ import OrderDetail from './pages/orders/OrderDetail'
 import SalesPage from './pages/sales/SalesPage'
 import ProductsPage from './pages/products/ProductsPage'
 import ProductionPage from './pages/production/ProductionPage'
+import PurchasesPage from './pages/purchases/PurchasesPage'
 import ProductionDashboardPage from './pages/production/ProductionDashboardPage'
 import WarehousePage from './pages/warehouse/WarehousePage'
 import FinancePage from './pages/finance/FinancePage'
@@ -24,7 +25,7 @@ import { t } from './i18n'
 
 /** Foydalanuvchi ko'ra oladigan birinchi bo'lim */
 function home(user) {
-  const preferred = ['/orders', '/sales', '/production', '/warehouse', '/finance']
+  const preferred = ['/orders', '/sales', '/purchases', '/production', '/warehouse', '/finance']
   const all = NAV.flatMap((g) => g.items)
   const first = preferred.map((p) => all.find((i) => i.to === p)).find((i) => i && can(user, i.module))
     || all.find((i) => can(user, i.module))
@@ -84,11 +85,12 @@ export default function App() {
         <Route path="/dashboard" element={guard('dashboard', <DashboardPage />)} />
         <Route path="/orders" element={guard('orders', <OrdersPage />)} />
         <Route path="/orders/:id" element={guard('orders', <OrderDetail />)} />
-        <Route path="/sales" element={guard('sales', <SalesPage />)} />
+        <Route path="/sales/:tab?" element={guard('sales', <SalesPage />)} />
+        <Route path="/purchases/:tab?" element={guard('purchases', <PurchasesPage />)} />
         <Route path="/products" element={guard('products', <ProductsPage />)} />
         <Route path="/production-dashboard" element={guard('production', <ProductionDashboardPage />)} />
         <Route path="/production" element={guard('production', <ProductionPage />)} />
-        <Route path="/warehouse" element={guard('warehouse', <WarehousePage />)} />
+        <Route path="/warehouse/:tab?" element={guard('warehouse', <WarehousePage />)} />
         <Route path="/finance" element={guard('finance', <FinancePage />)} />
         <Route path="/hr" element={guard('hr', <HrPage />)} />
         <Route path="/counterparties" element={guard('counterparties', <CounterpartiesPage />)} />

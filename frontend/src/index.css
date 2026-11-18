@@ -528,3 +528,20 @@ td .icon-act + .icon-act { margin-left: 2px; }
 .doc-totals .row b { color: var(--text); font-variant-numeric: tabular-nums; }
 .doc-totals .row.big { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 10px; font-size: 20px; }
 .doc-totals .row.big b { font-size: 22px; }
+
+/* ---------------- hujjatlar ro'yxati (MoySklad) ---------------- */
+.section-tabs { margin-bottom: 14px; }
+.filter-panel { margin-bottom: 14px; padding: 14px 16px; }
+.filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 18px; }
+.filter-grid > label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--text-2); }
+.filter-grid select, .filter-grid input { width: 100%; }
+.filter-grid .inline-pick input { min-width: 0; }
+.period-links { display: inline-flex; gap: 4px; font-size: 12px; color: var(--muted); }
+.period-links .link-btn { font-size: 12px; padding: 0; }
+.filter-actions { display: flex; gap: 8px; margin-top: 12px; }
+.link-like { color: var(--primary); font-weight: 500; }
+td.ellipsis { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.posted-check { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); font-weight: 500; }
+.doc-tabs .btn.small { margin-bottom: 4px; }
+.rate-history { padding: 6px 4px; }
+.rate-history .table-toolbar { background: transparent; }

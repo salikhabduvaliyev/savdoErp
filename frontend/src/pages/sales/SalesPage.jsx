@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import api, { errorText } from '../../api'
 import { can, canCreate, canDelete, canEdit, useAuth } from '../../auth'
 import { Drawer } from '../../components/EntityForm'
@@ -7,6 +7,7 @@ import { Badge, Field, Loading, Modal, MoneyBag, Stat, toast, useFetch } from '.
 import { date, money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import SaleForm from './SaleForm'
+import { DocList } from '../warehouse/StockDocs'
 import Icon, { IconBtn } from '../../components/Icon'
 import { curLabel, CurrencyOptions } from '../../currency'
 
@@ -53,6 +54,13 @@ function PayForm({ sale, onClose, onSaved }) {
 /* ------------------------------------------------------------ karta */
 function SaleCard({ id, onClose, onChanged }) {
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const makeReturn = async () => {
+    try {
+      const { data } = await api.post('/warehouse/docs/from_sale/?type=sales_return', { sale: id })
+      navigate(`/sales/returns?open=${data.id}`)
+    } catch (e) { toast(errorText(e), true) }
+  }
   const [stamp, setStamp] = useState(0)
   const { data: s, error } = useFetch(`/sales/${id}/`, { stamp })
   const pays = useFetch(`/sales/${id}/payments/`, { stamp })
@@ -130,6 +138,9 @@ function SaleCard({ id, onClose, onChanged }) {
         </table>
       </div>
       <div className="form-actions" style={{ justifyContent: 'flex-start' }}>
+        {s.status === 'completed' && canCreate(user, 'sales') && (
+          <button className="btn" onClick={makeReturn}><Icon name="back" size={15} /> {tr('Mijoz qaytarishi')}</button>
+        )}
         {s.status === 'draft' && canDelete(user, 'sales') && <button className="btn" onClick={remove}>{tr("Qoralamani o'chirish")}</button>}
         {s.status !== 'cancelled' && editable && (
           <button className="btn" onClick={() => act('cancel', "Sotuv bekor qilinsinmi? Tovarlar omborga qaytariladi.")}>{tr("Sotuvni bekor qilish")}</button>
@@ -142,7 +153,7 @@ function SaleCard({ id, onClose, onChanged }) {
 }
 
 /* ------------------------------------------------------------ sahifa */
-export default function SalesPage() {
+function SalesList() {
   const { user } = useAuth()
   const [params, setParams] = useSearchParams()
   const [stamp, setStamp] = useState(0)
@@ -213,6 +224,23 @@ export default function SalesPage() {
       </div>
       {form && <SaleForm onClose={() => setForm(false)} onSaved={(id, done) => { setForm(false); refresh(); setParams({ open: id }); toast(done ? 'Sotuv yakunlandi' : 'Qoralama saqlandi') }} />}
       {openId && <SaleCard id={openId} onClose={() => setParams({})} onChanged={refresh} />}
+    </>
+  )
+}
+
+// MoySklad "Продажи": Sotuvlar (Отгрузки) · Mijoz qaytarishlari. Buyurtmalar — alohida bo'lim.
+const TABS = [['list', tr('Sotuvlar')], ['returns', tr('Mijoz qaytarishlari')]]
+
+export default function SalesPage() {
+  const { tab: tabParam } = useParams()
+  const nav = useNavigate()
+  const tab = TABS.some(([k]) => k === tabParam) ? tabParam : 'list'
+  return (
+    <>
+      <div className="tabs section-tabs">
+        {TABS.map(([k, l]) => <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => nav(k === 'list' ? '/sales' : `/sales/${k}`)}>{l}</button>)}
+      </div>
+      {tab === 'list' ? <SalesList /> : <DocList type="sales_return" />}
     </>
   )
 }

@@ -7,6 +7,7 @@ import Icon from '../../components/Icon'
 import { Badge, toast, useFetch } from '../../components/ui'
 import { money, todayISO } from '../../format'
 import { t } from '../../i18n'
+import { convertPrice } from '../../currency'
 import { CurrencyOptions } from '../../currency'
 
 const toLines = (items) => (items || []).map((i) => ({
@@ -40,7 +41,11 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
   const pts = priceTypes.data || []
   const pt = pts.find((p) => p.id === client?.price_type && p.currency === v.currency)
     || pts.find((p) => p.is_default && p.currency === v.currency) || pts.find((p) => p.currency === v.currency)
-  const priceOf = (p) => (pt ? p.prices?.[pt.id] ?? '' : '')
+  const ptAny = pt || pts.find((p) => p.id === client?.price_type) || pts.find((p) => p.is_default) || pts[0]
+  const priceOf = (p) => {
+    const raw = ptAny ? p.prices?.[ptAny.id] : null
+    return raw === null || raw === undefined || raw === '' ? '' : convertPrice(raw, ptAny.currency, v.currency)
+  }
 
   useEffect(() => {
     if (!dirty) return undefined
@@ -142,11 +147,11 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
         </div>
         <div>
           <DocField label="Valyuta" required>
-            <select value={v.currency} onChange={set('currency')} disabled={!!order}>
+            <select value={v.currency} onChange={(e) => { const to = e.target.value; setLines((ls) => ls.map((l) => ({ ...l, price: l.price === '' ? '' : String(convertPrice(l.price, v.currency, to)) }))); set('currency')(e) }} disabled={!!order}>
               <CurrencyOptions withName value={v.currency} />
             </select>
           </DocField>
-          <DocField label="Narx turi"><input value={pt ? `${pt.name}` : '—'} readOnly className="muted-input" title={t("Mijozning narx turi yoki standart narx turi")} /></DocField>
+          <DocField label="Narx turi"><input value={ptAny ? `${ptAny.name}${ptAny.currency !== v.currency ? ` (${ptAny.currency} → ${v.currency})` : ''}` : '—'} readOnly className="muted-input" title={t("Mijozning narx turi yoki standart narx turi")} /></DocField>
         </div>
       </div>
 

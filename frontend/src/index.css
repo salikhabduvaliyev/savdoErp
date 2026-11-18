@@ -284,9 +284,12 @@ select.chip { border-radius: 9px; }
 .form .full { grid-column: 1 / -1; }
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field label { font-size: 12.5px; font-weight: 500; color: var(--text-2); }
-.field input, .field select, .field textarea { border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; font: inherit; background: var(--input-bg); color: var(--text); transition: border-color .12s, box-shadow .12s; }
-.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
-.field input:disabled, .field select:disabled { background: var(--surface-2); color: var(--muted); }
+.field input, .field select, .field textarea,
+:is(.doc-field-input, .inline-pick, .price-row, .filter-grid, .side-form .row, .table-toolbar) :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; font: inherit; background: var(--input-bg); color: var(--text); transition: border-color .12s, box-shadow .12s; }
+.field input:focus, .field select:focus, .field textarea:focus,
+:is(.doc-field-input, .inline-pick, .price-row, .filter-grid, .side-form .row, .table-toolbar) :is(input, select, textarea):focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+.field input:disabled, .field select:disabled,
+:is(.doc-field-input, .inline-pick, .price-row, .side-form .row) :is(input, select, textarea):disabled { background: var(--surface-2); color: var(--muted); }
 .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
 .error { background: var(--red-soft); color: var(--red); border: 1px solid var(--error-border); border-radius: 9px; padding: 9px 12px; font-size: 13px; margin-bottom: 12px; }
 .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
@@ -486,7 +489,8 @@ td .icon-act + .icon-act { margin-left: 2px; }
 .doc-field > label { color: var(--text-2); font-size: 13px; }
 .doc-field .req { color: var(--red); margin-right: 2px; }
 .doc-field-input > input, .doc-field-input > select, .doc-field-input > textarea, .inline-pick > input, .inline-pick > select { width: 100%; }
-.doc-field-input input, .doc-field-input select { height: 34px; }
+.doc-field-input input, .doc-field-input select { height: 36px; padding-top: 6px; padding-bottom: 6px; }
+.price-row input, .price-row select { height: 36px; padding-top: 6px; padding-bottom: 6px; }
 .muted-input { background: var(--surface-2) !important; color: var(--muted) !important; }
 .inline-pick { display: flex; align-items: center; gap: 4px; }
 .inline-pick > .icon-act { color: var(--primary); flex: none; }
@@ -545,3 +549,31 @@ td.ellipsis { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white
 .doc-tabs .btn.small { margin-bottom: 4px; }
 .rate-history { padding: 6px 4px; }
 .rate-history .table-toolbar { background: transparent; }
+
+/* ---------------- tovarlar katalogi (MoySklad) ---------------- */
+.catalog { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .catalog { grid-template-columns: minmax(0, 1fr); } }
+.group-tree { padding: 8px; position: sticky; top: calc(var(--topbar-h) + 12px); max-height: calc(100vh - var(--topbar-h) - 40px); overflow-y: auto; }
+.group-tree .gt-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: 0; padding: 7px 8px; border-radius: 8px; cursor: pointer; font: inherit; color: var(--text); }
+.group-tree > .gt-item:hover, .gt-row:hover { background: var(--surface-2); }
+.group-tree > .gt-item.active, .gt-row.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.gt-row { display: flex; align-items: center; border-radius: 8px; }
+.gt-row .gt-item { padding-left: 2px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; }
+.gt-toggle { width: 20px; flex: none; display: inline-grid; place-items: center; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0; }
+.gt-acts { display: none; flex: none; }
+.gt-row:hover .gt-acts { display: inline-flex; }
+.gt-acts .icon-act { width: 24px; height: 24px; }
+.doc-name-label { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 4px; }
+.doc-name-label .req, .side-form .req { color: var(--red); margin-right: 2px; }
+.side-form hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
+.seg-tabs { display: flex; gap: 0; background: var(--surface-3); border-radius: 10px; padding: 3px; margin-bottom: 12px; width: fit-content; }
+.seg-tabs button { border: 0; background: none; padding: 8px 18px; border-radius: 8px; font: inherit; font-weight: 500; color: var(--text-2); cursor: pointer; }
+.seg-tabs button.active { background: var(--primary); color: #fff; box-shadow: var(--shadow-xs); }
+.seg-tabs button:disabled { opacity: .45; cursor: default; }
+.price-card { padding: 18px 20px; }
+.price-row { display: grid; grid-template-columns: 160px 180px 200px; gap: 10px; align-items: center; margin-bottom: 10px; }
+.price-row > label { color: var(--text-2); font-size: 13px; }
+.price-row input { text-align: right; }
+.price-cur { color: var(--muted); font-size: 13px; }
+.price-sub { font-size: 14px; margin: 18px 0 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+@media (max-width: 700px) { .price-row { grid-template-columns: 1fr 1fr; } .price-row > label { grid-column: 1 / -1; } }

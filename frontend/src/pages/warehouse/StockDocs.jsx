@@ -6,7 +6,7 @@ import { canCreate, canDelete, canEdit, useAuth } from '../../auth'
 import { cleanNum, DocField, DocFooter, DocPage, DocTitle, newKey, Positions, useLinesTotal } from '../../components/DocEditor'
 import Icon from '../../components/Icon'
 import { Badge, Loading, MoneyBag, toast, useFetch } from '../../components/ui'
-import { CurrencyOptions, curLabel } from '../../currency'
+import { convertPrice, CurrencyOptions, curLabel } from '../../currency'
 import { date, money, qty, todayISO } from '../../format'
 import { t } from '../../i18n'
 
@@ -84,6 +84,18 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
 
   const set = (k, val) => { setV((s) => ({ ...s, [k]: val })); setDirty(true) }
   const setL = (fn) => { setLines(fn); setDirty(true) }
+  // tovar narxi o'z valyutasida → hujjat valyutasiga (joriy kurs bo'yicha)
+  const priceOf = (p) => {
+    if (type === 'sales_return') {
+      const pt = Object.keys(p.prices || {})[0]
+      return pt ? convertPrice(p.prices[pt], p.currency, v.currency) : ''
+    }
+    return convertPrice(p.purchase_price, p.currency, v.currency)
+  }
+  const changeCurrency = (to) => {
+    setLines((ls) => ls.map((l) => ({ ...l, price: l.price === '' ? '' : String(convertPrice(l.price, v.currency, to)) })))
+    set('currency', to)
+  }
 
   const save = async (close, extra = {}) => {
     setBusy(true)
@@ -202,7 +214,7 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
         <div>
           {cfg.price && (
             <DocField label="Valyuta" required>
-              <select value={v.currency} onChange={(e) => set('currency', e.target.value)} disabled={!editable}><CurrencyOptions withName value={v.currency} /></select>
+              <select value={v.currency} onChange={(e) => changeCurrency(e.target.value)} disabled={!editable}><CurrencyOptions withName value={v.currency} /></select>
             </DocField>
           )}
           {cfg.planDate && <DocField label="Kutilgan sana"><input type="date" value={v.plan_date || ''} onChange={(e) => set('plan_date', e.target.value)} disabled={!editable} /></DocField>}
@@ -219,7 +231,7 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
       </div>
       <Positions
         lines={linesView} setLines={setL} currency={v.currency} readOnly={!editable} allowFree={false} searchParams={cfg.search}
-        priceOf={cfg.price ? (p) => (type === 'sales_return' ? '' : p.purchase_price) : null}
+        priceOf={cfg.price ? priceOf : null}
         stockOf={(p) => stockBy[p.id] ?? 0}
         showPrice={cfg.price} showDiscount={cfg.discount !== false}
         qtyLabel={cfg.inventory ? 'Haqiqiy' : 'Miqdor'} stockLabel={cfg.inventory ? 'Hisobda' : 'Qoldiq'}

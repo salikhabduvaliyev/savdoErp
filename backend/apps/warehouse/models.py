@@ -23,9 +23,10 @@ class Warehouse(TenantModel):
 
 
 class MaterialGroup(TenantModel):
-    """Tovar guruhi (kategoriya)."""
+    """Tovar guruhi (kategoriya). Ichma-ich bo'lishi mumkin (MoySklad: guruhlar daraxti)."""
 
     name = models.CharField(max_length=100)
+    parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="children")
 
     class Meta:
         ordering = ["name"]
@@ -33,6 +34,14 @@ class MaterialGroup(TenantModel):
 
     def __str__(self):
         return self.name
+
+    def descendant_ids(self):
+        """O'zi va barcha ichki guruhlari id lari."""
+        ids, frontier = [self.id], [self.id]
+        while frontier:
+            frontier = list(MaterialGroup.objects.filter(parent_id__in=frontier).values_list("id", flat=True))
+            ids += frontier
+        return ids
 
 
 class PriceType(TenantModel):
@@ -50,6 +59,15 @@ class PriceType(TenantModel):
         return self.name
 
 
+def next_product_code():
+    """Keyingi raqamli kod (5 xonali): mavjud raqamli kodlarning eng kattasi + 1."""
+    mx = 0
+    for c in Material.objects.exclude(code="").values_list("code", flat=True):
+        if c.isdigit():
+            mx = max(mx, int(c))
+    return str(mx + 1).zfill(5)
+
+
 class Material(TenantModel, TimeStamped):
     """Tovar / nomenklatura: xomashyo, tayyor mahsulot, qayta sotiladigan tovar yoki xizmat.
 
@@ -64,12 +82,18 @@ class Material(TenantModel, TimeStamped):
 
     name = models.CharField(max_length=200)
     type = models.CharField(max_length=10, choices=Type.choices, default=Type.RAW)
+    code = models.CharField("Kod", max_length=30, blank=True, db_index=True, help_text="Avtomatik: 00001, 00002…")
     sku = models.CharField("Artikul", max_length=50, blank=True)
     barcode = models.CharField("Shtrix-kod", max_length=64, blank=True)
     group = models.ForeignKey(MaterialGroup, null=True, blank=True, on_delete=models.SET_NULL)
+    supplier = models.ForeignKey("crm.Counterparty", null=True, blank=True, on_delete=models.SET_NULL, related_name="supplied_products")
     unit = models.CharField(max_length=8, choices=Unit.choices, default=Unit.PCS)
     currency = currency_field(help_text="Tannarx (xarid) valyutasi")
     purchase_price = money_field(max_digits=18, decimal_places=4, help_text="Oxirgi/rejalashtirilgan xarid narxi")
+    min_price = money_field(help_text="Minimal sotuv narxi (shu narxdan arzon sotib bo'lmaydi)")
+    min_price_currency = currency_field()
+    weight = models.DecimalField(max_digits=12, decimal_places=3, default=0, help_text="Og'irlik, kg")
+    volume = models.DecimalField(max_digits=12, decimal_places=3, default=0, help_text="Hajm, m³")
     min_qty = qty_field(help_text="Minimal qoldiq (barcha omborlar bo'yicha)")
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -79,6 +103,11 @@ class Material(TenantModel, TimeStamped):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = next_product_code()
+        super().save(*args, **kwargs)
 
     @property
     def is_stocked(self):

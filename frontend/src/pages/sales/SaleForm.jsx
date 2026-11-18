@@ -6,7 +6,7 @@ import Icon from '../../components/Icon'
 import { Badge, useFetch } from '../../components/ui'
 import { money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
-import { curLabel, CurrencyOptions } from '../../currency'
+import { convertPrice, curLabel, CurrencyOptions } from '../../currency'
 
 const cur = curLabel
 
@@ -41,10 +41,21 @@ export default function SaleForm({ sale, onClose, onSaved }) {
     if (!sale && warehouses.data?.length && !v.warehouse) setV((s) => ({ ...s, warehouse: warehouses.data[0].id }))
   }, [warehouses.data]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const priceOf = (p) => (v.price_type ? p.prices?.[v.price_type] ?? '' : '')
+  // narx turi valyutasidagi narx → hujjat valyutasiga (joriy kurs)
+  const ptCur = (id) => (priceTypes.data || []).find((p) => String(p.id) === String(id))?.currency
+  const priceOf = (p) => {
+    const raw = v.price_type ? p.prices?.[v.price_type] : null
+    return raw === null || raw === undefined || raw === '' ? '' : convertPrice(raw, ptCur(v.price_type), v.currency)
+  }
+  const changeCurrency = (to) => {
+    setLines((ls) => ls.map((l) => ({ ...l, price: l.price === '' ? '' : String(convertPrice(l.price, v.currency, to)) })))
+    setF('currency', to)
+  }
   const changePriceType = (ptId) => {
     const pt = (priceTypes.data || []).find((p) => String(p.id) === String(ptId))
-    setV((s) => ({ ...s, price_type: ptId, currency: fromOrder ? s.currency : pt?.currency || s.currency }))
+    const to = fromOrder ? v.currency : pt?.currency || v.currency
+    if (to !== v.currency) setLines((ls) => ls.map((l) => ({ ...l, price: l.price === '' ? '' : String(convertPrice(l.price, v.currency, to)) })))
+    setV((s) => ({ ...s, price_type: ptId, currency: to }))
     setDirty(true)
   }
   const pickClient = (id) => {
@@ -115,7 +126,7 @@ export default function SaleForm({ sale, onClose, onSaved }) {
         </div>
         <div>
           <DocField label="Valyuta" required>
-            <select value={v.currency} onChange={(e) => setF('currency', e.target.value)} disabled={fromOrder}>
+            <select value={v.currency} onChange={(e) => changeCurrency(e.target.value)} disabled={fromOrder}>
               <CurrencyOptions withName value={v.currency} />
             </select>
           </DocField>

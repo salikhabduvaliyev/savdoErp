@@ -80,11 +80,24 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-# --- Ma'lumotlar bazasi: PostgreSQL ---
-# DB_ENGINE=sqlite faqat testlar / tezkor tekshiruv uchun.
-if env("DB_ENGINE", "postgres") == "sqlite":
+# --- Ma'lumotlar bazasi: PostgreSQL (asosiy) | MySQL (PythonAnywhere bepul tarifi) | SQLite (testlar) ---
+DB_ENGINE = env("DB_ENGINE", "postgres")
+if DB_ENGINE == "sqlite":
     DATABASES = {
         "default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}
+    }
+elif DB_ENGINE == "mysql":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": env("DB_NAME"),
+            "USER": env("DB_USER"),
+            "PASSWORD": env("DB_PASSWORD", ""),
+            "HOST": env("DB_HOST"),
+            "PORT": env("DB_PORT", "3306"),
+            "OPTIONS": {"charset": "utf8mb4", "init_command": "SET sql_mode='STRICT_TRANS_TABLES'"},
+            "CONN_MAX_AGE": 60,
+        }
     }
 else:
     DATABASES = {
@@ -113,6 +126,20 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# React build (frontend/dist) — production'da Django o'zi beradi (bitta domen, CORS kerak emas)
+FRONTEND_DIST = Path(env("FRONTEND_DIST", BASE_DIR.parent / "frontend" / "dist"))
+
+# HTTPS orqasida (PythonAnywhere, nginx) ishlash
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in env("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
+    if SECRET_KEY.startswith("dev-only"):
+        raise RuntimeError("Production'da DJANGO_SECRET_KEY ni .env da o'rnating")
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 

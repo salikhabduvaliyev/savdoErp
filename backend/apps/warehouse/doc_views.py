@@ -88,7 +88,14 @@ class StockDocSerializer(StockDocListSerializer):
         for it in raw:
             m = it["material"]
             if "price" not in it or it["price"] is None:
-                it["price"] = m.purchase_price if doc.type in (T.SUPPLY, T.PURCHASE_ORDER, T.ENTER) else Decimal("0")
+                # tovar narxi o'z valyutasida — hujjat valyutasiga hujjat sanasidagi kurs bo'yicha
+                from apps.core.money import RateNotFound, convert
+
+                base = m.purchase_price if doc.type in (T.SUPPLY, T.PURCHASE_ORDER, T.ENTER, T.PURCHASE_RETURN) else Decimal("0")
+                try:
+                    it["price"] = convert(base, m.currency, doc.currency, doc.date).quantize(Decimal("0.0001"))
+                except RateNotFound as e:
+                    raise serializers.ValidationError({"items": str(e)})
             rows.append(it)
         return rows
 

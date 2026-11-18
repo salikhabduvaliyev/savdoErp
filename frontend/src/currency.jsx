@@ -50,3 +50,23 @@ export function CurrencyOptions({ withName = false, value }) {
 
 /** EntityForm uchun: [[code, label], ...] */
 export const currencyOptions = () => list.filter((c) => c.is_active).map((c) => [c.code, curLabel(c.code)])
+
+/** 1 birlik valyuta necha so'm (ma'lumotnomadagi oxirgi kurs). Topilmasa — null. */
+export function rateOf(code) {
+  if (!code || code === 'UZS') return 1
+  const c = findCurrency(code)
+  return c?.rate ? Number(c.rate) : null
+}
+
+/** Narxni bir valyutadan boshqasiga joriy kurs bo'yicha aylantirish (so'm orqali). Kurs bo'lmasa — o'zgarmaydi. */
+export function convertPrice(amount, from, to) {
+  if (amount === '' || amount === null || amount === undefined) return amount
+  const n = Number(amount)
+  if (!from || !to || from === to || !n) return n
+  const a = rateOf(from)
+  const b = rateOf(to)
+  if (!a || !b) return n
+  const v = (n * a) / b
+  const k = to === 'UZS' ? 100 : 10000
+  return Math.round(v * k) / k
+}

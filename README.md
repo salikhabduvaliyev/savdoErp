@@ -168,3 +168,7 @@ frontend/src/
 - Audit log, bildirishnomalar (Telegram), chizma fayllarini yuklash UI
 - Mobil/planshet uchun bo'lim boshlig'i ekranini optimallashtirish
 - CBU'dan kursni avtomatik olish
+
+## Serverga joylash
+
+PythonAnywhere uchun qadamma-qadam qo'llanma: [DEPLOY.md](DEPLOY.md)

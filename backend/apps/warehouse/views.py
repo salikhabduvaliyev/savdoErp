@@ -30,9 +30,20 @@ class WarehouseSerializer(serializers.ModelSerializer):
 
 
 class MaterialGroupSerializer(serializers.ModelSerializer):
+    products_count = serializers.SerializerMethodField()
+
     class Meta:
         model = MaterialGroup
-        fields = ["id", "name"]
+        fields = ["id", "name", "parent", "products_count"]
+
+    def get_products_count(self, obj):
+        return obj.material_set.count()
+
+    def validate_parent(self, parent):
+        if parent and self.instance:
+            if parent.id in self.instance.descendant_ids():
+                raise serializers.ValidationError("Guruhni o'zining ichiga joylab bo'lmaydi")
+        return parent
 
 
 class PriceTypeSerializer(serializers.ModelSerializer):
@@ -47,6 +58,7 @@ class ProductSerializer(serializers.ModelSerializer):
     unit_display = serializers.CharField(source="get_unit_display", read_only=True)
     type_display = serializers.CharField(source="get_type_display", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True, default=None)
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True, default=None)
     prices = serializers.DictField(child=serializers.DecimalField(max_digits=18, decimal_places=2, allow_null=True),
                                    required=False, write_only=True)
     stock_qty = serializers.SerializerMethodField()
@@ -54,8 +66,18 @@ class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Material
-        fields = ["id", "name", "type", "type_display", "sku", "barcode", "group", "group_name", "unit", "unit_display",
-                  "currency", "purchase_price", "min_qty", "description", "is_active", "prices", "stock_qty", "avg_cost"]
+        fields = ["id", "name", "type", "type_display", "code", "sku", "barcode", "group", "group_name", "supplier",
+                  "supplier_name", "unit", "unit_display", "currency", "purchase_price", "min_price", "min_price_currency",
+                  "weight", "volume", "min_qty", "description", "is_active", "prices", "stock_qty", "avg_cost",
+                  "created_at", "updated_at"]
+        read_only_fields = ["created_at", "updated_at"]
+        extra_kwargs = {"code": {"required": False, "allow_blank": True}}
+
+    def validate_code(self, v):
+        v = (v or "").strip()
+        if v and Material.objects.filter(code=v).exclude(pk=getattr(self.instance, "pk", None)).exists():
+            raise serializers.ValidationError("Bunday kodli tovar bor")
+        return v
 
     def to_representation(self, obj):
         data = super().to_representation(obj)
@@ -188,6 +210,11 @@ class MaterialGroupViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return MaterialGroup.objects.all()
 
+    def perform_destroy(self, instance):
+        if instance.children.exists():
+            raise serializers.ValidationError({"detail": "Guruh ichida boshqa guruhlar bor — avval ularni ko'chiring"})
+        _protected_destroy(instance, "Guruhni o'chirib bo'lmaydi")
+
 
 class PriceTypeViewSet(viewsets.ModelViewSet):
     serializer_class = PriceTypeSerializer
@@ -210,13 +237,19 @@ class ProductViewSet(viewsets.ModelViewSet):
     """Tovarlar (nomenklatura). ?type=raw,product  ?for_sale=1 (xomashyosiz)"""
 
     serializer_class = ProductSerializer
-    search_fields = ["name", "sku", "barcode"]
-    filterset_fields = ["group", "currency", "is_active"]
+    search_fields = ["name", "sku", "barcode", "code"]
+    filterset_fields = ["currency", "is_active", "supplier"]
     module = "products"
     public_read = True
 
     def get_queryset(self):
-        qs = Material.objects.select_related("group").prefetch_related("prices", "stocks")
+        qs = Material.objects.select_related("group", "supplier").prefetch_related("prices", "stocks")
+        g = self.request.query_params.get("group")
+        if g == "none":
+            qs = qs.filter(group__isnull=True)
+        elif g:
+            grp = MaterialGroup.objects.filter(pk=g).first()
+            qs = qs.filter(group_id__in=grp.descendant_ids()) if grp else qs.none()
         t = self.request.query_params.get("type")
         if t:
             qs = qs.filter(type__in=t.split(","))
@@ -230,9 +263,9 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 class StockViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = StockSerializer
-    filterset_fields = ["warehouse", "material__group", "material__type"]
+    filterset_fields = ["warehouse", "material", "material__group", "material__type"]
     search_fields = ["material__name", "material__sku"]
-    module = "warehouse"
+    module = ("warehouse", "products")
 
     def get_queryset(self):
         qs = Stock.objects.select_related("material__group", "warehouse")

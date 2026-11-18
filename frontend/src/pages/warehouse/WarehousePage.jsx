@@ -4,6 +4,7 @@ import api, { errorText } from '../../api'
 import { Badge, Field, Loading, Modal, MoneyBag, useFetch, useForm } from '../../components/ui'
 import { date, money, qty, todayISO } from '../../format'
 import { t } from '../../i18n'
+import { curLabel } from '../../currency'
 
 const TYPE_LABEL = { in: 'Kirim', out: 'Chiqim', transfer: "Ichki o'tkazma", adjust: 'Inventarizatsiya' }
 
@@ -56,7 +57,7 @@ function MoveForm({ type, onClose, onSaved }) {
         </Field>
         {type === 'in' && (
           <>
-            <Field label={`Narx (${mat?.currency === 'USD' ? 'USD' : "so'm"} / birlik)`}><input type="number" step="0.0001" min="0" {...bind('price')} required /></Field>
+            <Field label={`Narx (${curLabel(mat?.currency)} / birlik)`}><input type="number" step="0.0001" min="0" {...bind('price')} required /></Field>
             <Field label={t("Yetkazuvchi (kreditor qarzi hisoblanadi)")}>
               <select {...bind('supplier')}>
                 <option value="">—</option>

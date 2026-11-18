@@ -3,6 +3,7 @@ import api, { errorText } from '../../api'
 import { Field, Modal, useFetch, useForm } from '../../components/ui'
 import { money, todayISO } from '../../format'
 import { t } from '../../i18n'
+import { curLabel } from '../../currency'
 
 const KINDS = [
   ['client_payment', t("Mijoz to'lovi (kirim)")],
@@ -63,7 +64,7 @@ export default function TransactionForm({ kind = 'client_payment', order, onClos
             ))}
           </select>
         </Field>
-        <Field label={`Summa${account ? ` (${account.currency === 'USD' ? 'USD' : "so'm"})` : ''}`}>
+        <Field label={`Summa${account ? ` (${curLabel(account.currency)})` : ''}`}>
           <input type="number" step="0.01" min="0" {...bind('amount')} required />
         </Field>
         {k === 'expense' && (
@@ -99,7 +100,7 @@ export default function TransactionForm({ kind = 'client_payment', order, onClos
           </Field>
         )}
         {crossCurrency && (
-          <Field label={`Buyurtma valyutasida (${selOrder.currency === 'USD' ? 'USD' : "so'm"}) — bo'sh qolsa kurs bo'yicha`} full>
+          <Field label={`Buyurtma valyutasida (${curLabel(selOrder.currency)}) — bo'sh qolsa kurs bo'yicha`} full>
             <input type="number" step="0.01" min="0" {...bind('order_amount')} />
           </Field>
         )}

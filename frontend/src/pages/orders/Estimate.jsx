@@ -5,6 +5,7 @@ import { date, money, qty, shortDate } from '../../format'
 import { t } from '../../i18n'
 import Icon from '../../components/Icon'
 import { IconBtn } from '../../components/Icon'
+import { curLabel } from '../../currency'
 
 function AddMaterialRow({ estimateId, materials, onAdded }) {
   const [v, setV] = useState({ material: '', qty: '', waste_pct: '0', price: '' })
@@ -23,13 +24,13 @@ function AddMaterialRow({ estimateId, materials, onAdded }) {
       <td>
         <select value={v.material} onChange={(e) => setV({ ...v, material: e.target.value })} className="chip" style={{ width: '100%' }}>
           <option value="">{t("Material tanlang…")}</option>
-          {materials.map((m) => <option key={m.id} value={m.id}>{m.name} ({t(m.unit_display)}, {m.currency === 'USD' ? 'USD' : t("so'm")})</option>)}
+          {materials.map((m) => <option key={m.id} value={m.id}>{m.name} ({t(m.unit_display)}, {curLabel(m.currency)})</option>)}
         </select>
       </td>
       <td className="num"><input className="cell" placeholder={t("sarf")} value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} /></td>
       <td className="num"><input className="cell" style={{ width: 60 }} value={v.waste_pct} onChange={(e) => setV({ ...v, waste_pct: e.target.value })} /></td>
       <td className="num"><input className="cell" placeholder={t("o'rtacha")} value={v.price} onChange={(e) => setV({ ...v, price: e.target.value })} /></td>
-      <td>{mat ? (mat.currency === 'USD' ? 'USD' : "so'm") : ''}</td>
+      <td>{mat ? curLabel(mat.currency) : ''}</td>
       <td className="num"><button className="btn small primary" disabled={!v.material || !v.qty} onClick={add}>{t("Qo'shish")}</button></td>
       <td />
     </tr>
@@ -59,14 +60,14 @@ function AddServiceRow({ estimateId, operations, onAdded }) {
       <td className="num"><input className="cell" placeholder={t("miqdor")} value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} /></td>
       <td className="num">{op?.unit_display || ''}</td>
       <td className="num"><input className="cell" placeholder={op ? String(Number(op.default_rate)) : 'tarif'} value={v.rate} onChange={(e) => setV({ ...v, rate: e.target.value })} /></td>
-      <td>{op ? (op.rate_currency === 'USD' ? 'USD' : "so'm") : ''}</td>
+      <td>{op ? curLabel(op.rate_currency) : ''}</td>
       <td className="num"><button className="btn small primary" disabled={!v.operation || !v.qty} onClick={add}>{t("Qo'shish")}</button></td>
       <td />
     </tr>
   )
 }
 
-const cur = (c) => (c === 'USD' ? 'USD' : "so'm")
+const cur = curLabel
 
 export default function Estimate({ order, onChanged }) {
   const { data, error, reload } = useFetch(`/orders/${order.id}/costing/`)

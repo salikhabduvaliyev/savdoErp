@@ -1,34 +1,142 @@
 from django.db.models import ProtectedError
 from rest_framework import serializers, viewsets
-from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.decorators import action, api_view, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.accounts.permissions import TenantUser, module_perm
 
-from .models import Branch, Company, Currency, CustomField, ExchangeRate, SystemSettings
+from .models import Branch, Company, Currency, CurrencyDef, CustomField, ExchangeRate, SystemSettings
 from .money import RateNotFound, get_rate
 
 
 class ExchangeRateSerializer(serializers.ModelSerializer):
+    rate = serializers.DecimalField(source="usd_uzs", max_digits=14, decimal_places=4, required=False)
+
     class Meta:
         model = ExchangeRate
-        fields = ["id", "date", "usd_uzs", "source"]
+        fields = ["id", "currency", "date", "usd_uzs", "rate", "source"]
+        extra_kwargs = {"usd_uzs": {"required": False}, "source": {"required": False}}
 
-    def validate_usd_uzs(self, v):
-        if v <= 0:
-            raise serializers.ValidationError("Kurs musbat bo'lishi kerak")
-        return v
+    def validate(self, attrs):
+        v = attrs.get("usd_uzs")
+        if v is None and not self.instance:
+            raise serializers.ValidationError({"rate": "Kursni kiriting"})
+        if v is not None and v <= 0:
+            raise serializers.ValidationError({"rate": "Kurs musbat bo'lishi kerak"})
+        cur = attrs.get("currency", getattr(self.instance, "currency", "USD"))
+        if cur == "UZS":
+            raise serializers.ValidationError({"currency": "Asosiy valyuta kursi doim 1"})
+        if not self.instance and "source" not in attrs:
+            attrs["source"] = "qo'lda"
+        qs = ExchangeRate.objects.filter(currency=cur, date=attrs.get("date", getattr(self.instance, "date", None)))
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError({"date": "Bu sana uchun kurs allaqachon bor — uni tahrirlang"})
+        return attrs
 
 
 class ExchangeRateViewSet(viewsets.ModelViewSet):
+    """Kurslar tarixi. ?currency=USD"""
+
     serializer_class = ExchangeRateSerializer
+    module = ("settings", "finance")
+    public_read = True
+    filterset_fields = ["currency"]
+
+    def get_queryset(self):
+        return ExchangeRate.objects.all()
+
+
+class CurrencyDefSerializer(serializers.ModelSerializer):
+    rate = serializers.SerializerMethodField()
+    rate_date = serializers.SerializerMethodField()
+    rate_source = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CurrencyDef
+        fields = ["id", "code", "name", "symbol", "is_base", "auto_update", "is_active", "position",
+                  "rate", "rate_date", "rate_source"]
+        read_only_fields = ["is_base"]
+
+    def _last(self, obj):
+        if not hasattr(obj, "_last_rate"):
+            obj._last_rate = None if obj.is_base else ExchangeRate.objects.filter(currency=obj.code).order_by("-date").first()
+        return obj._last_rate
+
+    def get_rate(self, obj):
+        if obj.is_base:
+            return "1"
+        r = self._last(obj)
+        return str(r.usd_uzs) if r else None
+
+    def get_rate_date(self, obj):
+        r = self._last(obj)
+        return r.date if r else None
+
+    def get_rate_source(self, obj):
+        r = self._last(obj)
+        return r.source if r else None
+
+    def validate_code(self, v):
+        import re
+
+        v = (v or "").upper().strip()
+        if not re.fullmatch(r"[A-Z]{3}", v):
+            raise serializers.ValidationError("Kod 3 ta lotin harfi (masalan EUR)")
+        qs = CurrencyDef.objects.filter(code=v)
+        if self.instance:
+            if self.instance.code != v and self.instance.is_base:
+                raise serializers.ValidationError("Asosiy valyuta kodini o'zgartirib bo'lmaydi")
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("Bunday valyuta bor")
+        return v
+
+
+class CurrencyDefViewSet(viewsets.ModelViewSet):
+    """Valyutalar ma'lumotnomasi. Ro'yxat ochilganda CBU kurslari kuniga bir marta yangilanadi."""
+
+    serializer_class = CurrencyDefSerializer
     module = ("settings", "finance")
     public_read = True
 
     def get_queryset(self):
-        return ExchangeRate.objects.all()
+        return CurrencyDef.objects.all()
+
+    def list(self, request, *args, **kwargs):
+        from .currency import auto_update_once_a_day, ensure_default_currencies
+
+        ensure_default_currencies()
+        auto_update_once_a_day()
+        return super().list(request, *args, **kwargs)
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import ValidationError
+
+        if instance.is_base or instance.code in ("UZS", "USD"):
+            raise ValidationError("Asosiy valyutalarni (so'm, USD) o'chirib bo'lmaydi — nofaol qiling")
+        instance.delete()
+
+    @action(detail=False, methods=["post"])
+    def refresh(self, request):
+        """CBU'dan kurslarni hozir yangilash (?codes=USD,EUR)."""
+        from .currency import update_rates
+
+        codes = request.data.get("codes") or None
+        return Response(update_rates(codes=codes, force=True))
+
+    @action(detail=False, methods=["get"])
+    def cbu(self, request):
+        """CBU valyutalari ro'yxati — yangi valyuta qo'shishda tanlash uchun."""
+        from .currency import cbu_currencies
+
+        try:
+            return Response(cbu_currencies())
+        except Exception as e:
+            return Response({"detail": f"CBU bilan aloqa yo'q: {e}"}, status=503)
 
 
 class CustomFieldSerializer(serializers.ModelSerializer):
@@ -167,7 +275,8 @@ def meta(request):
     from apps.sales.models import Sale
 
     return Response({
-        "currencies": [{"value": v, "label": l} for v, l in Currency.choices],
+        "currencies": [{"value": c.code, "label": c.symbol or c.code, "name": c.name}
+                       for c in CurrencyDef.objects.filter(is_active=True)] or [{"value": v, "label": l} for v, l in Currency.choices],
         "usd_rate": rate,
         "order_statuses": [{"value": v, "label": l} for v, l in Order.Status.choices],
         "sale_statuses": [{"value": v, "label": l} for v, l in Sale.Status.choices],

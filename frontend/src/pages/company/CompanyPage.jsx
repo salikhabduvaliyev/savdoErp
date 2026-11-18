@@ -7,6 +7,7 @@ import { date, money, num, todayISO } from '../../format'
 import { AccessFields } from '../settings/SettingsPage'
 import { t } from '../../i18n'
 import Icon, { IconBtn } from '../../components/Icon'
+import { curLabel, currencyOptions } from '../../currency'
 
 const TABS = [
   ['info', t("Kompaniya ma'lumotlari")],
@@ -254,7 +255,6 @@ function Employees({ editable, user }) {
 
 /* ---------------- Bo'limlar va operatsiyalar ---------------- */
 const UNITS = [['pcs', t("dona")], ['m', 'm'], ['m2', 'm²'], ['kg', t("kg")], ['set', t("to'plam")]]
-const CURRENCIES = [['UZS', t("so'm")], ['USD', 'USD']]
 
 function Departments({ editable }) {
   const [stamp, setStamp] = useState(0)
@@ -332,7 +332,7 @@ function Departments({ editable }) {
             { name: 'department', label: t("Bo'lim"), type: 'select', options: deps.data.map((d) => [d.id, d.name]), required: true },
             { name: 'unit', label: t("O'lchov birligi"), type: 'select', options: UNITS, noEmpty: true },
             { name: 'default_rate', label: t("Xizmat tarifi (smeta B blok)"), type: 'number' },
-            { name: 'rate_currency', label: t("Tarif valyutasi"), type: 'select', options: CURRENCIES, noEmpty: true },
+            { name: 'rate_currency', label: t("Tarif valyutasi"), type: 'select', options: currencyOptions(), noEmpty: true },
             { name: 'piece_rate', label: t("Ishbay stavka, so'm / birlik"), type: 'number' },
           ]}
           defaults={{ unit: 'm2', rate_currency: 'UZS', default_rate: 0, piece_rate: 0 }}
@@ -439,7 +439,7 @@ function Accounts({ user }) {
                 <td className="bold">{a.name}</td>
                 <td>{a.branch_name || <span className="muted">{t("umumiy")}</span>}</td>
                 <td>{a.kind === 'cash' ? 'Kassa' : 'Bank'}</td>
-                <td>{a.currency === 'USD' ? 'USD' : "so'm"}</td>
+                <td>{curLabel(a.currency)}</td>
                 <td className="num">{money(a.opening_balance, a.currency)}</td>
                 <td className="num bold">{money(a.balance, a.currency)}</td>
                 <td><Badge kind={a.is_active ? 'ok' : 'neutral'}>{a.is_active ? 'Faol' : 'Yopilgan'}</Badge></td>
@@ -454,7 +454,7 @@ function Accounts({ user }) {
           fields={[
             { name: 'name', label: t("Nomi"), required: true, full: true },
             { name: 'kind', label: t("Turi"), type: 'select', options: [['cash', t("Kassa")], ['bank', t("Bank")]], noEmpty: true },
-            { name: 'currency', label: t("Valyuta"), type: 'select', options: CURRENCIES, noEmpty: true, readOnly: !!form.item },
+            { name: 'currency', label: t("Valyuta"), type: 'select', options: currencyOptions(), noEmpty: true, readOnly: !!form.item },
             { name: 'branch', label: 'Filial (bo\'sh — umumiy)', type: 'select', options: (branches.data || []).map((b) => [b.id, b.name]) },
             { name: 'opening_balance', label: t("Boshlang'ich qoldiq"), type: 'number' },
             { name: 'is_active', label: t("Faol"), type: 'checkbox' },

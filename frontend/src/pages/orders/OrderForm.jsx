@@ -7,6 +7,7 @@ import Icon from '../../components/Icon'
 import { Badge, toast, useFetch } from '../../components/ui'
 import { money, todayISO } from '../../format'
 import { t } from '../../i18n'
+import { CurrencyOptions } from '../../currency'
 
 const toLines = (items) => (items || []).map((i) => ({
   key: newKey(), product: i.product, name: i.name, code: i.product_code || '', unit: i.unit, qty: cleanNum(i.qty),
@@ -142,8 +143,7 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
         <div>
           <DocField label="Valyuta" required>
             <select value={v.currency} onChange={set('currency')} disabled={!!order}>
-              <option value="UZS">{t("so'm")} (UZS)</option>
-              <option value="USD">{t('dollar')} (USD)</option>
+              <CurrencyOptions withName value={v.currency} />
             </select>
           </DocField>
           <DocField label="Narx turi"><input value={pt ? `${pt.name}` : '—'} readOnly className="muted-input" title={t("Mijozning narx turi yoki standart narx turi")} /></DocField>

@@ -11,7 +11,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.db.models import Sum
 
-from .models import Currency, ExchangeRate
+from .models import BASE_CURRENCY, Currency, ExchangeRate
 from .tenancy import current_company_id
 
 ZERO = Decimal("0")
@@ -85,18 +85,21 @@ def reset_rate_cache(enabled=True):
     _rate_cache.set({} if enabled else None)
 
 
-def get_rate(on_date=None) -> Decimal:
-    """Berilgan sanadagi yoki undan oldingi eng yaqin USD kursi."""
+def get_rate(on_date=None, currency="USD") -> Decimal:
+    """Berilgan sanadagi yoki undan oldingi eng yaqin kurs: 1 birlik valyuta = ? so'm."""
+    if currency == BASE_CURRENCY:
+        return Decimal("1")
     on_date = on_date or date_cls.today()
     cache = _rate_cache.get()
-    key = (current_company_id(), on_date)
+    key = (current_company_id(), currency, on_date)
     if cache is not None and key in cache:
         return cache[key]
-    rate = ExchangeRate.objects.filter(date__lte=on_date).order_by("-date").first()
+    qs = ExchangeRate.objects.filter(currency=currency)
+    rate = qs.filter(date__lte=on_date).order_by("-date").first()
     if rate is None:
-        rate = ExchangeRate.objects.order_by("date").first()
+        rate = qs.order_by("date").first()
     if rate is None:
-        raise RateNotFound("Valyuta kursi kiritilmagan (Sozlamalar → Kurslar)")
+        raise RateNotFound(f"{currency} kursi kiritilmagan (Sozlamalar → Valyutalar)")
     if cache is not None:
         cache[key] = rate.usd_uzs
     return rate.usd_uzs
@@ -106,9 +109,5 @@ def convert(amount, from_cur, to_cur, on_date=None) -> Decimal:
     amount = Decimal(amount or 0)
     if from_cur == to_cur or amount == 0:
         return amount
-    rate = get_rate(on_date)
-    if from_cur == Currency.USD and to_cur == Currency.UZS:
-        return amount * rate
-    if from_cur == Currency.UZS and to_cur == Currency.USD:
-        return amount / rate
-    raise ValueError(f"Noma'lum valyuta juftligi: {from_cur}->{to_cur}")
+    # kross-kurs asosiy valyuta (so'm) orqali
+    return amount * get_rate(on_date, from_cur) / get_rate(on_date, to_cur)

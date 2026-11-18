@@ -31,11 +31,16 @@ export function useFetch(url, params) {
   return { data, error, loading, reload, setData }
 }
 
+/** UZS, USD — birinchi; qolgan valyutalar alifbo tartibida */
+function bagKeys(bag) {
+  return ['UZS', 'USD', ...Object.keys(bag || {}).filter((c) => c !== 'UZS' && c !== 'USD').sort()]
+}
+
 /** Valyuta bo'yicha alohida summa: {UZS, USD} — har biri o'z qatorida. Nol bo'lsa ko'rsatilmaydi. */
 export function MoneyBag({ bag, showZero = false, inline = false }) {
   if (!bag) return <span className="muted">—</span>
-  const parts = ['UZS', 'USD']
-    .filter((c) => showZero || Number(bag[c]) !== 0)
+  const parts = bagKeys(bag)
+    .filter((c) => showZero ? ['UZS', 'USD'].includes(c) || Number(bag[c]) !== 0 : Number(bag[c]) !== 0)
     .map((c) => (
       <div key={c} className={c === 'USD' ? 'usd-line' : ''} style={inline ? { display: 'inline' } : undefined}>
         {money(bag[c], c)}
@@ -54,6 +59,7 @@ export function Stat({ label, bag, value, sub, valueClass }) {
         <>
           <div className="value">{money(bag.UZS, 'UZS')}</div>
           <div className="value usd">{money(bag.USD, 'USD')}</div>
+          {bagKeys(bag).filter((c) => c !== 'UZS' && c !== 'USD' && Number(bag[c]) !== 0).map((c) => <div key={c} className="value usd">{money(bag[c], c)}</div>)}
         </>
       ) : (
         <div className={'value ' + (valueClass || '')}>{value}</div>

@@ -8,9 +8,10 @@ import { date, money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import SaleForm from './SaleForm'
 import Icon, { IconBtn } from '../../components/Icon'
+import { curLabel, CurrencyOptions } from '../../currency'
 
 const STATUSES = [['draft', tr("Qoralama")], ['completed', tr("Yakunlangan")], ['cancelled', tr("Bekor qilingan")]]
-const cur = (c) => (c === 'USD' ? 'USD' : "so'm")
+const cur = curLabel
 
 /* ------------------------------------------------------------ to'lov */
 function PayForm({ sale, onClose, onSaved }) {
@@ -179,7 +180,7 @@ export default function SalesPage() {
             {STATUSES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
           <select value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value })}>
-            <option value="">{tr("Valyuta: hammasi")}</option><option value="UZS">{tr("so'm")}</option><option value="USD">USD</option>
+            <option value="">{tr("Valyuta: hammasi")}</option><CurrencyOptions />
           </select>
         </div>
         {!data ? <Loading error={error} /> : (

@@ -6,8 +6,9 @@ import Icon from '../../components/Icon'
 import { Badge, useFetch } from '../../components/ui'
 import { money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
+import { curLabel, CurrencyOptions } from '../../currency'
 
-const cur = (c) => (c === 'USD' ? 'USD' : tr("so'm"))
+const cur = curLabel
 
 export default function SaleForm({ sale, onClose, onSaved }) {
   const clients = useFetch('/crm/counterparties/', { is_active: true })
@@ -115,7 +116,7 @@ export default function SaleForm({ sale, onClose, onSaved }) {
         <div>
           <DocField label="Valyuta" required>
             <select value={v.currency} onChange={(e) => setF('currency', e.target.value)} disabled={fromOrder}>
-              <option value="UZS">{tr("so'm")} (UZS)</option><option value="USD">{tr('dollar')} (USD)</option>
+              <CurrencyOptions withName value={v.currency} />
             </select>
           </DocField>
         </div>

@@ -4,6 +4,7 @@ import { Loading, MoneyBag, Stat, useFetch } from '../../components/ui'
 import { MONTHS, money, monthStartISO, pct, todayISO } from '../../format'
 import { ProductionDashboard } from '../production/Board'
 import { t } from '../../i18n'
+import { curLabel } from '../../currency'
 
 const PERIODS = {
   month: () => ({ date_from: monthStartISO(), date_to: todayISO() }),
@@ -61,7 +62,7 @@ function Director() {
       <div className="grid-2">
         <div className="card">
           <div className="card-head">
-            <h2 style={{ margin: 0 }}>{t('Oylik tushum va foyda')} ({cur === 'USD' ? 'USD' : t("so'm")})</h2>
+            <h2 style={{ margin: 0 }}>{t('Oylik tushum va foyda')} ({curLabel(cur)})</h2>
             <div className="segmented">
               <button className={cur === 'UZS' ? 'active' : ''} onClick={() => setCur('UZS')}>{t("so'm")}</button>
               <button className={cur === 'USD' ? 'active' : ''} onClick={() => setCur('USD')}>USD</button>

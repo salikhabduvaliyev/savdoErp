@@ -5,12 +5,13 @@ import { CustomFieldsManager } from '../../components/CustomFields'
 import EntityForm from '../../components/EntityForm'
 import Icon, { IconBtn } from '../../components/Icon'
 import { Badge, Field, Loading, Modal, toast, useFetch, DialogMode } from '../../components/ui'
-import { date, qty, todayISO } from '../../format'
+import { date } from '../../format'
 import { t } from '../../i18n'
+import Currencies from './Currencies'
 
 const SECTIONS = [
   { grp: 'Jamoa', items: [['users', t("Foydalanuvchilar"), 'user'], ['roles', t("Rollar va huquqlar"), 'roles']] },
-  { grp: 'Tizim', items: [['general', t("Umumiy sozlamalar"), 'sliders'], ['fields', t("Qo'shimcha maydonlar"), 'orders'], ['rates', t("Valyuta kursi"), 'currency'], ['refs', t("Ma'lumotnomalar"), 'book']] },
+  { grp: 'Tizim', items: [['general', t("Umumiy sozlamalar"), 'sliders'], ['fields', t("Qo'shimcha maydonlar"), 'orders'], ['rates', t("Valyutalar"), 'currency'], ['refs', t("Ma'lumotnomalar"), 'book']] },
 ]
 const ACTIONS = [['view', t("Ko'rish")], ['create', t("Yaratish")], ['edit', t("Tahrirlash")], ['delete', t("O'chirish")]]
 
@@ -456,41 +457,6 @@ function FieldsSection({ editable }) {
   )
 }
 
-/* ---------------- Valyuta kursi ---------------- */
-function Rates({ editable }) {
-  const [stamp, setStamp] = useState(0)
-  const { data, error } = useFetch('/core/rates/', { stamp })
-  const [v, setV] = useState({ date: todayISO(), usd_uzs: '' })
-  const add = async () => {
-    try {
-      await api.post('/core/rates/', v)
-      toast('Kurs saqlandi')
-      setV({ ...v, usd_uzs: '' })
-      setStamp((s) => s + 1)
-    } catch (e) { toast(errorText(e), true) }
-  }
-  return (
-    <>
-      <div className="page-head"><div><h1>{t("Valyuta kursi")}</h1><div className="page-sub">{t("Aylantirishda operatsiya sanasidagi (yoki undan oldingi eng yaqin) kurs ishlatiladi")}</div></div></div>
-      <div className="table-wrap" style={{ maxWidth: 620 }}>
-        {editable && (
-          <div className="table-toolbar filters">
-            <input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} />
-            <input type="number" placeholder={t("1 USD = … so'm")} value={v.usd_uzs} onChange={(e) => setV({ ...v, usd_uzs: e.target.value })} />
-            <button className="btn small primary" disabled={!v.usd_uzs} onClick={add}>{t("Qo'shish")}</button>
-          </div>
-        )}
-        {!data ? <Loading error={error} /> : (
-          <table className="t">
-            <thead><tr><th>{t("Sana")}</th><th className="num">{t("1 USD")}</th><th>{t("Manba")}</th></tr></thead>
-            <tbody>{data.slice(0, 60).map((r) => <tr key={r.id}><td>{date(r.date)}</td><td className="num">{qty(r.usd_uzs)} {t("so'm")}</td><td className="muted">{r.source}</td></tr>)}</tbody>
-          </table>
-        )}
-      </div>
-    </>
-  )
-}
-
 /* ---------------- Ma'lumotnomalar ---------------- */
 function References({ user }) {
   const [stamp, setStamp] = useState(0)
@@ -561,7 +527,7 @@ export default function SettingsPage() {
         {tab === 'roles' && <Roles editable={editable} onChanged={() => setStamp((s) => s + 1)} />}
         {tab === 'general' && <General editable={editable} />}
         {tab === 'fields' && <FieldsSection editable={editable} />}
-        {tab === 'rates' && <Rates editable={editable || canEdit(user, 'finance')} />}
+        {tab === 'rates' && <Currencies editable={editable || canEdit(user, 'finance')} />}
         {tab === 'refs' && <References user={user} />}
       </div>
     </div>

@@ -27,10 +27,25 @@ def qty_field(**kwargs):
     return models.DecimalField(**kwargs)
 
 
+BASE_CURRENCY = "UZS"
+
+
+def validate_currency(code):
+    """Valyuta kompaniya ma'lumotnomasida bo'lishi kerak (UZS va USD doim ruxsat)."""
+    from django.core.exceptions import ValidationError
+
+    if code in Currency.values:
+        return
+    if current_company_id() is None:
+        return
+    if not CurrencyDef.objects.filter(code=code, is_active=True).exists():
+        raise ValidationError(f"Valyuta topilmadi: {code} (Sozlamalar → Valyutalar)")
+
+
 def currency_field(**kwargs):
     kwargs.setdefault("max_length", 3)
-    kwargs.setdefault("choices", Currency.choices)
     kwargs.setdefault("default", Currency.UZS)
+    kwargs.setdefault("validators", [validate_currency])
     return models.CharField(**kwargs)
 
 
@@ -126,22 +141,50 @@ class Branch(TenantModel):
         return self.name
 
 
-class ExchangeRate(TenantModel):
-    """USD → so'm kursi sanalar bo'yicha (har kompaniya o'zi yuritadi).
+class CurrencyDef(TenantModel):
+    """Valyutalar ma'lumotnomasi (MoySklad: "Валюты"). Asosiy valyuta — so'm (UZS).
 
-    Qoida: operatsiya sanasidagi (yoki undan oldingi eng yaqin) kurs ishlatiladi.
+    Kurs qo'lda kiritiladi yoki CBU'dan avtomatik olinadi (auto_update).
     """
 
+    code = models.CharField(max_length=3, help_text="ISO kod: USD, EUR, RUB…")
+    name = models.CharField(max_length=60)
+    symbol = models.CharField(max_length=8, blank=True)
+    is_base = models.BooleanField(default=False)
+    auto_update = models.BooleanField(default=True, help_text="Kursni CBU'dan avtomatik olish")
+    is_active = models.BooleanField(default=True)
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-is_base", "position", "code"]
+        constraints = [models.UniqueConstraint(fields=["company", "code"], name="uniq_currency_code")]
+
+    def __str__(self):
+        return self.code
+
+    def save(self, *args, **kwargs):
+        self.code = self.code.upper()
+        super().save(*args, **kwargs)
+
+
+class ExchangeRate(TenantModel):
+    """Valyuta kursi sanalar bo'yicha: 1 birlik = rate so'm (har kompaniya o'zi yuritadi).
+
+    Qoida: operatsiya sanasidagi (yoki undan oldingi eng yaqin) kurs ishlatiladi.
+    `usd_uzs` — tarixiy nom, aslida "1 birlik valyuta necha so'm".
+    """
+
+    currency = models.CharField(max_length=3, default="USD")
     date = models.DateField()
     usd_uzs = models.DecimalField(max_digits=14, decimal_places=4)
     source = models.CharField(max_length=50, blank=True, default="CBU")
 
     class Meta:
-        ordering = ["-date"]
-        constraints = [models.UniqueConstraint(fields=["company", "date"], name="uniq_rate_date")]
+        ordering = ["-date", "currency"]
+        constraints = [models.UniqueConstraint(fields=["company", "currency", "date"], name="uniq_rate_cur_date")]
 
     def __str__(self):
-        return f"{self.date}: 1 USD = {self.usd_uzs} so'm"
+        return f"{self.date}: 1 {self.currency} = {self.usd_uzs} so'm"
 
     @staticmethod
     def _drop_cache():

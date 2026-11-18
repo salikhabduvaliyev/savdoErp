@@ -6,6 +6,7 @@ import { Badge, Field, Loading, Modal, Stat, toast, useFetch } from '../../compo
 import { money, qty } from '../../format'
 import { t } from '../../i18n'
 import { IconBtn } from '../../components/Icon'
+import { curLabel } from '../../currency'
 
 export const PRODUCT_TYPES = [
   ['raw', t("Xomashyo / material")],
@@ -68,7 +69,7 @@ function ProductForm({ item, groups, priceTypes, onClose, onSaved }) {
 
         <div className="full section-title">{t("Sotuv narxlari")}</div>
         {priceTypes.map((p) => (
-          <Field key={p.id} label={`${p.name} (${p.currency === 'USD' ? 'USD' : "so'm"})${p.is_default ? ' · asosiy' : ''}`}>
+          <Field key={p.id} label={`${p.name} (${curLabel(p.currency)})${p.is_default ? ' · asosiy' : ''}`}>
             <input type="number" step="any" min="0" value={prices[p.id] ?? ''} placeholder={t("narx belgilanmagan")}
               onChange={(e) => setPrices({ ...prices, [p.id]: e.target.value })} />
           </Field>
@@ -224,7 +225,7 @@ export default function ProductsPage() {
             { name: 'currency', label: t("Valyuta"), type: 'select', options: CUR, noEmpty: true },
             { name: 'is_default', label: t("Asosiy (sotuvda standart)"), type: 'checkbox' },
           ]}
-          columns={[{ key: 'name', render: (r) => <b>{r.name}</b> }, { key: 'currency', render: (r) => (r.currency === 'USD' ? 'USD' : "so'm") },
+          columns={[{ key: 'name', render: (r) => <b>{r.name}</b> }, { key: 'currency', render: (r) => curLabel(r.currency) },
             { key: 'is_default', render: (r) => (r.is_default ? <Badge kind="ok">{t("asosiy")}</Badge> : '') }]} />
       )}
       {tab === 'groups' && (

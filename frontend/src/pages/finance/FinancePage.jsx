@@ -4,6 +4,7 @@ import { Loading, MoneyBag, Stat, toast, useFetch } from '../../components/ui'
 import { money, monthLabel, shortDate, todayISO } from '../../format'
 import TransactionForm from './TransactionForm'
 import { t as tr } from '../../i18n'
+import { curLabel } from '../../currency'
 
 function Transactions({ stamp, direction }) {
   const [f, setF] = useState({ date_from: '', date_to: '', account: '', unassigned: '' })
@@ -32,7 +33,7 @@ function Transactions({ stamp, direction }) {
                 <td className="small muted">{tr(t.kind_display)}</td>
                 <td>{t.order ? <Link to={`/orders/${t.order}`}>{t.order_number}</Link> : (t.kind === 'expense' ? <span className="badge b-near_min">{tr("Biriktirilmagan")}</span> : '—')}</td>
                 <td>{t.account_name}</td>
-                <td>{t.currency === 'USD' ? 'USD' : "so'm"}</td>
+                <td>{curLabel(t.currency)}</td>
                 <td className={'num ' + (t.direction === 'in' ? 'green' : 'red')}>{money(t.direction === 'in' ? t.amount : -t.amount, t.currency, { sign: true })}</td>
               </tr>
             ))}

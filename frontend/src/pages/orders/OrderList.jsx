@@ -5,6 +5,7 @@ import { CustomFieldFilter, formatExtra } from '../../components/CustomFields'
 import { Badge, Loading, MoneyBag, toast, useFetch } from '../../components/ui'
 import { date, money } from '../../format'
 import { t } from '../../i18n'
+import { curLabel, CurrencyOptions } from '../../currency'
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const STATUSES = [
@@ -95,8 +96,7 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
           </select>
           <select value={f.currency || ''} onChange={set('currency')}>
             <option value="">{t('Valyuta: hammasi')}</option>
-            <option value="UZS">{t("so'm")}</option>
-            <option value="USD">USD</option>
+            <CurrencyOptions />
           </select>
           <select value={f.manager || ''} onChange={set('manager')}>
             <option value="">{t('Menejer')}</option>
@@ -171,7 +171,7 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
                     {show('date') && <td>{date(o.date)}</td>}
                     {show('client') && <td className="nowrap">{o.client_name}</td>}
                     {show('amount') && <td className="num">{money(o.amount, o.currency)}</td>}
-                    {show('currency') && <td>{o.currency === 'USD' ? 'USD' : t("so'm")}</td>}
+                    {show('currency') && <td>{curLabel(o.currency)}</td>}
                     {show('paid') && <td className="num">{money(o.paid, o.currency)}</td>}
                     {show('debt_uzs') && <td className="num bold">{o.currency === 'UZS' ? (debt ? money(debt, 'UZS') : <span className="muted">0</span>) : <span className="muted">—</span>}</td>}
                     {show('debt_usd') && <td className="num bold">{o.currency === 'USD' ? (debt ? money(debt, 'USD') : <span className="muted">$ 0,00</span>) : <span className="muted">—</span>}</td>}

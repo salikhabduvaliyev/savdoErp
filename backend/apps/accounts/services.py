@@ -25,6 +25,9 @@ def bootstrap_company(company):
     with tenant_context(company):
         main = Branch.objects.filter(is_main=True).first() or Branch.objects.create(name="Bosh ofis", is_main=True)
         SystemSettings.load()
+        from apps.core.currency import ensure_default_currencies
+
+        ensure_default_currencies()
         if not Account.objects.exists():
             Account.objects.create(name="Kassa (so'm)", kind="cash", currency="UZS", branch=main)
             Account.objects.create(name="Kassa (USD)", kind="cash", currency="USD", branch=main)

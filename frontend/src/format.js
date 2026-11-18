@@ -21,6 +21,7 @@ export function money(value, currency, { sign = false } = {}) {
     const s = num(Math.abs(n), 2)
     return `${prefix}${n < 0 ? '− ' : ''}$${nbsp}${s}`
   }
+  if (currency && currency !== 'UZS') return `${prefix}${num(n, 2)}${nbsp}${currency}`
   return `${prefix}${num(n)}${nbsp}${t("so'm")}`
 }
 

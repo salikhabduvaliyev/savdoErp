@@ -141,4 +141,11 @@ def sales_revenue_cost(date_from, date_to):
             continue
         revenue.add(sum((i.amount for i in lines), ZERO) - (sale.discount or ZERO), sale.currency)
         cost.add(sum((i.cost_amount for i in lines), ZERO), sale.currency)
+    # mijoz qaytarishlari: tushum va tannarx kamayadi
+    from apps.warehouse.documents import doc_cost
+    from apps.warehouse.models import StockDoc
+
+    for d in StockDoc.objects.filter(type="sales_return", posted=True, date__range=(date_from, date_to)).prefetch_related("items", "moves"):
+        revenue.add(-d.total, d.currency)
+        cost.add(-doc_cost(d), d.currency)
     return revenue, cost

@@ -299,3 +299,89 @@ class ApiTests(TestCase):
         r = self.api.post(f"/api/auth/platform/companies/{c3.id}/extend/", {"days": 30}, format="json")
         self.assertEqual(r.json()["status"], "active")
         self.assertEqual(r.json()["days_left"], 30)
+
+
+class StockDocTests(TestCase):
+    """MoySklad uslubidagi hujjatlar: qabul qilish, qaytarish, kirim, chiqim, ko'chirish, inventarizatsiya."""
+
+    def setUp(self):
+        self.c, self.owner = register_company(company_name="Ombor", full_name="A", phone="9", username="wh", password="Parol12345!")
+        with tenant_context(self.c):
+            from apps.core.models import CurrencyDef
+
+            self.sup = Counterparty.objects.create(name="Yetkazuvchi")
+            self.cli = Counterparty.objects.create(name="Mijoz")
+            self.m = Material.objects.create(name="Profil", type="raw", unit="m", currency="UZS")
+            self.w1 = Warehouse.objects.order_by("id").first()
+            self.w2 = Warehouse.objects.create(name="Ikkinchi")
+            CurrencyDef.objects.create(code="EUR", name="Evro", auto_update=False)
+            ExchangeRate.objects.create(currency="USD", date=T, usd_uzs=D("12000"))
+            ExchangeRate.objects.create(currency="EUR", date=T, usd_uzs=D("13000"))
+        set_context(None, None)
+        self.api = APIClient()
+        self.api.force_authenticate(self.owner)
+
+    def stock(self, w=None):
+        from apps.warehouse.models import Stock
+
+        with tenant_context(self.c):
+            s = Stock.objects.filter(material=self.m, warehouse=w or self.w1).first()
+            return (s.qty, s.avg_cost) if s else (D("0"), D("0"))
+
+    def doc(self, type_, items, **kw):
+        body = {"type": type_, "warehouse": self.w1.id, "currency": "UZS", "date": str(T), "items": items, **kw}
+        r = self.api.post(f"/api/warehouse/docs/?type={type_}", body, format="json")
+        self.assertIn(r.status_code, (200, 201), r.content)
+        return r.json()
+
+    def test_supply_edit_unpost_and_debt(self):
+        d = self.doc("supply", [{"material": self.m.id, "qty": "10", "price": "1000"}], counterparty=self.sup.id)
+        self.assertEqual(d["number"], 1)
+        self.assertEqual(self.stock()[0], D("10"))
+        # tahrirlash — qayta o'tkaziladi
+        r = self.api.patch(f"/api/warehouse/docs/{d['id']}/?type=supply", {"items": [{"material": self.m.id, "qty": "4", "price": "1000"}]}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(self.stock()[0], D("4"))
+        with tenant_context(self.c):
+            from apps.finance.services import supplier_debts
+
+            self.assertEqual(D(supplier_debts()["total"]["UZS"]), D("4000"))
+        # bekor qilish
+        self.api.post(f"/api/warehouse/docs/{d['id']}/unpost/?type=supply")
+        self.assertEqual(self.stock()[0], D("0"))
+        with tenant_context(self.c):
+            self.assertEqual(D(supplier_debts()["total"]["UZS"]), D("0"))
+
+    def test_purchase_order_to_supply_and_eur_price(self):
+        po = self.doc("purchase_order", [{"material": self.m.id, "qty": "10", "price": "2"}], counterparty=self.sup.id, currency="EUR")
+        self.assertEqual(self.stock()[0], D("0"))  # buyurtma qoldiqqa ta'sir qilmaydi
+        r = self.api.post(f"/api/warehouse/docs/{po['id']}/derive/?type=purchase_order", {"type": "supply"}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        sup = r.json()
+        self.assertFalse(sup["posted"])
+        self.assertEqual(D(sup["items"][0]["qty"]), D("10"))
+        self.api.patch(f"/api/warehouse/docs/{sup['id']}/?type=supply", {"items": [{"material": self.m.id, "qty": "6", "price": "2"}], "posted": True}, format="json")
+        qty, avg = self.stock()
+        self.assertEqual(qty, D("6"))
+        self.assertEqual(avg, D("26000"))  # 2 EUR × 13000
+        # qolgan 4 ta uchun ikkinchi qabul qilish
+        r = self.api.post(f"/api/warehouse/docs/{po['id']}/derive/?type=purchase_order", {"type": "supply"}, format="json")
+        self.assertEqual(D(r.json()["items"][0]["qty"]), D("4"))
+
+    def test_loss_move_inventory(self):
+        self.doc("enter", [{"material": self.m.id, "qty": "10", "price": "500"}])
+        self.doc("loss", [{"material": self.m.id, "qty": "3"}])
+        self.assertEqual(self.stock()[0], D("7"))
+        self.doc("move", [{"material": self.m.id, "qty": "2"}], to_warehouse=self.w2.id)
+        self.assertEqual(self.stock()[0], D("5"))
+        self.assertEqual(self.stock(self.w2)[0], D("2"))
+        inv = self.doc("inventory", [{"material": self.m.id, "qty": "4"}])
+        self.assertEqual(self.stock()[0], D("4"))
+        self.assertEqual(D(inv["items"][0]["book_qty"]), D("5"))
+        # ortiqcha hisobdan chiqarish — xato
+        r = self.api.post("/api/warehouse/docs/?type=loss", {"type": "loss", "warehouse": self.w1.id, "items": [{"material": self.m.id, "qty": "100"}]}, format="json")
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self.stock()[0], D("4"))
+        # aylanma
+        t = self.api.get("/api/warehouse/turnover/", {"warehouse": self.w1.id}).json()["rows"][0]
+        self.assertEqual((D(t["income"]), D(t["outcome"]), D(t["closing"])), (D("10"), D("6"), D("4")))

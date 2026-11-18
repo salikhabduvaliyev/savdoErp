@@ -7,7 +7,8 @@ from apps.core.tenancy import TenantModel
 MODULE_GROUPS = [
     ("Asosiy", [("dashboard", "Dashboard")]),
     ("Savdo", [("orders", "Buyurtmalar"), ("sales", "Sotuvlar"), ("counterparties", "Kontragentlar")]),
-    ("Ishlab chiqarish va ombor", [("production", "Ishlab chiqarish"), ("warehouse", "Ombor"), ("products", "Tovarlar")]),
+    ("Xaridlar va ombor", [("purchases", "Xaridlar"), ("warehouse", "Ombor"), ("products", "Tovarlar")]),
+    ("Ishlab chiqarish", [("production", "Ishlab chiqarish")]),
     ("Moliya va xodimlar", [("finance", "Moliya"), ("hr", "KPI va oylik")]),
     ("Tizim", [("company", "Kompaniya"), ("settings", "Sozlamalar")]),
 ]
@@ -43,12 +44,12 @@ DEFAULT_ROLES = [
      _perms(orders=perm(True, True, True, False, "own"), sales=perm(True, True, True, False, "own"),
             counterparties=WORK, products=VIEW, warehouse=VIEW), False),
     ("production_manager", "Ishlab chiqarish menejeri", "Ishlab chiqarish va ombor",
-     _perms(dashboard=VIEW, orders=WORK, production=FULL, warehouse=FULL, products=WORK, counterparties=VIEW, company=VIEW), False),
+     _perms(dashboard=VIEW, orders=WORK, production=FULL, warehouse=FULL, purchases=WORK, products=WORK, counterparties=VIEW, company=VIEW), False),
     ("dept_head", "Bo'lim boshlig'i", "Faqat o'z bo'limi topshiriqlari", _perms(production=WORK), True),
     ("storekeeper", "Omborchi", "Ombor harakatlari",
-     _perms(warehouse=WORK, products=WORK, production=VIEW, orders=VIEW, sales=VIEW, counterparties=VIEW), False),
+     _perms(warehouse=WORK, purchases=WORK, products=WORK, production=VIEW, orders=VIEW, sales=VIEW, counterparties=VIEW), False),
     ("accountant", "Hisobchi", "Moliya, oylik, KPI",
-     _perms(dashboard=VIEW, orders=VIEW, sales=VIEW, finance=FULL, hr=FULL, counterparties=WORK, company=VIEW), False),
+     _perms(dashboard=VIEW, orders=VIEW, sales=VIEW, purchases=VIEW, finance=FULL, hr=FULL, counterparties=WORK, company=VIEW), False),
     ("cashier", "Kassir", "Sotuv va to'lov qabul qilish",
      _perms(sales=WORK, counterparties=WORK, products=VIEW, finance=perm(True, True, False, False)), False),
 ]

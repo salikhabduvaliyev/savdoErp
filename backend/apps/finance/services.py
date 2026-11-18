@@ -56,6 +56,12 @@ def client_debts():
         if debt:
             per_client[doc.client_id].add(debt, doc.currency)
             names[doc.client_id] = doc.client.name
+    # mijoz qaytarishlari qarzni kamaytiradi
+    from apps.warehouse.models import StockDoc
+
+    for d in StockDoc.objects.filter(type="sales_return", posted=True, counterparty__isnull=False)             .select_related("counterparty").prefetch_related("items"):
+        per_client[d.counterparty_id].add(-d.total, d.currency)
+        names[d.counterparty_id] = d.counterparty.name
     free = Transaction.objects.filter(kind=Transaction.Kind.CLIENT_PAYMENT, order__isnull=True, sale__isnull=True,
                                       client__isnull=False)
     if bid:
@@ -78,15 +84,23 @@ def supplier_debts():
     """Yetkazuvchilarga qarz (kreditor): ombor kirimlari − to'lovlar, valyuta bo'yicha."""
     from apps.warehouse.models import StockMove
 
+    from apps.warehouse.models import StockDoc
+
     per_supplier = defaultdict(MoneyBag)
     names = {}
+    # hujjatsiz (eski) kirimlar — material valyutasida
     for m in (
-        StockMove.objects.filter(type=StockMove.Type.IN, supplier__isnull=False)
+        StockMove.objects.filter(type=StockMove.Type.IN, supplier__isnull=False, doc__isnull=True)
         .values("supplier_id", "supplier__name", "currency")
         .annotate(total=Sum(F("qty") * F("price")))
     ):
         per_supplier[m["supplier_id"]].add(m["total"], m["currency"])
         names[m["supplier_id"]] = m["supplier__name"]
+    # qabul qilish (+) va yetkazuvchiga qaytarish (−) — hujjat valyutasida
+    for d in StockDoc.objects.filter(type__in=["supply", "purchase_return"], posted=True, counterparty__isnull=False)             .select_related("counterparty").prefetch_related("items"):
+        sign = 1 if d.type == "supply" else -1
+        per_supplier[d.counterparty_id].add(sign * d.total, d.currency)
+        names[d.counterparty_id] = d.counterparty.name
     for t in (
         Transaction.objects.filter(kind=Transaction.Kind.SUPPLIER_PAYMENT)
         .values("supplier_id", "supplier__name", "currency")

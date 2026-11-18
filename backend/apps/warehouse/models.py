@@ -168,6 +168,7 @@ class StockMove(TenantModel, TimeStamped):
     order = models.ForeignKey("orders.Order", null=True, blank=True, on_delete=models.PROTECT, related_name="stock_moves")
     sale = models.ForeignKey("sales.Sale", null=True, blank=True, on_delete=models.PROTECT, related_name="stock_moves")
     job = models.ForeignKey("production.ProductionJob", null=True, blank=True, on_delete=models.PROTECT, related_name="stock_moves")
+    doc = models.ForeignKey("warehouse.StockDoc", null=True, blank=True, on_delete=models.PROTECT, related_name="moves")
     note = models.CharField(max_length=300, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 
@@ -177,3 +178,82 @@ class StockMove(TenantModel, TimeStamped):
     @property
     def amount(self):
         return self.qty * self.price
+
+
+class StockDoc(TenantModel, TimeStamped):
+    """Ombor/xarid hujjati (MoySklad uslubi): bir nechta pozitsiya, "o'tkazilgan" (Проведено) belgisi.
+
+    O'tkazilganda qoldiqqa ta'sir qiladi (StockMove.doc), o'tkazilmagani — qoralama.
+    """
+
+    class Type(models.TextChoices):
+        PURCHASE_ORDER = "purchase_order", "Yetkazuvchiga buyurtma"
+        SUPPLY = "supply", "Qabul qilish"
+        PURCHASE_RETURN = "purchase_return", "Yetkazuvchiga qaytarish"
+        ENTER = "enter", "Kirim"
+        LOSS = "loss", "Hisobdan chiqarish"
+        MOVE = "move", "Ko'chirish"
+        INVENTORY = "inventory", "Inventarizatsiya"
+        SALES_RETURN = "sales_return", "Mijoz qaytarishi"
+
+    # qaysi modul huquqi bilan ishlanadi
+    MODULE = {
+        "purchase_order": "purchases", "supply": "purchases", "purchase_return": "purchases",
+        "enter": "warehouse", "loss": "warehouse", "move": "warehouse", "inventory": "warehouse",
+        "sales_return": "sales",
+    }
+
+    type = models.CharField(max_length=20, choices=Type.choices)
+    number = models.PositiveIntegerField(editable=False)
+    date = models.DateField(default=timezone.localdate)
+    branch = models.ForeignKey("core.Branch", null=True, blank=True, on_delete=models.PROTECT, related_name="stock_docs")
+    warehouse = models.ForeignKey(Warehouse, null=True, blank=True, on_delete=models.PROTECT, related_name="docs")
+    to_warehouse = models.ForeignKey(Warehouse, null=True, blank=True, on_delete=models.PROTECT, related_name="docs_in")
+    counterparty = models.ForeignKey("crm.Counterparty", null=True, blank=True, on_delete=models.PROTECT, related_name="stock_docs")
+    currency = currency_field()
+    posted = models.BooleanField(default=True, help_text="O'tkazilgan (qoldiqqa ta'sir qiladi)")
+    plan_date = models.DateField(null=True, blank=True, help_text="Yetkazuvchiga buyurtma: kutilgan sana")
+    source = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="derived",
+                               help_text="Asos hujjat (buyurtma → qabul qilish → qaytarish)")
+    sale = models.ForeignKey("sales.Sale", null=True, blank=True, on_delete=models.PROTECT, related_name="returns")
+    note = models.TextField(blank=True)
+    extra = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        ordering = ["-date", "-number"]
+        constraints = [models.UniqueConstraint(fields=["company", "type", "number"], name="uniq_stockdoc_number")]
+
+    def __str__(self):
+        return f"{self.get_type_display()} №{self.number}"
+
+    def save(self, *args, **kwargs):
+        if not self.number:
+            last = StockDoc.objects.filter(type=self.type).aggregate(m=models.Max("number"))["m"] or 0
+            self.number = last + 1
+        super().save(*args, **kwargs)
+
+    @property
+    def total(self) -> Decimal:
+        return sum((i.amount for i in self.items.all()), Decimal("0"))
+
+
+class StockDocItem(TenantModel):
+    doc = models.ForeignKey(StockDoc, on_delete=models.CASCADE, related_name="items")
+    material = models.ForeignKey(Material, on_delete=models.PROTECT, related_name="doc_items")
+    qty = qty_field(help_text="Inventarizatsiyada — haqiqiy (sanalgan) miqdor")
+    book_qty = qty_field(null=True, blank=True, help_text="Inventarizatsiya: hisobdagi qoldiq")
+    price = money_field(max_digits=18, decimal_places=4)
+    discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0"))
+    amount = money_field(editable=False)
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def save(self, *args, **kwargs):
+        q = Decimal(self.qty)
+        if self.doc.type == StockDoc.Type.INVENTORY and self.book_qty is not None:
+            q = Decimal(self.qty) - Decimal(self.book_qty)  # farq summasi
+        self.amount = (q * Decimal(self.price) * (1 - Decimal(self.discount_pct) / 100)).quantize(Decimal("0.01"))
+        super().save(*args, **kwargs)

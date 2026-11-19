@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import ProtectedError
 from rest_framework import mixins, serializers, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.money import MoneyBag
@@ -273,18 +274,39 @@ class StockViewSet(viewsets.ReadOnlyModelViewSet):
         return qs.filter(warehouse__branch_id=bid) if bid else qs
 
     def list(self, request, *args, **kwargs):
-        from apps.core.models import SystemSettings
+        """Qoldiqlar: ?warehouse&group&type&search&stock=all|positive|negative|zero|nonzero&below_min&date=YYYY-MM-DD"""
+        from .stock_report import stock_rows
 
-        ratio = SystemSettings.load().stock_near_min_ratio
-        rows = list(self.filter_queryset(self.get_queryset()))
-        if request.query_params.get("below_min") in ("1", "true"):
-            rows = [r for r in rows if r.state_for(ratio) != "ok"]
+        rows = stock_rows(request.query_params)
         bag = MoneyBag()
         for r in rows:
-            bag.add(r.value, r.material.currency)
-        ser = self.get_serializer(rows, many=True)
-        ser.context["ratio"] = ratio
-        return Response({"results": ser.data, "total_value": bag.as_dict()})
+            bag.add(r["value"], r["currency"])
+        return Response({"results": rows, "count": len(rows), "total_value": bag.as_dict(),
+                         "date": request.query_params.get("date") or None})
+
+    @action(detail=False, methods=["get"])
+    def export(self, request):
+        """Yuklab olish: ?fmt=xlsx|csv (+ list filtrlari)"""
+        from django.utils import timezone
+
+        from .excel import csv_response, xlsx_response
+        from .stock_report import stock_rows
+
+        rows = stock_rows(request.query_params)
+        day = request.query_params.get("date") or timezone.localdate().isoformat()
+        headers = ["Kod", "Artikul", "Nomi", "Guruh", "Ombor", "Birlik", "Qoldiq", "Rezerv", "Mavjud", "Minimal",
+                   "O'rtacha narx", "Qiymati", "Valyuta", "Holat"]
+        data = [[r["code"], r["sku"], r["material_name"], r["group_name"], r["warehouse_name"], r["unit"],
+                 float(r["qty"]), float(r["reserved"]), float(r["available"]), float(r["min_qty"]),
+                 float(r["avg_cost"]), float(r["value"]), r["currency"], r["state_display"]] for r in rows]
+        name = f"qoldiqlar-{day}"
+        if request.query_params.get("fmt") == "csv":
+            return csv_response(headers, data, name)
+        totals = MoneyBag()
+        for r in rows:
+            totals.add(r["value"], r["currency"])
+        tot_rows = [[None] * 10 + ["Jami", float(v), c, None] for c, v in totals.as_dict().items() if Decimal(v)]
+        return xlsx_response([(f"Qoldiqlar {day}", headers, data + tot_rows, None)], name)
 
 
 class StockMoveViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):

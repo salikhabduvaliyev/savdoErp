@@ -10,7 +10,7 @@ import SaleForm from './SaleForm'
 import Profitability from './Profitability'
 import { PaymentDoc } from '../finance/Payments'
 import { printReceipt, printWaybill } from '../../components/Print'
-import { BulkMenu, SearchSelect, usePager } from '../../components/Controls'
+import { BulkMenu, DropMenu, SearchSelect, usePager } from '../../components/Controls'
 import { DocList } from '../warehouse/StockDocs'
 import Icon, { IconBtn } from '../../components/Icon'
 import { curLabel, CurrencyOptions } from '../../currency'
@@ -57,15 +57,6 @@ function PayForm({ sale, onClose, onSaved }) {
 
 /* ------------------------------------------------------------ karta */
 /* Sotuv kartasi (MoySklad "Отгрузка"): o'tkazish, tahrirlash, o'chirish, yaratish (to'lov, qaytarish), pechat, bog'liq hujjatlar */
-function Drop({ label, icon, items }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="bulk" onMouseLeave={() => setOpen(false)}>
-      <button className="btn" onClick={() => setOpen((o) => !o)}>{icon && <Icon name={icon} size={16} />} {label} <Icon name="chevron-down" size={14} /></button>
-      {open && <div className="bulk-menu">{items.filter(Boolean).map(([l, fn, dis]) => <button key={l} className="bulk-item" disabled={dis} onClick={() => { setOpen(false); fn() }}>{l}</button>)}</div>}
-    </div>
-  )
-}
 
 function RelatedDocs({ s, pays, rets }) {
   const card = (kind, title, num, d, sum, cur, to, status) => (
@@ -128,7 +119,7 @@ function SaleCard({ id, onClose, onChanged }) {
       <div className="doc-toolbar">
         {editable && <button className="btn primary" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> {tr('Tahrirlash')}</button>}
         <button className="btn" onClick={onClose}>{tr('Yopish')}</button>
-        <Drop label={tr('Yaratish')} icon="plus" items={[
+        <DropMenu label={tr('Yaratish')} icon="plus" items={[
           canCreate(user, 'finance') && Number(s.debt) > 0 && [tr('Kirim orderi (kassa)'), () => setPay('cash')],
           canCreate(user, 'finance') && Number(s.debt) > 0 && [tr("Kiruvchi to'lov (bank)"), () => setPay('bank')],
           posted && canCreate(user, 'sales_returns') && [tr('Mijoz qaytarishi'), makeReturn],
@@ -140,7 +131,7 @@ function SaleCard({ id, onClose, onChanged }) {
             } catch (e) { toast(errorText(e), true) }
           }, !canCreate(user, 'sales')],
         ]} />
-        <Drop label={tr('Pechat')} icon="print" items={[[tr('Yuk xati (nakladnoy)'), () => printWaybill(s)], [tr('Tovar cheki'), () => printReceipt(s)]]} />
+        <DropMenu label={tr('Pechat')} icon="print" items={[[tr('Yuk xati (nakladnoy)'), () => printWaybill(s)], [tr('Tovar cheki'), () => printReceipt(s)]]} />
         <span className="grow" />
         {s.status !== 'cancelled' && (
           <label className="check posted-check" title={tr("Belgilansa — tovar ombordan chiqadi")}>

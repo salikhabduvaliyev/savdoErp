@@ -3,7 +3,7 @@ import api from '../api'
 import { date, money, qty } from '../format'
 import { t } from '../i18n'
 
-const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+export const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
 const BASE_CSS = `
   * { box-sizing: border-box; } body { font-family: Arial, sans-serif; color: #111; margin: 24px; font-size: 13px; }
@@ -14,13 +14,13 @@ const BASE_CSS = `
   @media print { body { margin: 10mm; } .noprint { display: none; } }
 `
 
-function openPrint(title, body, css = BASE_CSS) {
+export function openPrint(title, body, css = BASE_CSS, autoPrint = true) {
   const w = window.open('', '_blank', 'width=900,height=1000')
   if (!w) { alert(t("Brauzer yangi oynani blokladi — ruxsat bering")); return }
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>
     <div class="noprint" style="margin-bottom:12px"><button onclick="window.print()">🖨 ${esc(t('Chop etish'))}</button></div>${body}</body></html>`)
   w.document.close()
-  setTimeout(() => w.print(), 300)
+  if (autoPrint) setTimeout(() => w.print(), 300)
 }
 
 async function company() {

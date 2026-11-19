@@ -137,3 +137,29 @@ export function BulkMenu({ count, items, label }) {
     </div>
   )
 }
+
+/** Tugma + ochiladigan menyu (MoySklad "Создать документ ▾", "Печать ▾", "Импорт ▾").
+ *  items: [[label, onClick, disabled?], ...] — false/null elementlar tashlab yuboriladi */
+export function DropMenu({ label, icon, items, align = 'left' }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+  const list = items.filter(Boolean)
+  return (
+    <div className="bulk" ref={ref}>
+      <button type="button" className="btn" onClick={() => setOpen((o) => !o)} disabled={!list.length}>
+        {icon && <Icon name={icon} size={16} />} {label} <Icon name="chevron-down" size={14} />
+      </button>
+      {open && (
+        <div className="bulk-menu" style={align === 'right' ? { left: 'auto', right: 0 } : undefined}>
+          {list.map(([l, fn, dis]) => <button type="button" key={l} className="bulk-item" disabled={dis} onClick={() => { setOpen(false); fn() }}>{l}</button>)}
+        </div>
+      )}
+    </div>
+  )
+}

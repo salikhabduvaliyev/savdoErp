@@ -334,6 +334,50 @@ class StockDocTests(TestCase):
         self.assertIn(r.status_code, (200, 201), r.content)
         return r.json()
 
+    def test_stock_as_of_date_export_and_excel_import(self):
+        import io
+        from datetime import timedelta
+
+        from openpyxl import Workbook, load_workbook
+
+        past = T - timedelta(days=10)
+        self.doc("enter", [{"material": self.m.id, "qty": "10", "price": "100"}], date=str(past))
+        self.doc("enter", [{"material": self.m.id, "qty": "10", "price": "200"}])
+        self.doc("loss", [{"material": self.m.id, "qty": "5"}])
+        r = self.api.get("/api/warehouse/stock/", {"material": self.m.id}).json()["results"]
+        self.assertEqual(D(r[0]["qty"]), D("15"))
+        # o'tgan sanaga qoldiq: faqat birinchi kirim
+        r = self.api.get("/api/warehouse/stock/", {"material": self.m.id, "date": str(T - timedelta(days=1))}).json()["results"]
+        self.assertEqual(D(r[0]["qty"]), D("10"))
+        self.assertEqual(D(r[0]["avg_cost"]), D("100"))
+        self.assertEqual(self.api.get("/api/warehouse/stock/", {"stock": "negative"}).json()["count"], 0)
+        # yuklab olish
+        x = self.api.get("/api/warehouse/stock/export/", {"fmt": "xlsx"})
+        self.assertEqual(x.status_code, 200)
+        ws = load_workbook(io.BytesIO(x.content)).active
+        self.assertEqual(ws.cell(2, 3).value, "Profil")
+        self.assertIn("Profil", self.api.get("/api/warehouse/stock/export/", {"fmt": "csv"}).content.decode("utf-8-sig"))
+        # shablon va import
+        tpl = self.api.get("/api/warehouse/docs/import_template/", {"type": "enter"})
+        self.assertEqual(tpl.status_code, 200)
+        self.assertEqual([c.value for c in load_workbook(io.BytesIO(tpl.content)).active[1]], ["Kod", "Artikul", "Nomi", "Miqdor", "Narx"])
+        wb = Workbook()
+        wb.active.append(["Kod", "Nomi", "Miqdor", "Narx"])
+        wb.active.append([None, "profil", 3, "1 500,5"])
+        wb.active.append([None, "Yo'q tovar", 1, 1])
+        wb.active.append([None, "Profil", 2, None])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        buf.name = "import.xlsx"
+        r = self.api.post("/api/warehouse/docs/import_items/?type=enter", {"file": buf}, format="multipart")
+        self.assertEqual(r.status_code, 200, r.content)
+        body = r.json()
+        self.assertEqual(len(body["lines"]), 1)
+        self.assertEqual(D(body["lines"][0]["qty"]), D("5"))
+        self.assertEqual(D(body["lines"][0]["price"]), D("1500.5"))
+        self.assertEqual(len(body["errors"]), 1)
+
     def test_supply_edit_unpost_and_debt(self):
         d = self.doc("supply", [{"material": self.m.id, "qty": "10", "price": "1000"}], counterparty=self.sup.id)
         self.assertEqual(d["number"], 1)

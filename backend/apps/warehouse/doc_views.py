@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Q, Sum
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
@@ -141,11 +142,14 @@ def _module_for(t):
     return StockDoc.MODULE.get(t)
 
 
+NO_PRICE_TYPES = {"loss", "move", "inventory"}
+
+
 class StockDocViewSet(viewsets.ModelViewSet):
     """?type=supply&warehouse=&counterparty=&posted=&date_from=&date_to=&search="""
 
     serializer_class = StockDocSerializer
-    action_perms = {"post": "post", "unpost": "post", "derive": "view", "from_sale": "view"}
+    action_perms = {"post": "post", "unpost": "post", "derive": "view", "from_sale": "view", "import_template": "view", "import_items": "view"}
 
     @property
     def module(self):
@@ -183,6 +187,32 @@ class StockDocViewSet(viewsets.ModelViewSet):
         if bid:
             qs = qs.filter(Q(branch_id=bid) | Q(warehouse__branch_id=bid) | Q(branch__isnull=True, warehouse__isnull=True))
         return qs
+
+    @action(detail=False, methods=["get"])
+    def import_template(self, request):
+        """Import shabloni (xlsx): 1-varaq — to'ldiriladigan jadval, 2-varaq — tovarlar ma'lumotnomasi."""
+        from .excel import template_response
+
+        t = request.query_params.get("type") or "enter"
+        mats = list(Material.objects.filter(is_active=True).exclude(type=Material.Type.SERVICE).order_by("name"))
+        return template_response(t, mats, with_price=t not in NO_PRICE_TYPES)
+
+    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
+    def import_items(self, request):
+        """Excel/CSV'dan pozitsiyalar: {lines, errors}. Hujjat saqlanmaydi — forma to'ldiriladi."""
+        from .excel import parse_items
+
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"detail": "Fayl tanlanmagan"}, status=400)
+        if f.size > 5 * 1024 * 1024:
+            return Response({"detail": "Fayl juda katta (5 MB gacha)"}, status=400)
+        t = request.query_params.get("type") or "enter"
+        try:
+            lines, errors = parse_items(f, Material.objects.exclude(type=Material.Type.SERVICE), with_price=t not in NO_PRICE_TYPES)
+        except Exception as e:  # noqa: BLE001 — buzilgan fayl
+            return Response({"detail": f"Faylni o'qib bo'lmadi: {e}"}, status=400)
+        return Response({"lines": lines, "errors": errors})
 
     def check_object_permissions(self, request, obj):
         super().check_object_permissions(request, obj)

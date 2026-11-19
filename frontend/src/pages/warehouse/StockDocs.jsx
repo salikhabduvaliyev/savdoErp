@@ -1,15 +1,16 @@
 // Ombor va xarid hujjatlari — MoySklad uslubida: ro'yxat (filtr bilan) va hujjat sahifasi
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api, { errorText } from '../../api'
 import { canCreate, canDelete, canEdit, canPost, useAuth } from '../../auth'
 import { cleanNum, DocField, DocFooter, DocPage, DocTitle, newKey, Positions, useLinesTotal } from '../../components/DocEditor'
 import Icon from '../../components/Icon'
-import { Badge, Loading, MoneyBag, toast, useFetch } from '../../components/ui'
+import { Badge, Loading, Modal, MoneyBag, toast, useFetch } from '../../components/ui'
+import { downloadFile } from '../../components/Download'
 import { convertPrice, CurrencyOptions, curLabel } from '../../currency'
 import { date, money, qty, todayISO } from '../../format'
 import { t } from '../../i18n'
-import { SearchSelect, usePager } from '../../components/Controls'
+import { DropMenu, SearchSelect, usePager } from '../../components/Controls'
 
 /* Hujjat turlari sozlamasi */
 export const DOC_TYPES = {
@@ -48,6 +49,8 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
   const [dirty, setDirty] = useState(false)
   const [changed, setChanged] = useState(false)
   const stockMap = useFetch(v?.warehouse ? '/warehouse/stock/' : null, { warehouse: v?.warehouse })
+  const fileRef = useRef(null)
+  const [imp, setImp] = useState(null)
   const editable = docId ? canEdit(user, cfg.module) : canCreate(user, cfg.module)
 
   const fill = (d) => {
@@ -155,6 +158,28 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
     })
   }
 
+  /* Excel/CSV import (MoySklad "Импорт"): fayl serverda o'qiladi, pozitsiyalar formaga qo'shiladi (saqlash — foydalanuvchida) */
+  const importFile = async (file) => {
+    if (!file) return
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const { data } = await api.post(`/warehouse/docs/import_items/?type=${type}`, fd)
+      setL((ls) => {
+        const out = [...ls]
+        data.lines.forEach((x) => {
+          const i = out.findIndex((l) => String(l.product) === String(x.material))
+          const price = x.price != null ? cleanNum(x.price) : (cfg.price ? String(priceOf({ purchase_price: x.purchase_price, currency: x.currency, prices: {} })) : '')
+          if (i >= 0) out[i] = { ...out[i], qty: cleanNum(Number(out[i].qty || 0) + Number(x.qty)), ...(x.price != null ? { price } : {}) }
+          else out.push({ key: newKey(), product: x.material, name: x.name, code: x.code || '', unit: x.unit, qty: cleanNum(x.qty), price, discount_pct: '0', stock: null })
+        })
+        return out
+      })
+      setImp({ name: file.name, added: data.lines.length, errors: data.errors })
+    } catch (e) { toast(errorText(e), true) }
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
   const whs = warehouses.data || []
   const canSave = editable && !busy && (!cfg.party || v.counterparty) && (cfg.planDate || v.warehouse) && (!cfg.toWh || v.to_warehouse)
   const postedLabel = cfg.postedLabel || "O'tkazilgan"
@@ -166,6 +191,13 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
         <button type="button" className="btn primary" disabled={!canSave} onClick={() => save(false)}><Icon name="save" size={16} /> {busy ? t('Saqlanmoqda…') : t('Saqlash')}</button>
         <button type="button" className="btn" disabled={!canSave} onClick={() => save(true)}>{t('Saqlash va yopish')}</button>
         <button type="button" className="btn" onClick={close}>{t('Yopish')}</button>
+        {editable && (
+          <DropMenu label={t('Import')} icon="upload" items={[
+            [t("Excel'dan import (.xlsx, .csv)"), () => fileRef.current?.click()],
+            [t('Shablonni yuklab olish'), () => downloadFile('/warehouse/docs/import_template/', { type }, `shablon-${type}.xlsx`)],
+          ]} />
+        )}
+        <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.csv" hidden onChange={(e) => importFile(e.target.files[0])} />
         {docId && cfg.derive?.map(([k, l]) => (
           <button key={k} type="button" className="btn" onClick={() => derive(k)} disabled={!canCreate(user, DOC_TYPES[k].module)}>
             <Icon name="plus" size={15} /> {t(l)}
@@ -250,6 +282,18 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
         onComment={editable ? (note) => set('note', note) : null}
         rows={cfg.price ? [['Pozitsiyalar', lines.length], ['Jami', money(total, v.currency), true]] : [['Pozitsiyalar', lines.length], ['Jami miqdor', qty(lines.reduce((a, l) => a + Number(l.qty || 0), 0)), true]]}
       />
+      {imp && (
+        <Modal dialog title={t('Import natijasi')} onClose={() => setImp(null)}>
+          <p style={{ marginTop: 0 }}><b>{imp.name}</b></p>
+          <p className="green">{t("Qo'shildi: {n} ta pozitsiya", { n: imp.added })}</p>
+          {imp.errors.length > 0 && <>
+            <p className="red" style={{ marginBottom: 0 }}>{t('Xatoliklar: {n} ta qator', { n: imp.errors.length })}</p>
+            <ul className="doc-import-err">{imp.errors.map((e) => <li key={e}>{e}</li>)}</ul>
+          </>}
+          <p className="muted small">{t("Pozitsiyalarni tekshirib, hujjatni saqlang.")}</p>
+          <div className="form-actions"><button className="btn primary" onClick={() => setImp(null)}>{t('OK')}</button></div>
+        </Modal>
+      )}
     </DocPage>
   )
 }

@@ -6,6 +6,7 @@ import { Badge, Loading, MoneyBag, toast, useFetch } from '../../components/ui'
 import { date, money } from '../../format'
 import { t } from '../../i18n'
 import { curLabel, CurrencyOptions } from '../../currency'
+import { BulkMenu, SearchSelect, usePager } from '../../components/Controls'
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const STATUSES = [
@@ -40,10 +41,10 @@ export const ORDER_COLUMNS = [
 
 export default function OrderList({ refs, stamp, view, fields = [], onChanged }) {
   const nav = useNavigate()
+  const users = refs.users
   const [f, setF] = useState({})
   const [xf, setXf] = useState({})
   const [selected, setSelected] = useState([])
-  const [bulkStatus, setBulkStatus] = useState('')
   const params = useMemo(() => {
     const p = { ...f, stamp }
     Object.entries(xf).forEach(([k, v]) => { if (v !== '' && v !== undefined) p[`x_${k}`] = v })
@@ -58,11 +59,14 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
   const toggle = (k) => setF((s) => ({ ...s, [k]: s[k] ? '' : 'true' }))
   const toggleRow = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
 
-  const applyBulk = async () => {
-    if (!bulkStatus || !selected.length) return
+  // MoySklad "Изменить": tanlanganlar ustida amal
+  const bulk = async (action, extra = {}, confirmText) => {
+    if (!selected.length) return
+    if (confirmText && !window.confirm(confirmText)) return
     try {
-      await api.post('/orders/bulk_status/', { ids: selected, status: bulkStatus })
-      toast(t("{n} ta buyurtma statusi o'zgartirildi", { n: selected.length }))
+      const { data: r } = await api.post('/orders/bulk/', { ids: selected, action, ...extra })
+      if (r.errors?.length) toast(r.errors.join('\n'), true)
+      if (r.done) toast(t('Bajarildi: {n} ta', { n: r.done }))
       setSelected([])
       reload()
       onChanged?.()
@@ -70,51 +74,57 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
       toast(errorText(e), true)
     }
   }
+  const { rows: pageRows, pager } = usePager(data?.results, 50, JSON.stringify(params))
+  const clientOptions = useMemo(() => refs.clients.map((c) => ({ value: c.id, label: c.name, sub: c.phone })), [refs.clients])
+  const userOptions = useMemo(() => users.map((u) => ({ value: u.id, label: u.full_name })), [users])
+  const active = Object.values(f).some(Boolean) || Object.values(xf).some(Boolean)
 
-  const users = refs.users
   // ustunlar soni (tfoot uchun)
   const lead = 1 + ['number', 'date', 'client'].filter(show).length
 
   return (
     <>
       {show('filters') && (
-        <div className="card filters" style={{ marginBottom: 12 }}>
-          <input placeholder={t('Raqam yoki mijoz…')} value={f.search || ''} onChange={set('search')} style={{ width: 180 }} />
-          <span className="muted small">{t('Davr')}</span>
-          <input type="date" value={f.date_from || ''} onChange={set('date_from')} />
-          <input type="date" value={f.date_to || ''} onChange={set('date_to')} />
-          <span className="muted small">{t('Reja sana')}</span>
-          <input type="date" value={f.plan_from || ''} onChange={set('plan_from')} />
-          <input type="date" value={f.plan_to || ''} onChange={set('plan_to')} />
-          <select value={f.client || ''} onChange={set('client')}>
-            <option value="">{t('Mijoz: hammasi')}</option>
-            {refs.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <select value={f.status || ''} onChange={set('status')}>
-            <option value="">{t('Status: hammasi')}</option>
-            {STATUSES.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}
-          </select>
-          <select value={f.currency || ''} onChange={set('currency')}>
-            <option value="">{t('Valyuta: hammasi')}</option>
-            <CurrencyOptions />
-          </select>
-          <select value={f.manager || ''} onChange={set('manager')}>
-            <option value="">{t('Menejer')}</option>
-            {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-          </select>
-          <select value={f.operator || ''} onChange={set('operator')}>
-            <option value="">{t('Operator')}</option>
-            {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-          </select>
-          {fields.filter((x) => x.filterable).map((x) => (
-            <CustomFieldFilter key={x.id} f={x} value={xf[x.key]} users={users} onChange={(v) => setXf({ ...xf, [x.key]: v })} />
-          ))}
-          <button className={'chip' + (f.overdue ? ' on' : '')} onClick={() => toggle('overdue')}>{t('Kechikkan')}</button>
-          <button className={'chip' + (f.has_debt ? ' on' : '')} onClick={() => toggle('has_debt')}>{t('Qarzi bor')}</button>
-          <button className={'chip' + (f.negative_profit ? ' on' : '')} onClick={() => toggle('negative_profit')}>{t('Foyda: manfiy')}</button>
-          {(Object.values(f).some(Boolean) || Object.values(xf).some(Boolean)) && (
-            <button className="link-btn small" onClick={() => { setF({}); setXf({}) }}>{t('Tozalash')}</button>
-          )}
+        <div className="filter-panel card">
+          <div className="filter-grid">
+            <label>{t('Qidirish')}
+              <input placeholder={t('Raqam, mijoz yoki izoh')} value={f.search || ''} onChange={set('search')} />
+            </label>
+            <label>{t('Sana (davr)')}
+              <div className="inline-pick"><input type="date" value={f.date_from || ''} onChange={set('date_from')} />—<input type="date" value={f.date_to || ''} onChange={set('date_to')} /></div>
+            </label>
+            <label>{t('Reja sana')}
+              <div className="inline-pick"><input type="date" value={f.plan_from || ''} onChange={set('plan_from')} />—<input type="date" value={f.plan_to || ''} onChange={set('plan_to')} /></div>
+            </label>
+            <label>{t('Mijoz')}
+              <SearchSelect value={f.client || ''} onChange={(v) => setF((s0) => ({ ...s0, client: v }))} options={clientOptions} empty={t('hammasi')} />
+            </label>
+            <label>{t('Status')}
+              <select value={f.status || ''} onChange={set('status')}>
+                <option value="">{t('hammasi')}</option>
+                {STATUSES.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}
+              </select>
+            </label>
+            <label>{t('Valyuta')}
+              <select value={f.currency || ''} onChange={set('currency')}><option value="">{t('hammasi')}</option><CurrencyOptions /></select>
+            </label>
+            <label>{t('Menejer')}
+              <SearchSelect value={f.manager || ''} onChange={(v) => setF((s0) => ({ ...s0, manager: v }))} options={userOptions} empty={t('hammasi')} />
+            </label>
+            <label>{t('Operator')}
+              <SearchSelect value={f.operator || ''} onChange={(v) => setF((s0) => ({ ...s0, operator: v }))} options={userOptions} empty={t('hammasi')} />
+            </label>
+            {fields.filter((x) => x.filterable).map((x) => (
+              <label key={x.id}>{x.name}<CustomFieldFilter f={x} value={xf[x.key]} users={users} onChange={(v) => setXf({ ...xf, [x.key]: v })} /></label>
+            ))}
+          </div>
+          <div className="filter-actions">
+            <button className={'chip' + (f.overdue ? ' on' : '')} onClick={() => toggle('overdue')}>{t('Kechikkan')}</button>
+            <button className={'chip' + (f.has_debt ? ' on' : '')} onClick={() => toggle('has_debt')}>{t('Qarzi bor')}</button>
+            <button className={'chip' + (f.negative_profit ? ' on' : '')} onClick={() => toggle('negative_profit')}>{t('Foyda: manfiy')}</button>
+            <span className="grow" />
+            {active && <button className="btn small" onClick={() => { setF({}); setXf({}) }}>{t('Tozalash')}</button>}
+          </div>
         </div>
       )}
 
@@ -122,16 +132,12 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
         <div className="table-wrap">
           <div className="table-toolbar">
             <b>{t('Hammasi')} {data.count}</b>
-            {selected.length > 0 && (
-              <>
-                <span className="muted">{t('Tanlangan')}: {selected.length}</span>
-                <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} className="chip">
-                  <option value="">{t("Statusni o'zgartirish…")}</option>
-                  {STATUSES.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}
-                </select>
-                <button className="btn small primary" disabled={!bulkStatus} onClick={applyBulk}>{t("Qo'llash")}</button>
-              </>
-            )}
+            <BulkMenu count={selected.length} items={[
+              { label: t('Status'), sub: STATUSES.map(([v, l]) => ({ label: t(l), onClick: () => bulk('status', { status: v }) })) },
+              { label: t('Nusxa olish'), onClick: () => bulk('copy') },
+              { divider: true },
+              { label: t("O'chirish"), danger: true, onClick: () => bulk('delete', {}, t("Tanlangan buyurtmalar o'chirilsinmi? To'lov yoki sotuvi borlari o'chirilmaydi.")) },
+            ]} />
           </div>
           <table className={view.tableClass}>
             <thead>
@@ -160,7 +166,7 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
               </tr>
             </thead>
             <tbody>
-              {data.results.map((o) => {
+              {pageRows.map((o) => {
                 const debt = Number(o.debt)
                 return (
                   <tr key={o.id} className={'clickable' + (o.is_overdue ? ' row-danger' : '')} onClick={() => nav(`/orders/${o.id}`)}>
@@ -205,6 +211,7 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
               </tr>
             </tfoot>
           </table>
+          {pager}
         </div>
       )}
       <div className="legend">

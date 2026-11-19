@@ -74,7 +74,7 @@ def order_costing(order: Order) -> dict:
 
     # D — ish haqi ulushi (ishbay topshiriqlardan, so'mda)
     d_rows, d_bag, d_conv = [], MoneyBag(), ZERO
-    for p in PieceworkEntry.objects.filter(task__order=order).select_related("employee", "task__operation"):
+    for p in PieceworkEntry.objects.filter(task__order=order, task__job__techcard__isnull=True).select_related("employee", "task__operation"):
         d_bag.add(p.amount, "UZS")
         d_conv += conv(p.amount, "UZS", p.date)
         d_rows.append({
@@ -97,8 +97,24 @@ def order_costing(order: Order) -> dict:
         rest = max(ZERO, Decimal(it.qty) - sh_qty)
         stocks = [s for s in prod.stocks.all() if s.qty > 0]
         sq = sum((s.qty for s in stocks), ZERO)
-        unit = (sum((s.qty * s.avg_cost for s in stocks), ZERO) / sq) if sq else Decimal(prod.purchase_price)
-        rest_cost = conv(rest * unit, prod.currency, order.date)
+        unit_cur = prod.currency
+        if sq:
+            unit = sum((s.qty * s.avg_cost for s in stocks), ZERO) / sq
+        else:
+            # omborda yo'q (hali ishlab chiqarilmagan) — texkartaning rejaviy tannarxi
+            from apps.production.models import TechCard
+            from apps.production.services import techcard_cost
+
+            tc = TechCard.objects.filter(product=prod, is_active=True).order_by("id").first()
+            unit = Decimal(prod.purchase_price)
+            if tc is not None:
+                try:
+                    c = techcard_cost(tc)
+                    unit = Decimal(c["total"])  # 1 birlik uchun
+                    unit_cur = c.get("currency", prod.currency)
+                except Exception:  # noqa: BLE001 — kurs yo'q va h.k.
+                    pass
+        rest_cost = conv(rest * unit, unit_cur, order.date)
         amount = sh_cost + rest_cost
         p_bag.add(amount, cur)
         p_conv += amount

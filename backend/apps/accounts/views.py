@@ -53,7 +53,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_employee(self, obj):
         emp = getattr(obj, "employee", None)
-        return {"id": emp.id, "full_name": emp.full_name, "position": emp.position} if emp else None
+        return {"id": emp.id, "full_name": emp.full_name, "position": emp.position, "department": emp.department_id} if emp else None
 
     def get_branch_names(self, obj):
         return [b.name for b in obj.branches.all()]

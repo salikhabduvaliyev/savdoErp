@@ -4,6 +4,7 @@ import api, { errorText } from '../../api'
 import { CustomFieldInputs, useCustomFields } from '../../components/CustomFields'
 import { cleanNum, DocField, DocFooter, DocPage, DocTitle, newKey, Positions, useLinesTotal } from '../../components/DocEditor'
 import Icon from '../../components/Icon'
+import { SearchSelect } from '../../components/Controls'
 import { Badge, toast, useFetch } from '../../components/ui'
 import { money, todayISO } from '../../format'
 import { t } from '../../i18n'
@@ -113,13 +114,9 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
         <div>
           <DocField label="Mijoz" required>
             {newClient === null ? (
-              <div className="inline-pick">
-                <select value={v.client || ''} onChange={set('client')}>
-                  <option value="">{t('— tanlang —')}</option>
-                  {refs.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <button type="button" className="icon-act" title={t('Yangi kontragent')} onClick={() => { setV((s) => ({ ...s, client: '' })); setNewClient('') }}><Icon name="plus" size={18} /></button>
-              </div>
+              <SearchSelect value={v.client || ''} onChange={(id) => { setV((x) => ({ ...x, client: id })); setDirty(true) }}
+                placeholder={t('Mijozni tanlang…')} options={refs.clients.map((c) => ({ value: c.id, label: c.name, sub: c.phone }))}
+                onCreate={(name) => { setV((x) => ({ ...x, client: '' })); setNewClient(name || ''); setDirty(true) }} createLabel={t('Yangi mijoz')} />
             ) : (
               <div className="inline-pick">
                 <input autoFocus placeholder={t('Yangi mijoz nomi')} value={newClient} onChange={(e) => { setNewClient(e.target.value); setDirty(true) }} />
@@ -128,16 +125,12 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
             )}
           </DocField>
           <DocField label="Menejer">
-            <select value={v.manager || ''} onChange={set('manager')}>
-              <option value="">{t('— men —')}</option>
-              {refs.users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-            </select>
+            <SearchSelect value={v.manager || ''} onChange={(id) => { setV((x) => ({ ...x, manager: id })); setDirty(true) }} empty={t('— men —')}
+              options={refs.users.map((u) => ({ value: u.id, label: u.full_name }))} />
           </DocField>
           <DocField label="Operator">
-            <select value={v.operator || ''} onChange={set('operator')}>
-              <option value="">—</option>
-              {refs.users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-            </select>
+            <SearchSelect value={v.operator || ''} onChange={(id) => { setV((x) => ({ ...x, operator: id })); setDirty(true) }} empty="—"
+              options={refs.users.map((u) => ({ value: u.id, label: u.full_name }))} />
           </DocField>
         </div>
         <div>

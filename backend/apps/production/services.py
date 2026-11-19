@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from apps.core.money import convert
 
-from .models import ProductionJob, ProductionOrder, ProductionTask, StageCompletion, TechCard
+from .models import ProductionJob, ProductionOrder, ProductionOrderItem, ProductionTask, StageCompletion, TechCard
 
 ZERO = Decimal("0")
 Q3 = Decimal("0.001")
@@ -22,7 +22,8 @@ def _q(v):
 
 @transaction.atomic
 def create_job_from_techcard(techcard: TechCard, qty, *, materials_warehouse=None, products_warehouse=None,
-                             plan_start=None, plan_end=None, production_order=None, branch_id=None, user=None, note=""):
+                             plan_start=None, plan_end=None, production_order=None, branch_id=None, user=None, note="",
+                             allow_negative=False):
     qty = Decimal(qty)
     if qty <= 0:
         raise ValidationError("Miqdor musbat bo'lishi kerak")
@@ -32,10 +33,13 @@ def create_job_from_techcard(techcard: TechCard, qty, *, materials_warehouse=Non
         techcard=techcard, qty=qty, materials_warehouse=materials_warehouse, products_warehouse=products_warehouse,
         plan_start=plan_start, plan_end=plan_end, production_order=production_order, branch_id=branch_id,
         order=production_order.client_order if production_order else None, created_by=user, note=note,
+        allow_negative=allow_negative,
     )
     for st in techcard.process.stages.select_related("operation"):
-        ProductionTask.objects.create(job=job, position=st.position, operation=st.operation, plan_qty=qty,
-                                      deadline=plan_end, planned_date=plan_start)
+        ProductionTask.objects.create(job=job, order=job.order, position=st.position, operation=st.operation,
+                                      plan_qty=qty, deadline=plan_end, planned_date=plan_start)
+    if job.order_id:
+        job.order.on_task_changed()
     return job
 
 
@@ -69,14 +73,17 @@ def create_job_from_order(order, user=None):
 
 
 @transaction.atomic
-def create_jobs_for_production_order(po: ProductionOrder, *, materials_warehouse=None, products_warehouse=None, user=None):
+def create_jobs_for_production_order(po: ProductionOrder, *, materials_warehouse=None, products_warehouse=None, user=None,
+                                     allow_negative=False):
+    if po.status == ProductionOrder.Status.CANCELLED:
+        raise ValidationError("Bekor qilingan buyurtma")
     jobs = []
     for item in po.items.select_related("techcard__process"):
         if po.jobs.filter(techcard=item.techcard).exclude(status=ProductionJob.Status.CANCELLED).exists():
             continue
         jobs.append(create_job_from_techcard(
             item.techcard, item.qty, materials_warehouse=materials_warehouse, products_warehouse=products_warehouse,
-            plan_end=po.plan_date, production_order=po, branch_id=po.branch_id, user=user,
+            plan_end=po.plan_date, production_order=po, branch_id=po.branch_id, user=user, allow_negative=allow_negative,
         ))
     if jobs and po.status == ProductionOrder.Status.NEW:
         po.status = ProductionOrder.Status.IN_PROGRESS
@@ -152,8 +159,11 @@ def _issue(material, qty, *, job, order=None, warehouse=None, date=None, user=No
         wh = st.warehouse if st else None
     if wh is None:
         raise ValidationError(f"{material.name}: omborda qoldiq yo'q")
+    from apps.core.models import SystemSettings
+
+    allow = bool(job and job.allow_negative) or SystemSettings.load().allow_negative_stock
     return post_move(StockMove(date=date or timezone.localdate(), type=StockMove.Type.OUT, material=material,
-                               warehouse=wh, qty=qty, order=order, job=job, created_by=user, note=note))
+                               warehouse=wh, qty=qty, order=order, job=job, created_by=user, note=note), allow_negative=allow)
 
 
 # ------------------------------------------------------------------ bajarish
@@ -304,3 +314,54 @@ def techcard_cost(techcard):
             labor += convert(st.operation.piece_rate, "UZS", cur) * out
     return {"materials": (mat / out).quantize(Decimal("0.01")), "labor": (labor / out).quantize(Decimal("0.01")),
             "total": ((mat + labor) / out).quantize(Decimal("0.01")), "currency": cur}
+
+
+def production_order_requirements(po: ProductionOrder, warehouse=None):
+    """Ishni boshlashdan oldin: texkartalar bo'yicha material ehtiyoji va tanlangan ombordagi mavjud qoldiq."""
+    from apps.warehouse.models import Stock
+
+    need = {}
+    for item in po.items.select_related("techcard__product"):
+        tc = item.techcard
+        k = Decimal(item.qty) / (tc.output_qty or Decimal("1"))
+        for m in tc.materials.select_related("material"):
+            if not m.material.is_stocked:
+                continue
+            row = need.setdefault(m.material_id, {"material": m.material, "need": ZERO})
+            row["need"] += _q(m.qty * k)
+    rows = []
+    for mid, r in need.items():
+        qs = Stock.objects.filter(material_id=mid)
+        if warehouse is not None:
+            qs = qs.filter(warehouse=warehouse)
+        have = sum((s.qty - s.reserved for s in qs), ZERO)
+        short = max(ZERO, r["need"] - have)
+        rows.append({"material": mid, "name": r["material"].name, "unit": r["material"].get_unit_display(),
+                     "need": str(r["need"]), "available": str(have), "shortage": str(short)})
+    rows.sort(key=lambda x: (-Decimal(x["shortage"]), x["name"]))
+    return rows
+
+
+@transaction.atomic
+def production_order_from_client_order(order, user=None):
+    """Mijoz buyurtmasi pozitsiyalaridan (texkartasi bor mahsulotlar) ishlab chiqarish buyurtmasi."""
+    existing = order.production_orders.exclude(status=ProductionOrder.Status.CANCELLED).first()
+    if existing:
+        return existing, False
+    rows = []
+    for it in order.items.select_related("product"):
+        if not it.product_id:
+            continue
+        tc = TechCard.objects.filter(product=it.product, is_active=True).order_by("id").first()
+        if tc:
+            rows.append((tc, it.qty))
+    if not rows:
+        raise ValidationError("Buyurtma pozitsiyalarida texkartasi bor mahsulot yo'q")
+    po = ProductionOrder.objects.create(client_order=order, plan_date=order.production_date or order.plan_date,
+                                        branch_id=order.branch_id, created_by=user, note=f"Buyurtma №{order.number} asosida")
+    for tc, q in rows:
+        ProductionOrderItem.objects.create(production_order=po, techcard=tc, qty=q)
+    if order.status == order.Status.NEW:
+        order.status = order.Status.CONFIRMED
+        order.save(update_fields=["status", "updated_at"])
+    return po, True

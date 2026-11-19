@@ -113,7 +113,8 @@ class Order(TenantModel, TimeStamped):
         open_tasks = [t for t in self.tasks.all() if t.status != "done"]  # prefetch bilan ishlaydi
         if not open_tasks:
             return None
-        task = min(open_tasks, key=lambda t: (t.department.sequence, t.id))
+        # texjarayondagi bosqich tartibi (position) bo'yicha — bo'lim raqami emas
+        task = min(open_tasks, key=lambda t: (t.position, t.department.sequence, t.id))
         return task.department.name
 
     @property

@@ -184,6 +184,7 @@ class ProductionJob(TenantModel, TimeStamped):
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     capitalized = money_field(help_text="Omborga kirim qilingan mahsulot qiymati (mahsulot valyutasida)")
+    allow_negative = models.BooleanField(default=False, help_text="Material yetmasa ham boshlash (qoldiq minusga ketadi)")
     note = models.CharField(max_length=500, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 

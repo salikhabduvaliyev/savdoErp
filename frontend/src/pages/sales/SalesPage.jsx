@@ -7,6 +7,7 @@ import { Badge, Field, Loading, Modal, MoneyBag, Stat, toast, useFetch } from '.
 import { date, money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import SaleForm from './SaleForm'
+import { BulkMenu, SearchSelect, usePager } from '../../components/Controls'
 import { DocList } from '../warehouse/StockDocs'
 import Icon, { IconBtn } from '../../components/Icon'
 import { curLabel, CurrencyOptions } from '../../currency'
@@ -157,12 +158,30 @@ function SalesList() {
   const { user } = useAuth()
   const [params, setParams] = useSearchParams()
   const [stamp, setStamp] = useState(0)
-  const [f, setF] = useState({ search: '', status: '', currency: '', date_from: '', date_to: '' })
+  const empty = { search: '', status: '', currency: '', date_from: '', date_to: '', client: '', seller: '', warehouse: '' }
+  const [f, setF] = useState(empty)
+  const [showFilter, setShowFilter] = useState(false)
   const [form, setForm] = useState(false)
+  const [selected, setSelected] = useState([])
   const openId = params.get('open')
   const q = useMemo(() => Object.fromEntries(Object.entries({ ...f, stamp }).filter(([, v]) => v !== '')), [f, stamp])
   const { data, error } = useFetch('/sales/', q)
+  const clients = useFetch(showFilter ? '/crm/counterparties/' : null, { is_active: true })
+  const users = useFetch(showFilter ? '/auth/users-lookup/' : null)
+  const warehouses = useFetch(showFilter ? '/warehouse/warehouses/' : null)
   const refresh = () => setStamp((s) => s + 1)
+  const { rows: pageRows, pager } = usePager(data?.results, 50, JSON.stringify(q))
+  const toggleRow = (id) => setSelected((x) => (x.includes(id) ? x.filter((y) => y !== id) : [...x, id]))
+  const bulk = async (action, confirmText) => {
+    if (confirmText && !window.confirm(confirmText)) return
+    try {
+      const { data: r } = await api.post('/sales/bulk/', { ids: selected, action })
+      if (r.errors?.length) toast(r.errors.join('\n'), true)
+      if (r.done) toast(tr('Bajarildi: {n} ta', { n: r.done }))
+      setSelected([])
+      refresh()
+    } catch (e) { toast(errorText(e), true) }
+  }
 
   return (
     <>
@@ -172,8 +191,46 @@ function SalesList() {
           <div className="page-sub">{tr("Tovar sotish va tayyor buyurtmalarni realizatsiya qilish")}</div>
         </div>
         <span className="grow" />
-        {canCreate(user, 'sales') && <button className="btn primary" onClick={() => setForm(true)}>{tr("+ Sotuv")}</button>}
+        {canCreate(user, 'sales') && <button className="btn primary" onClick={() => setForm(true)}><Icon name="plus" size={16} /> {tr("Sotuv")}</button>}
+        <button className={'btn' + (showFilter ? ' active' : '')} onClick={() => setShowFilter((x) => !x)}><Icon name="filter" size={15} /> {tr('Filtr')}</button>
+        <div className="psearch" style={{ maxWidth: 320, minWidth: 220 }}>
+          <Icon name="search" size={16} className="psearch-ic" />
+          <input placeholder={tr("Raqam, mijoz yoki izoh")} value={f.search} onChange={(e) => setF({ ...f, search: e.target.value })} />
+        </div>
       </div>
+      {showFilter && (
+        <div className="filter-panel card">
+          <div className="filter-grid">
+            <label>{tr('Davr')}
+              <div className="inline-pick"><input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—<input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} /></div>
+            </label>
+            <label>{tr('Mijoz')}
+              <SearchSelect value={f.client} onChange={(v) => setF({ ...f, client: v })} empty={tr('hammasi')}
+                options={(clients.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.phone }))} />
+            </label>
+            <label>{tr('Status')}
+              <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
+                <option value="">{tr('hammasi')}</option>
+                {STATUSES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+            </label>
+            <label>{tr('Valyuta')}
+              <select value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value })}><option value="">{tr('hammasi')}</option><CurrencyOptions /></select>
+            </label>
+            <label>{tr('Sotuvchi')}
+              <SearchSelect value={f.seller} onChange={(v) => setF({ ...f, seller: v })} empty={tr('hammasi')}
+                options={(users.data || []).map((u) => ({ value: u.id, label: u.full_name }))} />
+            </label>
+            <label>{tr('Ombor')}
+              <select value={f.warehouse} onChange={(e) => setF({ ...f, warehouse: e.target.value })}>
+                <option value="">{tr('hammasi')}</option>
+                {(warehouses.data || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="filter-actions"><span className="grow" /><button className="btn small" onClick={() => setF(empty)}>{tr('Tozalash')}</button></div>
+        </div>
+      )}
       {data && (
         <div className="stats">
           <Stat label={tr("Sotuvlar (yakunlangan)")} bag={data.totals.total} />
@@ -182,25 +239,24 @@ function SalesList() {
         </div>
       )}
       <div className="table-wrap">
-        <div className="table-toolbar filters">
-          <input placeholder={tr("Raqam yoki mijoz…")} value={f.search} onChange={(e) => setF({ ...f, search: e.target.value })} />
-          <input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />
-          <input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} />
-          <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
-            <option value="">{tr("Status: hammasi")}</option>
-            {STATUSES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
-          <select value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value })}>
-            <option value="">{tr("Valyuta: hammasi")}</option><CurrencyOptions />
-          </select>
+        <div className="table-toolbar">
+          <b>{tr('Hammasi')} {data?.count ?? ''}</b>
+          <BulkMenu count={selected.length} items={[
+            { label: tr('Yakunlash (o\'tkazish)'), onClick: () => bulk('complete') },
+            { label: tr('Bekor qilish'), onClick: () => bulk('cancel', tr('Tanlangan sotuvlar bekor qilinsinmi? Tovarlar omborga qaytadi.')) },
+            { divider: true },
+            { label: tr("O'chirish (qoralamalar)"), danger: true, onClick: () => bulk('delete', tr("Tanlangan qoralamalar o'chirilsinmi?")) },
+          ]} />
         </div>
         {!data ? <Loading error={error} /> : (
           <table className="t">
-            <thead><tr><th>№</th><th>{tr("Sana")}</th><th>{tr("Mijoz")}</th><th>{tr("Asos")}</th><th className="num">{tr("Summa")}</th><th className="num">{tr("To'langan")}</th><th className="num">{tr("Qarz")}</th><th>{tr("Status")}</th><th>{tr("Sotuvchi")}</th></tr></thead>
+            <thead><tr><th style={{ width: 30 }}><input type="checkbox" checked={!!data.results.length && selected.length === data.results.length}
+              onChange={(e) => setSelected(e.target.checked ? data.results.map((x) => x.id) : [])} /></th><th>№</th><th>{tr("Sana")}</th><th>{tr("Mijoz")}</th><th>{tr("Asos")}</th><th className="num">{tr("Summa")}</th><th className="num">{tr("To'langan")}</th><th className="num">{tr("Qarz")}</th><th>{tr("Status")}</th><th>{tr("Sotuvchi")}</th></tr></thead>
             <tbody>
-              {data.results.map((s) => (
+              {pageRows.map((s) => (
                 <tr key={s.id} className="clickable" onClick={() => setParams({ open: s.id })}>
-                  <td className="bold">{s.number}</td>
+                  <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.includes(s.id)} onChange={() => toggleRow(s.id)} /></td>
+                  <td className="bold"><span className="link-like">{s.number}</span></td>
                   <td>{date(s.date)}</td>
                   <td>{s.client_name}</td>
                   <td className="small">{s.order ? `Buyurtma №${s.order_number}` : <span className="muted">{s.warehouse_name || '—'}</span>}</td>
@@ -211,16 +267,17 @@ function SalesList() {
                   <td className="small">{s.seller_name || '—'}</td>
                 </tr>
               ))}
-              {!data.results.length && <tr><td colSpan={9} className="empty">{tr("Sotuvlar yo'q")}</td></tr>}
+              {!data.results.length && <tr><td colSpan={10} className="empty">{tr("Sotuvlar yo'q")}</td></tr>}
             </tbody>
             <tfoot>
-              <tr><td colSpan={4}>{tr("Jami (yakunlanganlar, valyuta bo'yicha)")}</td>
+              <tr><td colSpan={5}>{tr("Jami (yakunlanganlar, valyuta bo'yicha)")}</td>
                 <td className="num"><MoneyBag bag={data.totals.total} /></td>
                 <td className="num"><MoneyBag bag={data.totals.paid} /></td>
                 <td className="num"><MoneyBag bag={data.totals.debt} /></td><td colSpan={2} /></tr>
             </tfoot>
           </table>
         )}
+        {pager}
       </div>
       {form && <SaleForm onClose={() => setForm(false)} onSaved={(id, done) => { setForm(false); refresh(); setParams({ open: id }); toast(done ? 'Sotuv yakunlandi' : 'Qoralama saqlandi') }} />}
       {openId && <SaleCard id={openId} onClose={() => setParams({})} onChanged={refresh} />}

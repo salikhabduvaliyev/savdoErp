@@ -3,6 +3,7 @@ import api, { errorText } from '../../api'
 import { Loading, MoneyBag, toast, useFetch } from '../../components/ui'
 import { date, money, qty, shortDate } from '../../format'
 import { t } from '../../i18n'
+import { SearchSelect } from '../../components/Controls'
 import Icon from '../../components/Icon'
 import { IconBtn } from '../../components/Icon'
 import { curLabel } from '../../currency'
@@ -22,10 +23,8 @@ function AddMaterialRow({ estimateId, materials, onAdded }) {
   return (
     <tr>
       <td>
-        <select value={v.material} onChange={(e) => setV({ ...v, material: e.target.value })} className="chip" style={{ width: '100%' }}>
-          <option value="">{t("Material tanlang…")}</option>
-          {materials.map((m) => <option key={m.id} value={m.id}>{m.name} ({t(m.unit_display)}, {curLabel(m.currency)})</option>)}
-        </select>
+        <SearchSelect value={v.material} onChange={(id) => setV({ ...v, material: id })} placeholder={t("Material tanlang…")}
+          options={materials.map((m) => ({ value: m.id, label: m.name, sub: `${t(m.unit_display)} · ${curLabel(m.currency)}` }))} />
       </td>
       <td className="num"><input className="cell" placeholder={t("sarf")} value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} /></td>
       <td className="num"><input className="cell" style={{ width: 60 }} value={v.waste_pct} onChange={(e) => setV({ ...v, waste_pct: e.target.value })} /></td>
@@ -52,10 +51,8 @@ function AddServiceRow({ estimateId, operations, onAdded }) {
   return (
     <tr>
       <td>
-        <select value={v.operation} onChange={(e) => setV({ ...v, operation: e.target.value })} className="chip" style={{ width: '100%' }}>
-          <option value="">{t("Operatsiya tanlang…")}</option>
-          {operations.map((o) => <option key={o.id} value={o.id}>{o.name} / {o.department_name}</option>)}
-        </select>
+        <SearchSelect value={v.operation} onChange={(id) => setV({ ...v, operation: id })} placeholder={t("Operatsiya tanlang…")}
+          options={operations.map((o) => ({ value: o.id, label: o.name, sub: o.department_name }))} />
       </td>
       <td className="num"><input className="cell" placeholder={t("miqdor")} value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} /></td>
       <td className="num">{op?.unit_display || ''}</td>

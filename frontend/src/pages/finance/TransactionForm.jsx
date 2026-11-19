@@ -4,6 +4,7 @@ import { Field, Modal, useFetch, useForm } from '../../components/ui'
 import { money, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { curLabel } from '../../currency'
+import { SearchSelect } from '../../components/Controls'
 
 const KINDS = [
   ['client_payment', t("Mijoz to'lovi (kirim)")],
@@ -77,26 +78,20 @@ export default function TransactionForm({ kind = 'client_payment', order, onClos
         )}
         {k === 'supplier_payment' && (
           <Field label={t("Yetkazuvchi")}>
-            <select {...bind('supplier')} required>
-              <option value="">{t("— tanlang —")}</option>
-              {(suppliers.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <SearchSelect value={values.supplier || ''} onChange={(id) => bind('supplier').onChange({ target: { value: id } })}
+              options={(suppliers.data || []).map((s) => ({ value: s.id, label: s.name }))} />
           </Field>
         )}
         {!order && ['client_payment', 'expense'].includes(k) && (
           <Field label={t("Buyurtma (ixtiyoriy)")}>
-            <select {...bind('order')}>
-              <option value="">{t("— biriktirilmagan —")}</option>
-              {(orders.data?.results || []).map((o) => <option key={o.id} value={o.id}>{o.number} · {o.client_name} · {money(o.amount, o.currency)}</option>)}
-            </select>
+            <SearchSelect value={values.order || ''} onChange={(id) => bind('order').onChange({ target: { value: id } })} empty={t("— biriktirilmagan —")}
+              options={(orders.data?.results || []).map((o) => ({ value: o.id, label: `№${o.number} · ${o.client_name}`, sub: money(o.amount, o.currency) }))} />
           </Field>
         )}
         {!order && k === 'client_payment' && !values.order && (
           <Field label={t("Mijoz")}>
-            <select {...bind('client')}>
-              <option value="">{t("— tanlang —")}</option>
-              {(clients.data || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <SearchSelect value={values.client || ''} onChange={(id) => bind('client').onChange({ target: { value: id } })}
+              options={(clients.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.phone }))} />
           </Field>
         )}
         {crossCurrency && (

@@ -282,3 +282,40 @@ def meta(request):
         "sale_statuses": [{"value": v, "label": l} for v, l in Sale.Status.choices],
         "default_currency": SystemSettings.load().default_currency,
     })
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+    action_display = serializers.CharField(source="get_action_display", read_only=True)
+
+    class Meta:
+        from .models import AuditLog
+
+        model = AuditLog
+        fields = ["id", "created_at", "user", "user_name", "action", "action_display", "entity", "entity_id", "title", "changes"]
+
+    def get_user_name(self, obj):
+        return obj.user.full_name if obj.user else None
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """Kompaniya tarixi. ?entity=production_order&entity_id=1&user=&action=&date_from=&date_to=&search="""
+
+    serializer_class = AuditLogSerializer
+    module = ("company", "settings", "production")
+
+    def get_queryset(self):
+        from .models import AuditLog
+
+        qs = AuditLog.objects.select_related("user")
+        p = self.request.query_params
+        for f in ("entity", "entity_id", "user", "action"):
+            if p.get(f):
+                qs = qs.filter(**{f: p[f]})
+        if p.get("date_from"):
+            qs = qs.filter(created_at__date__gte=p["date_from"])
+        if p.get("date_to"):
+            qs = qs.filter(created_at__date__lte=p["date_to"])
+        if p.get("search"):
+            qs = qs.filter(title__icontains=p["search"])
+        return qs[:2000]

@@ -48,12 +48,17 @@ class OrderSerializer(serializers.ModelSerializer):
             "paid", "debt", "status", "status_display", "stage", "progress",
             "plan_date", "production_date", "delivered_at", "is_overdue", "overdue_days",
             "manager", "manager_name", "operator", "operator_name", "note", "is_sold", "branch", "branch_name", "extra",
-            "items",
+            "items", "production_orders",
         ]
         read_only_fields = ["number", "delivered_at"]
         extra_kwargs = {"amount": {"required": False}}
 
     items = OrderItemSerializer(many=True, required=False)
+    production_orders = serializers.SerializerMethodField()
+
+    def get_production_orders(self, obj):
+        return [{"id": p.id, "number": p.number, "status": p.status} for p in obj.production_orders.all()
+                if p.status != "cancelled"]
 
     def validate(self, attrs):
         items = attrs.get("items")

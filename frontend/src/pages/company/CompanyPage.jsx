@@ -8,6 +8,7 @@ import { AccessFields } from '../settings/SettingsPage'
 import { t } from '../../i18n'
 import Icon, { IconBtn } from '../../components/Icon'
 import { curLabel, currencyOptions } from '../../currency'
+import History from './History'
 
 const TABS = [
   ['info', t("Kompaniya ma'lumotlari")],
@@ -16,6 +17,7 @@ const TABS = [
   ['departments', t("Bo'limlar va operatsiyalar")],
   ['warehouses', t("Omborlar")],
   ['accounts', t("Kassa va bank")],
+  ['history', t("Tarix")],
 ]
 
 /* ---------------- Ma'lumotlar ---------------- */
@@ -484,6 +486,7 @@ export default function CompanyPage() {
       {tab === 'departments' && <Departments editable={editable} />}
       {tab === 'warehouses' && <Warehouses editable={editable} />}
       {tab === 'accounts' && <Accounts user={user} />}
+      {tab === 'history' && <History />}
     </>
   )
 }

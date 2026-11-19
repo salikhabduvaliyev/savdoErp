@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import api, { errorText } from '../../api'
 import { canCreate, canDelete, canEdit, useAuth } from '../../auth'
 import { cleanNum, DocPage } from '../../components/DocEditor'
+import { usePager } from '../../components/Controls'
 import EntityForm from '../../components/EntityForm'
 import Icon, { IconBtn } from '../../components/Icon'
 import { Badge, Field, Loading, Modal, toast, useFetch } from '../../components/ui'
@@ -283,6 +284,7 @@ function Products({ user }) {
   const priceTypes = pts.data || []
   const defPt = priceTypes.find((p) => p.is_default) || priceTypes[0]
   const rows = data || []
+  const { rows: pageRows, pager } = usePager(rows, 50, JSON.stringify(q))
   const open = params.get('open')
   const setOpen = (val) => { const p = new URLSearchParams(params); if (val) p.set('open', val); else p.delete('open'); setParams(p) }
   const reload = () => setStamp((s) => s + 1)
@@ -350,7 +352,7 @@ function Products({ user }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((p) => (
+                  {pageRows.map((p) => (
                     <tr key={p.id} className="clickable" onClick={() => setOpen(String(p.id))}>
                       <td>
                         <span className="link-like">{p.name}</span>{!p.is_active && <span className="muted small"> {t('(nofaol)')}</span>}
@@ -368,6 +370,7 @@ function Products({ user }) {
                   {!rows.length && <tr><td colSpan={8} className="empty">{t('Tovarlar topilmadi')}</td></tr>}
                 </tbody>
               </table>
+              {pager}
             </>
           )}
         </div>

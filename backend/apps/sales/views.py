@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+from django.db import transaction
+
 from django.db.models import DecimalField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django_filters import rest_framework as filters
@@ -37,7 +39,7 @@ class SaleViewSet(viewsets.ModelViewSet):
     filterset_class = SaleFilter
     search_fields = ["=number", "client__name", "note"]
     ordering_fields = ["number", "date"]
-    action_perms = {"from_order": "create", "complete": "edit", "cancel": "edit", "pay": "edit"}
+    action_perms = {"from_order": "create", "complete": "edit", "cancel": "edit", "pay": "edit", "bulk": "view"}
 
     def get_serializer_class(self):
         return SaleListSerializer if self.action == "list" else SaleSerializer
@@ -93,6 +95,33 @@ class SaleViewSet(viewsets.ModelViewSet):
         resp = self._detail(sale)
         resp.status_code = 201 if created else 200
         return resp
+
+    @action(detail=False, methods=["post"])
+    def bulk(self, request):
+        """Ommaviy amal: {ids, action: complete|cancel|delete}"""
+        from django.core.exceptions import ValidationError as DjValidationError
+
+        ids, act = request.data.get("ids", []), request.data.get("action")
+        need = {"complete": "edit", "cancel": "edit", "delete": "delete"}.get(act)
+        if not need:
+            return Response({"detail": "Noma'lum amal"}, status=400)
+        if not request.user.can("sales", need):
+            return Response({"detail": "Bu amal uchun huquqingiz yo'q"}, status=403)
+        done, errors = 0, []
+        for sale in self.get_queryset().filter(id__in=ids):
+            try:
+                with transaction.atomic():
+                    if act == "complete":
+                        services.complete_sale(sale)
+                    elif act == "cancel":
+                        services.cancel_sale(sale)
+                    else:
+                        self.perform_destroy(sale)
+                done += 1
+            except (DjValidationError, serializers.ValidationError) as e:
+                msg = "; ".join(e.messages) if hasattr(e, "messages") else "; ".join(str(x) for x in (e.detail if isinstance(e.detail, list) else [e.detail]))
+                errors.append(f"№{sale.number}: {msg}")
+        return Response({"done": done, "errors": errors})
 
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):

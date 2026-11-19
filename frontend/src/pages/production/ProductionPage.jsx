@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth'
 import { t } from '../../i18n'
 import { DeptBoard } from './Board'
-import { CompletionsTab, JobsTab, LaborTab, ProdOrdersTab, StatusTab } from './Jobs'
+import { CompletionsTab, JobsTab, LaborTab, StatusTab } from './Jobs'
+import { ProdOrdersTab } from './ProdOrders'
 import { ProcessesTab, StagesTab, TechCardsTab } from './TechCards'
 
 // MoySklad "Производство" tuzilmasi
@@ -20,8 +22,9 @@ const TABS = [
 
 export default function ProductionPage() {
   const { user } = useAuth()
+  const [sp] = useSearchParams()
   const [tab, setTab] = useState(() => {
-    const v = sessionStorage.getItem('production.tab')
+    const v = sp.get('tab') || sessionStorage.getItem('production.tab')
     return TABS.some(([k]) => k === v) ? v : 'jobs'
   })
   const pick = (k) => { setTab(k); sessionStorage.setItem('production.tab', k) }

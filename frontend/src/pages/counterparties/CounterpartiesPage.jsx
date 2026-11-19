@@ -9,6 +9,7 @@ import { Loading, Modal, Stat, toast, useFetch } from '../../components/ui'
 import { money } from '../../format'
 import { t } from '../../i18n'
 import { IconBtn } from '../../components/Icon'
+import { usePager } from '../../components/Controls'
 
 const COLUMNS = [
   { key: 'name', label: t("Nomi"), fixed: true },
@@ -102,6 +103,7 @@ export default function CounterpartiesPage() {
 
   const nz = (bag) => bag && (Number(bag.UZS) !== 0 || Number(bag.USD) !== 0)
   const rows = (data || []).filter((r) => !f.debt || nz(r.receivable) || nz(r.payable))
+  const { rows: pageRows, pager } = usePager(rows, 50, JSON.stringify(f))
   const sum = (key) => rows.reduce((a, r) => ({ UZS: a.UZS + Number(r[key]?.UZS || 0), USD: a.USD + Number(r[key]?.USD || 0) }), { UZS: 0, USD: 0 })
   const show = view.show
 
@@ -192,7 +194,7 @@ export default function CounterpartiesPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {pageRows.map((r) => (
                 <tr key={r.id} className="clickable" onClick={() => nav(`/counterparties/${r.id}`)}>
                   <td><div className="bold">{r.name}{!r.is_active && <span className="muted small"> ({t('nofaol')})</span>}</div><div className="small muted">{t(r.kind_display)}{r.code ? ` · ${r.code}` : ''}</div></td>
                   {show('status') && <td>{r.status_name ? <span className="status-pill" style={{ background: r.status_color }}>{r.status_name}</span> : '—'}</td>}
@@ -216,6 +218,7 @@ export default function CounterpartiesPage() {
             </tbody>
           </table>
         )}
+        {pager}
       </div>
       <div className="legend"><span>{t('Manfiy (yashil) qarz — avans (ortiqcha to\'lov).')}</span><span>{t("Hujjatlarda ishlatilgan kontragentni o'chirib bo'lmaydi — nofaol qiling.")}</span></div>
       {manage && <GroupsManager editable={canEdit(user, 'counterparties')} onClose={() => setManage(false)} onChanged={() => setStamp((s) => s + 1)} />}

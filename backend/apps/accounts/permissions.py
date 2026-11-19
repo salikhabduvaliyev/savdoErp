@@ -32,6 +32,9 @@ def activate_tenant(request):
     user = request.user
     if not user or not user.is_authenticated or not user.company_id:
         set_context(None, None)
+        from apps.core.audit import set_user
+
+        set_user(None)
         return
     if not user.company.is_accessible:
         raise SubscriptionExpired()
@@ -52,6 +55,9 @@ def activate_tenant(request):
             branch_id = allowed[0]
     set_context(user.company_id, branch_id)
     request.branch_id = branch_id
+    from apps.core.audit import set_user
+
+    set_user(user)
 
 
 def required_action(request, view):

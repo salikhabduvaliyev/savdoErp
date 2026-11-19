@@ -412,3 +412,52 @@ class StockDocTests(TestCase):
         self.assertEqual(rows["revenue"], D("6000000"))  # ikki marta hisoblanmaydi
         self.assertEqual(rows["cogs"], D("3000000"))
         self.assertEqual(rows["gross"], D("3000000"))
+
+    def test_order_to_production_flow_audit_bulk(self):
+        """Buyurtma → ishlab chiqarishga yuborish → boshlash (minusga ruxsat) → bosqichlar → buyurtma tayyor; tarix va ommaviy amallar."""
+        from apps.production.models import Department, Operation, TechCard, TechCardMaterial, TechProcess, TechProcessStage
+
+        with tenant_context(self.c):
+            prod = Material.objects.create(name="Rom", type="product", unit="pcs", currency="UZS")
+            d1 = Department.objects.create(name="Kesish", sequence=1)
+            d2 = Department.objects.create(name="Yig'ish", sequence=2)
+            o1 = Operation.objects.create(name="Kesish", department=d1, unit="pcs")
+            o2 = Operation.objects.create(name="Yig'ish", department=d2, unit="pcs")
+            proc = TechProcess.objects.create(name="P")
+            TechProcessStage.objects.create(process=proc, operation=o1, position=0)
+            TechProcessStage.objects.create(process=proc, operation=o2, position=1)
+            tc = TechCard.objects.create(name="Rom", product=prod, output_qty=1, process=proc)
+            TechCardMaterial.objects.create(techcard=tc, material=self.m, qty=D("3"), operation=o1)
+        set_context(None, None)
+        self.doc("enter", [{"material": self.m.id, "qty": "4", "price": "100"}])  # 2 ta uchun 6 kerak — yetmaydi
+        order = self.api.post("/api/orders/", {"client": self.cli.id, "currency": "UZS", "plan_date": str(T), "date": str(T),
+                                               "items": [{"product": prod.id, "qty": "2", "price": "500"}]}, format="json").json()
+        r = self.api.post(f"/api/orders/{order['id']}/send_to_production/").json()
+        po = r["production_order"]
+        req = self.api.get(f"/api/production/orders/{po}/requirements/", {"warehouse": self.w1.id}).json()
+        self.assertEqual(D(req[0]["shortage"]), D("2"))
+        body = {"materials_warehouse": self.w1.id, "products_warehouse": self.w1.id}
+        self.assertEqual(self.api.post(f"/api/production/orders/{po}/create_jobs/", body, format="json").status_code, 409)
+        r = self.api.post(f"/api/production/orders/{po}/create_jobs/", {**body, "allow_negative": True}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        o = self.api.get(f"/api/orders/{order['id']}/").json()
+        self.assertEqual(o["stage"], "Kesish")
+        tasks = sorted(self.api.get("/api/production/tasks/", {"job": r.json()["jobs"][0]}).json(), key=lambda x: x["id"])
+        for tk in tasks:
+            self.assertEqual(self.api.post(f"/api/production/tasks/{tk['id']}/complete/", {"qty": "2"}, format="json").status_code, 200)
+        o = self.api.get(f"/api/orders/{order['id']}/").json()
+        self.assertEqual(o["status"], "ready")
+        self.assertEqual(self.stock()[0], D("-2"))  # minusga ketdi
+        # tarix
+        with tenant_context(self.c):
+            from apps.core.models import AuditLog
+
+            self.assertTrue(AuditLog.objects.filter(entity="production_order", action="start").exists())
+            self.assertTrue(AuditLog.objects.filter(entity="order", action="create").exists())
+        # ommaviy: nusxa va o'chirish
+        r = self.api.post("/api/orders/bulk/", {"ids": [order["id"]], "action": "copy"}, format="json").json()
+        self.assertEqual(len(r["created"]), 1)
+        r = self.api.post("/api/orders/bulk/", {"ids": r["created"], "action": "delete"}, format="json").json()
+        self.assertEqual(r["done"], 1)
+        with tenant_context(self.c):
+            self.assertTrue(AuditLog.objects.filter(entity="order", action="delete").exists())

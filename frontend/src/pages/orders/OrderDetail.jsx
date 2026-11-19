@@ -18,7 +18,7 @@ export default function OrderDetail() {
   const nav = useNavigate()
   const { user } = useAuth()
   const { data: o, error, reload } = useFetch(`/orders/${id}/`)
-  const [tab, setTab] = useState('estimate')
+  const [tab, setTab] = useState('items')
   const [stamp, setStamp] = useState(0)
   const [edit, setEdit] = useState(false)
   const [pay, setPay] = useState(null)
@@ -47,6 +47,11 @@ export default function OrderDetail() {
   const sendToProduction = async () => {
     try {
       const { data } = await api.post(`/orders/${id}/send_to_production/`)
+      if (data.production_order) {
+        toast(tr('Ishlab chiqarish buyurtmasi №{n} — ishni boshlang', { n: data.production_order_number }))
+        nav(`/production?tab=orders&po=${data.production_order}`)
+        return
+      }
       const short = data.materials.filter((m) => Number(m.shortage) > 0)
       toast(`Topshiriqlar: +${data.created_tasks}. ` + (short.length ? `Yetishmaydi: ${short.map((m) => `${m.material} ${qty(m.shortage)} ${m.unit}`).join(', ')} — zayavka yuborildi` : 'Material rezerv qilindi'), short.length > 0)
       refresh()
@@ -59,16 +64,17 @@ export default function OrderDetail() {
         <Link to="/orders" className="muted">{tr("← Buyurtmalar")}</Link>
         <h1>Buyurtma {o.number}</h1>
         <Badge kind={o.status}>{o.status_display}</Badge>
-        {o.stage && <span className="muted">Bo'lim: {o.stage}</span>}
+        {o.stage && <span className="stage-chip current">● {tr('Hozir')}: {o.stage}</span>}
         {o.is_overdue && <span className="badge b-low">{o.overdue_days} kun kechikkan</span>}
         <span className="grow" />
         <select className="chip" value={o.status} onChange={(e) => setStatus(e.target.value)}>
           {STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
         <button className="btn icon-only" onClick={() => setEdit(true)} title={tr("Tahrirlash")}><Icon name="edit" size={16} /></button>
-        {['new', 'confirmed', 'in_production'].includes(o.status) && <button className="btn" onClick={sendToProduction}>{tr("Bo'limlarga yuborish")}</button>}
+        {['new', 'confirmed'].includes(o.status) && !o.production_orders?.length && <button className="btn primary" onClick={sendToProduction}><Icon name="production" size={16} /> {tr("Ishlab chiqarishga yuborish")}</button>}
+        {o.production_orders?.map((po) => <Link key={po.id} className="btn" to={`/production?tab=orders&po=${po.id}`}><Icon name="production" size={16} /> {tr('Ishlab chiqarish')} №{po.number}</Link>)}
         {['ready', 'delivered'].includes(o.status) && canCreate(user, 'sales') && (
-          <button className="btn primary" onClick={makeSale}>{o.is_sold ? 'Sotuvni ochish' : 'Sotuv qilish'}</button>
+          <button className="btn success" onClick={makeSale}><Icon name="sales" size={16} /> {o.is_sold ? tr('Sotuvni ochish') : tr('Sotuvga berish')}</button>
         )}
       </div>
 
@@ -96,6 +102,21 @@ export default function OrderDetail() {
       ) : <div className="card empty">{tr("Pozitsiyalar yo'q — buyurtma umumiy summa bilan kiritilgan.")} <button className="link-btn" onClick={() => setEdit(true)}>{tr("Pozitsiya qo'shish")}</button></div>)}
       {tab === 'estimate' && <Estimate key={stamp} order={o} onChanged={refresh} />}
 
+      {tab === 'tasks' && (tasks.data || []).length > 0 && (
+        <div className="stage-flow" style={{ marginBottom: 12 }}>
+          {Object.values((tasks.data || []).reduce((acc, t) => {
+            const k = t.department_name
+            const a = acc[k] || (acc[k] = { name: k, plan: 0, done: 0, status: 'done' })
+            a.plan += Number(t.plan_qty); a.done += Number(t.done_qty)
+            if (t.status !== 'done') a.status = a.status === 'current' ? 'current' : 'waiting'
+            return acc
+          }, {})).map((d) => (
+            <div key={d.name} className={'stage-chip ' + (d.done >= d.plan ? 'done' : o.stage === d.name ? 'current' : '')}>
+              {d.done >= d.plan ? '✓' : o.stage === d.name ? '●' : '○'} {d.name} <small>{qty(d.done)}/{qty(d.plan)}</small>
+            </div>
+          ))}
+        </div>
+      )}
       {tab === 'tasks' && (
         <div className="table-wrap">
           <table className="t">
@@ -112,7 +133,7 @@ export default function OrderDetail() {
                   <td><Badge kind={t.status}>{t.status_display}</Badge>{t.blocked_reason && <div className="small red">{t.blocked_reason}</div>}</td>
                 </tr>
               ))}
-              {tasks.data && !tasks.data.length && <tr><td colSpan={7} className="empty">{tr("Topshiriqlar yo'q. \"Bo'limlarga yuborish\" smetaning B blokidan topshiriq yaratadi.")}</td></tr>}
+              {tasks.data && !tasks.data.length && <tr><td colSpan={7} className="empty">{tr("Topshiriqlar yo'q. \"Ishlab chiqarishga yuborish\" — pozitsiyalardan ishlab chiqarish buyurtmasi (yoki smetaning B blokidan topshiriq) yaratadi.")}</td></tr>}
             </tbody>
           </table>
         </div>

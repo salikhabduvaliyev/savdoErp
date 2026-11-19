@@ -144,7 +144,8 @@ function DialogBox({ title, onClose, children, wide }) {
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
   }, [onClose])
-  return (
+  // portal: to'liq sahifa (fullpage) ichida ochilsa ham yon menyu ustida turadi
+  return createPortal(
     <div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={'modal' + (wide ? ' wide' : '')}>
         <div className="modal-head">
@@ -153,7 +154,8 @@ function DialogBox({ title, onClose, children, wide }) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

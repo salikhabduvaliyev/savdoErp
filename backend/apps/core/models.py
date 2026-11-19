@@ -269,3 +269,26 @@ __all__ = ["CustomField",
     "Currency", "money_field", "qty_field", "currency_field", "TimeStamped", "Company", "Branch",
     "ExchangeRate", "SystemSettings", "TenantModel", "TenantManager",
 ]
+
+
+class AuditLog(TenantModel):
+    """Kompaniya tarixi: kim, qachon, nimani yaratdi / o'zgartirdi / o'chirdi."""
+
+    class Action(models.TextChoices):
+        CREATE = "create", "Yaratildi"
+        UPDATE = "update", "O'zgartirildi"
+        DELETE = "delete", "O'chirildi"
+        START = "start", "Ishga tushirildi"
+        STATUS = "status", "Holat o'zgardi"
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    user = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    action = models.CharField(max_length=10, choices=Action.choices)
+    entity = models.CharField(max_length=30, db_index=True)
+    entity_id = models.PositiveBigIntegerField(null=True, blank=True)
+    title = models.CharField(max_length=250)
+    changes = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["company", "entity", "entity_id"])]

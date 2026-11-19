@@ -9,6 +9,7 @@ import { Badge, Loading, MoneyBag, toast, useFetch } from '../../components/ui'
 import { convertPrice, CurrencyOptions, curLabel } from '../../currency'
 import { date, money, qty, todayISO } from '../../format'
 import { t } from '../../i18n'
+import { SearchSelect, usePager } from '../../components/Controls'
 
 /* Hujjat turlari sozlamasi */
 export const DOC_TYPES = {
@@ -190,24 +191,22 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
         <div>
           {cfg.party && (
             <DocField label={cfg.party} required>
-              <select value={v.counterparty || ''} onChange={(e) => set('counterparty', e.target.value)} disabled={!editable}>
-                <option value="">{t('— tanlang —')}</option>
-                {(parties.data || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <SearchSelect value={v.counterparty || ''} onChange={(id) => set('counterparty', id)} disabled={!editable}
+                options={(parties.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.phone }))}
+                onCreate={async (name) => {
+                  const n = name || window.prompt(t('Yangi kontragent nomi'))
+                  if (!n) return
+                  try { const { data } = await api.post('/crm/counterparties/', { name: n }); parties.reload(); set('counterparty', data.id) } catch (e) { setError(errorText(e)) }
+                }} createLabel={t('Yangi kontragent')} />
             </DocField>
           )}
           <DocField label={cfg.wh} required={!cfg.planDate}>
-            <select value={v.warehouse || ''} onChange={(e) => set('warehouse', e.target.value)} disabled={!editable}>
-              <option value="">—</option>
-              {whs.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
+            <SearchSelect value={v.warehouse || ''} onChange={(id) => set('warehouse', id)} disabled={!editable} options={whs.map((w) => ({ value: w.id, label: w.name }))} />
           </DocField>
           {cfg.toWh && (
             <DocField label="Qaysi omborga" required>
-              <select value={v.to_warehouse || ''} onChange={(e) => set('to_warehouse', e.target.value)} disabled={!editable}>
-                <option value="">—</option>
-                {whs.filter((w) => String(w.id) !== String(v.warehouse)).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+              <SearchSelect value={v.to_warehouse || ''} onChange={(id) => set('to_warehouse', id)} disabled={!editable}
+                options={whs.filter((w) => String(w.id) !== String(v.warehouse)).map((w) => ({ value: w.id, label: w.name }))} />
             </DocField>
           )}
         </div>
@@ -267,6 +266,7 @@ export function DocList({ type }) {
   const [applied, setApplied] = useState(empty)
   const q = useMemo(() => Object.fromEntries(Object.entries({ ...applied, type, stamp }).filter(([, x]) => x !== '')), [applied, type, stamp])
   const { data, error } = useFetch('/warehouse/docs/', q)
+  const { rows: pageRows, pager } = usePager(data?.results, 50, JSON.stringify(q))
   const warehouses = useFetch('/warehouse/warehouses/')
   const parties = useFetch(cfg.party ? '/crm/counterparties/' : null, { is_active: true })
   const open = params.get('open')
@@ -316,10 +316,8 @@ export function DocList({ type }) {
             </label>
             {cfg.party && (
               <label>{t(cfg.party)}
-                <select value={f.counterparty} onChange={(e) => setF({ ...f, counterparty: e.target.value })}>
-                  <option value="">{t('hammasi')}</option>
-                  {(parties.data || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <SearchSelect value={f.counterparty} onChange={(id) => setF({ ...f, counterparty: id })} empty={t('hammasi')}
+                  options={(parties.data || []).map((c) => ({ value: c.id, label: c.name }))} />
               </label>
             )}
             <label>{t(cfg.postedLabel || "O'tkazilgan")}
@@ -353,7 +351,7 @@ export function DocList({ type }) {
               </tr>
             </thead>
             <tbody>
-              {data.results.map((d) => (
+              {pageRows.map((d) => (
                 <tr key={d.id} className="clickable" onClick={() => setOpen(d.id)}>
                   <td><span className="link-like">{pad(d.number)}</span></td>
                   <td>{date(d.date)}</td>
@@ -373,6 +371,7 @@ export function DocList({ type }) {
               <tfoot><tr><td colSpan={cfg.party ? 4 : 3}>{t('Jami (valyuta bo\'yicha)')}</td><td className="num"><MoneyBag bag={data.totals} /></td><td colSpan={5} /></tr></tfoot>
             )}
           </table>
+          {pager}
         </div>
       )}
       {cfg.hint && <p className="hint">{t(cfg.hint)}</p>}

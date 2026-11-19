@@ -56,6 +56,22 @@ def with_paid(qs):
     )
 
 
+def _copy_order(order, user):
+    """Buyurtma nusxasi: mijoz, valyuta, pozitsiyalar va qo'shimcha maydonlar; holat — Yangi, sana — bugun."""
+    from .models import OrderItem
+
+    new = Order.objects.create(
+        client=order.client, currency=order.currency, amount=order.amount, volume=order.volume,
+        plan_date=max(order.plan_date, timezone.localdate()), branch=order.branch, manager=order.manager or user,
+        operator=order.operator, note=order.note, extra=order.extra, created_by=user,
+    )
+    for it in order.items.all():
+        OrderItem.objects.create(order=new, product=it.product, name=it.name, unit=it.unit, qty=it.qty, price=it.price,
+                                 discount_pct=it.discount_pct, position=it.position)
+    Estimate.objects.create(order=new, version=1)
+    return new
+
+
 def totals(orders):
     amount, paid, debt = MoneyBag(), MoneyBag(), MoneyBag()
     for o in orders:
@@ -73,9 +89,10 @@ class OrderViewSet(viewsets.ModelViewSet):
     search_fields = ["=number", "client__name", "note"]
     ordering_fields = ["number", "date", "plan_date", "amount"]
     module = "orders"
+    action_perms = {"bulk": "view"}
 
     def get_queryset(self):
-        qs = Order.objects.select_related("client", "manager", "operator", "branch").prefetch_related("tasks__department", "items__product")
+        qs = Order.objects.select_related("client", "manager", "operator", "branch").prefetch_related("tasks__department", "items__product", "production_orders")
         bid = current_branch_id()
         if bid:
             qs = qs.filter(branch_id=bid)
@@ -84,7 +101,8 @@ class OrderViewSet(viewsets.ModelViewSet):
             qs = qs.filter(Q(manager=user) | Q(operator=user) | Q(created_by=user))
         from apps.core.custom_fields import filter_by_extra
 
-        return with_paid(filter_by_extra(qs, self.request.query_params))
+        # GROUP BY so'rovlarida Meta.ordering qo'llanmaydi — tartib aniq beriladi (eng yangisi tepada)
+        return with_paid(filter_by_extra(qs, self.request.query_params)).order_by("-date", "-number")
 
     def list(self, request, *args, **kwargs):
         orders = list(self.filter_queryset(self.get_queryset()))
@@ -123,6 +141,40 @@ class OrderViewSet(viewsets.ModelViewSet):
                 _apply_status(order, new)
         return Response({"updated": len(ids)})
 
+    @action(detail=False, methods=["post"])
+    def bulk(self, request):
+        """Ommaviy amal (MoySklad "Изменить"): {ids, action: delete|copy|status, status?}. Har biri alohida — xatolar ro'yxatda."""
+        from django.core.exceptions import ValidationError as DjValidationError
+        from django.db.models import ProtectedError
+
+        ids, act = request.data.get("ids", []), request.data.get("action")
+        user = request.user
+        need = {"delete": "delete", "copy": "create", "status": "edit"}.get(act)
+        if not need:
+            return Response({"detail": "Noma'lum amal"}, status=400)
+        if not user.can("orders", need):
+            return Response({"detail": "Bu amal uchun huquqingiz yo'q"}, status=403)
+        done, errors, created = 0, [], []
+        for order in self.get_queryset().filter(id__in=ids):
+            try:
+                with transaction.atomic():
+                    if act == "delete":
+                        if order.transactions.exists() or order.sales.exists():
+                            raise DjValidationError("to'lov yoki sotuv bor — o'chirib bo'lmaydi, bekor qiling")
+                        order.delete()
+                    elif act == "status":
+                        new = request.data.get("status")
+                        if new not in Order.Status.values:
+                            raise DjValidationError("noto'g'ri status")
+                        _apply_status(order, new)
+                    elif act == "copy":
+                        created.append(_copy_order(order, user).id)
+                done += 1
+            except (DjValidationError, ProtectedError) as e:
+                msg = "; ".join(e.messages) if hasattr(e, "messages") else "bog'langan hujjatlar bor"
+                errors.append(f"№{order.number}: {msg}")
+        return Response({"done": done, "errors": errors, "created": created})
+
     @action(detail=True, methods=["post"])
     def move(self, request, pk=None):
         """Kalendarda kartochkani sudrash: production_date o'zgaradi (reja sana emas)."""
@@ -145,10 +197,16 @@ class OrderViewSet(viewsets.ModelViewSet):
     # --- ishlab chiqarish va ombor ---
     @action(detail=True, methods=["post"])
     def send_to_production(self, request, pk=None):
-        """Smeta (B blok) asosida ishlab chiqarish topshirig'i va bosqichlar; materialni rezerv qiladi."""
-        from apps.production.services import create_job_from_order
+        """Ishlab chiqarishga yuborish.
+        Pozitsiyalarda texkartali mahsulot bo'lsa — ishlab chiqarish buyurtmasi yaratiladi (MoySklad uslubi);
+        aks holda smeta (B blok) asosida bosqichli topshiriq."""
+        from apps.production.services import create_job_from_order, production_order_from_client_order
 
-        job, created, shortages = create_job_from_order(self.get_object(), user=request.user)
+        order = self.get_object()
+        if order.items.filter(product__isnull=False).exists():
+            po, created = production_order_from_client_order(order, user=request.user)
+            return Response({"production_order": po.id, "production_order_number": po.number, "created": created})
+        job, created, shortages = create_job_from_order(order, user=request.user)
         for s in shortages:
             s["shortage"] = str(s["shortage"])
         return Response({"job": job.id, "job_number": job.number, "created_tasks": created, "materials": shortages})

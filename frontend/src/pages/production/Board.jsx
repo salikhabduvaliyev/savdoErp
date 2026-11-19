@@ -4,65 +4,97 @@ import api, { errorText } from '../../api'
 import { useAuth } from '../../auth'
 import { Badge, Loading, Progress, Stat, toast, useFetch } from '../../components/ui'
 import { date, pct, qty, shortDate } from '../../format'
+import { cleanNum } from '../../components/DocEditor'
 import { t as tr } from '../../i18n'
 
-function TaskCard({ t, onDone, employees }) {
+/* Bo'lim ekrani (ishni boshlash): katta tugmalar, ketma-ket bosqichlar, ijrochi — kirgan xodim */
+function TaskCard({ t, onDone, employees, me }) {
+  const ready = Number(t.flow?.ready ?? t.remaining)
   const [done, setDone] = useState('')
-  const [emp, setEmp] = useState('')
+  const myEmp = me && employees.some((e) => e.id === me.id) ? String(me.id) : ''
+  const [emp, setEmp] = useState(myEmp)
+  const [busy, setBusy] = useState(false)
   const call = async (action, body) => {
+    setBusy(true)
     try {
       const { data } = await api.post(`/production/tasks/${t.id}/${action}/`, body)
-      toast(`${t.job_number ? '№' + t.job_number : t.order_number}: ${data.status_display}`)
+      toast(`${t.job_number ? '№' + t.job_number : t.order_number}: ${tr(data.status_display)}`)
     } catch (e) {
       const st = e?.response?.status
-      toast(st === 409 ? 'Material yetishmaydi — zayavka ishlab chiqarish menejeriga yuborildi' : errorText(e), true)
+      toast(st === 409 ? tr('Material yetishmaydi — zayavka ishlab chiqarish menejeriga yuborildi') : errorText(e), true)
     }
+    setBusy(false)
     onDone()
   }
-  const unit = t.unit
+  const unit = tr(t.unit)
+  const amount = done === '' ? ready : Number(done)
+  const running = ['in_progress', 'paused'].includes(t.status)
+  const waitingPrev = t.flow?.prev && ready <= 0 && Number(t.remaining) > 0
   return (
-    <div className={'task' + (t.status === 'in_progress' ? ' active' : '')}>
-      <div className="title">
-        <span>
-          {t.job_number ? <>№{t.job_number} · </> : null}
-          {t.order ? <Link to={`/orders/${t.order}`}>{t.order_number}</Link> : null}
-          {t.order ? ` · ${t.client_name}` : t.job_title}
-        </span>
-        <Badge kind={t.status}>{t.status_display}</Badge>
+    <div className={'tcard ' + t.status + (waitingPrev ? ' waiting-prev' : '')}>
+      <div className="tcard-head">
+        <div>
+          <div className="tcard-title">{t.job_title || `${tr('Buyurtma')} №${t.order_number}`}</div>
+          <div className="tcard-sub">
+            {t.job_number && <>№{t.job_number}</>}
+            {t.order && <> · <Link to={`/orders/${t.order}`}>{tr('Buyurtma')} №{t.order_number}</Link> · {t.client_name}</>}
+          </div>
+        </div>
+        <Badge kind={t.status}>{tr(t.status_display)}</Badge>
       </div>
-      <div className="line">
-        Bosqich: <b>{t.operation_name}</b> · Reja: {qty(t.plan_qty)} {unit}
-        {Number(t.done_qty) > 0 && <> · Bajarildi: {qty(t.done_qty)} {unit}</>}
-        {' · '}Muddat:{' '}
-        <span className={t.is_overdue ? 'red' : ''}>{shortDate(t.deadline)}{t.is_overdue && ' ' + tr('({n} kun kechikkan)', { n: t.overdue_days })}</span>
+
+      <div className="tcard-flow">
+        {t.flow?.prev && <span className="muted">{t.flow.prev} ✓ {qty(t.flow.prev_done)}</span>}
+        <span className="cur">● {t.operation_name}</span>
+        {t.flow?.next && <span className="muted">→ {t.flow.next}</span>}
       </div>
+
+      <div className="tcard-nums">
+        <div><small>{tr('Reja')}</small><b>{qty(t.plan_qty)} {unit}</b></div>
+        <div><small>{tr('Bajarildi')}</small><b className="green">{qty(t.done_qty)}</b></div>
+        <div><small>{tr('Hozir bajarsa bo\'ladi')}</small><b className={ready > 0 ? '' : 'muted'}>{qty(ready)}</b></div>
+        <div><small>{tr('Muddat')}</small><b className={t.is_overdue ? 'red' : ''}>{shortDate(t.deadline)}</b></div>
+      </div>
+      <Progress value={t.progress} big />
+
       {t.materials.length > 0 && (
-        <div className="line muted small">
-          Material: {t.materials.map((m) => `${m.name} — ${qty(m.qty)} ${m.unit}${Number(m.reserved) > 0 ? ' (rezervda)' : ''}`).join(' · ')}
-          {t.drawing && <> · <a href={t.drawing} target="_blank" rel="noreferrer">{tr("Chizma")}</a></>}
+        <div className="tcard-mats">
+          {t.materials.map((m) => <span key={m.name} className="mat-chip">{m.name} <b>{qty(m.qty)} {tr(m.unit)}</b></span>)}
+          {t.drawing && <a href={t.drawing} target="_blank" rel="noreferrer">{tr('Chizma')}</a>}
         </div>
       )}
-      {t.status === 'blocked' && <div className="line red small">{t.blocked_reason} — zayavka ishlab chiqarish menejeriga yuborildi</div>}
-      {['in_progress', 'paused'].includes(t.status) && <div style={{ maxWidth: 400, marginTop: 8 }}><Progress value={t.progress} big /></div>}
-      <div className="actions">
+      {t.status === 'blocked' && <div className="warn-box">{t.blocked_reason}</div>}
+      {waitingPrev && <div className="hint">{tr('Oldingi bosqich ({d}) tugatishini kuting', { d: t.flow.prev })}</div>}
+
+      <div className="tcard-actions">
         {['waiting', 'paused', 'blocked'].includes(t.status) && (
-          <button className="btn primary big" onClick={() => call('start')}>{t.status === 'blocked' ? 'Qayta tekshirish' : 'Boshlash'}</button>
+          <button className="btn primary huge" disabled={busy || waitingPrev} onClick={() => call('start')}>
+            ▶ {t.status === 'blocked' ? tr('Qayta tekshirish') : t.status === 'paused' ? tr('Davom ettirish') : tr('Boshlash')}
+          </button>
         )}
-        {['in_progress', 'paused'].includes(t.status) && (
+        {running && (
           <>
-            {t.status === 'in_progress' && <button className="btn danger big" onClick={() => call('pause', { reason: window.prompt("To'xtatish sababi:", '') || '' })}>{tr("To'xtatish")}</button>}
-            <button className="btn success big" onClick={() => call('finish', { employee: emp || undefined })}>{tr("Tugatish")}</button>
-            <input className="cell" style={{ width: 120, padding: 9 }} placeholder={`+ bajarildi, ${unit}`} value={done} onChange={(e) => setDone(e.target.value)} />
-            {employees?.length > 0 && (
-              <select className="cell" style={{ width: 180, padding: 8 }} value={emp} onChange={(e) => setEmp(e.target.value)}>
-                <option value="">{tr("Ijrochi (men)")}</option>
-                {employees.map((x) => <option key={x.id} value={x.id}>{x.full_name}</option>)}
-              </select>
+            <div className="qty-stepper">
+              <button onClick={() => setDone(String(Math.max(0, amount - 1)))}>−</button>
+              <input inputMode="decimal" value={done === '' ? cleanNum(ready) : done} onChange={(e) => setDone(e.target.value)} />
+              <button onClick={() => setDone(String(Math.min(ready, amount + 1)))}>+</button>
+              <span className="muted">{unit}</span>
+            </div>
+            <select className="emp-select" value={emp} onChange={(e) => setEmp(e.target.value)} title={tr('Ijrochi — shu xodimga ishbay haq yoziladi')}>
+              <option value="">{tr('Ijrochi: tanlanmagan')}</option>
+              {employees.map((x) => <option key={x.id} value={x.id}>{x.full_name}{me && x.id === me.id ? ` (${tr('men')})` : ''}</option>)}
+            </select>
+            <button className="btn success huge" disabled={busy || !(amount > 0) || amount > ready}
+              onClick={() => { call('complete', { qty: amount, employee: emp || undefined }); setDone('') }}>
+              ✓ {tr('Bajarildi')} {qty(amount)} {unit}
+            </button>
+            {t.status === 'in_progress' && (
+              <button className="btn huge-ghost" disabled={busy} onClick={() => call('pause', { reason: window.prompt(tr("To'xtatish sababi:"), '') || '' })}>❚❚ {tr("To'xtatish")}</button>
             )}
-            <button className="btn" disabled={!done} onClick={() => { call('complete', { qty: done, employee: emp || undefined }); setDone('') }}>{tr("Saqlash")}</button>
           </>
         )}
       </div>
+      {running && amount > ready && <div className="red small">{tr('Oldingi bosqichdan faqat {n} keldi', { n: qty(ready) })}</div>}
     </div>
   )
 }
@@ -70,30 +102,37 @@ function TaskCard({ t, onDone, employees }) {
 export function DeptBoard() {
   const { user } = useAuth()
   const deps = useFetch('/production/departments/')
-  const [dep, setDep] = useState(user.department || '')
+  const me = user.employee
+  const [dep, setDep] = useState(user.department || me?.department || '')
   const [stamp, setStamp] = useState(0)
   const depId = dep || deps.data?.[0]?.id
   const tasks = useFetch(depId ? '/production/tasks/' : null, { department: depId, active: 1, stamp })
   const depName = deps.data?.find((d) => d.id === Number(depId))?.name
   const employees = useFetch('/hr/employees/', { is_active: true, department: depId || '' })
 
-  const order = { in_progress: 0, waiting: 1, paused: 2, blocked: 3 }
+  const order = { in_progress: 0, paused: 1, waiting: 2, blocked: 3 }
   const list = [...(tasks.data || [])].sort((a, b) => order[a.status] - order[b.status])
 
   return (
     <>
-      <div className="page-head">
-        <h1>{depName ? `${depName} bo'limi` : "Bo'lim"}</h1>
-        <span className="muted">Bugun, {date(new Date().toISOString())} · Bo'lim boshlig'i</span>
+      <div className="board-head">
+        <div>
+          <h1>{depName ? tr("{d} bo'limi", { d: depName }) : tr("Bo'lim")}</h1>
+          <div className="muted">{tr('Bugun')}, {date(new Date().toISOString())} · {me ? me.full_name : user.full_name}</div>
+        </div>
         <span className="grow" />
         {!user.own_department_only && (
-          <select className="chip" value={depId || ''} onChange={(e) => setDep(e.target.value)}>
-            {(deps.data || []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
+          <div className="dep-tabs">
+            {(deps.data || []).map((d) => (
+              <button key={d.id} className={String(d.id) === String(depId) ? 'active' : ''} onClick={() => setDep(d.id)}>{d.name}</button>
+            ))}
+          </div>
         )}
       </div>
       {!tasks.data ? <Loading error={tasks.error} /> : list.length ? (
-        list.map((t) => <TaskCard key={t.id} t={t} employees={employees.data || []} onDone={() => setStamp((s) => s + 1)} />)
+        <div className="tcards">
+          {list.map((t) => <TaskCard key={t.id + ':' + stamp} t={t} me={me} employees={employees.data || []} onDone={() => setStamp((s) => s + 1)} />)}
+        </div>
       ) : <div className="card empty">{tr("Faol topshiriqlar yo'q")}</div>}
     </>
   )

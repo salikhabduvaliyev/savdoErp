@@ -7,6 +7,7 @@ import { Badge, Field, Loading, Modal, Progress, Stat, toast, useFetch } from '.
 import { date, monthStartISO, money, num, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import Icon, { IconBtn } from '../../components/Icon'
+import { SearchSelect } from '../../components/Controls'
 
 const JOB_STATUSES = [['new', tr("Yangi")], ['in_progress', tr("Jarayonda")], ['done', tr("Bajarildi")], ['cancelled', tr("Bekor qilindi")]]
 const JOB_BADGE = { new: 'new', in_progress: 'in_production', done: 'done', cancelled: 'cancelled' }
@@ -68,10 +69,8 @@ function JobForm({ onClose, onSaved, preset }) {
       {error && <div className="error">{error}</div>}
       <form className="form" onSubmit={submit}>
         <Field label={tr("Texkarta")} full>
-          <select value={v.techcard} onChange={(e) => setV({ ...v, techcard: e.target.value })} required>
-            <option value="">{tr("— tanlang —")}</option>
-            {(tcs.data || []).map((x) => <option key={x.id} value={x.id}>{x.name} → {x.product_name}</option>)}
-          </select>
+          <SearchSelect value={v.techcard} onChange={(id) => setV({ ...v, techcard: id })} placeholder={tr("— tanlang —")}
+            options={(tcs.data || []).map((x) => ({ value: x.id, label: x.product_name, sub: x.name }))} />
         </Field>
         <Field label={`Miqdor${tc ? `, ${tc.product_unit}` : ''}`}><input type="number" step="any" min="0" value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} required /></Field>
         <div />
@@ -245,183 +244,6 @@ export function JobsTab() {
   )
 }
 
-/* ------------------------------------------------------------ ishlab chiqarish buyurtmalari */
-function ProdOrderForm({ item, onClose, onSaved }) {
-  const tcs = useFetch('/production/techcards/', { is_active: true })
-  const [v, setV] = useState({ date: item?.date || todayISO(), plan_date: item?.plan_date || '', note: item?.note || '' })
-  const [items, setItems] = useState(() => item?.items?.map((i) => ({ key: i.id, techcard: i.techcard, qty: i.qty })) || [{ key: 1, techcard: '', qty: '1' }])
-  const [error, setError] = useState(null)
-  const submit = async (e) => {
-    e.preventDefault()
-    const payload = { ...v, plan_date: v.plan_date || null, items: items.filter((i) => i.techcard).map((i) => ({ techcard: i.techcard, qty: i.qty })) }
-    try {
-      const { data } = item ? await api.patch(`/production/orders/${item.id}/`, payload) : await api.post('/production/orders/', payload)
-      onSaved(data)
-    } catch (err) { setError(errorText(err)) }
-  }
-  return (
-    <Modal title={item ? `Ishlab chiqarish buyurtmasi №${item.number}` : 'Yangi ishlab chiqarish buyurtmasi'} onClose={onClose} wide>
-      {error && <div className="error">{error}</div>}
-      <form onSubmit={submit}>
-        <div className="form three">
-          <Field label={tr("Sana")}><input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></Field>
-          <Field label={tr("Reja sana (tayyor bo'lishi)")}><input type="date" value={v.plan_date} onChange={(e) => setV({ ...v, plan_date: e.target.value })} /></Field>
-          <Field label={tr("Izoh")}><input value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} /></Field>
-        </div>
-        <div className="table-wrap" style={{ marginTop: 14 }}>
-          <table className="t">
-            <thead><tr><th>{tr("Texkarta (mahsulot)")}</th><th className="num">{tr("Miqdor")}</th><th /></tr></thead>
-            <tbody>
-              {items.map((it) => (
-                <tr key={it.key}>
-                  <td>
-                    <select className="cell" value={it.techcard} onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, techcard: e.target.value } : x)))}>
-                      <option value="">{tr("— texkarta —")}</option>
-                      {(tcs.data || []).map((x) => <option key={x.id} value={x.id}>{x.name} → {x.product_name}</option>)}
-                    </select>
-                  </td>
-                  <td className="num"><input className="cell" value={it.qty} onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, qty: e.target.value } : x)))} /></td>
-                  <td className="num"><IconBtn icon="delete" danger title="O\'chirish" onClick={() => setItems(items.filter((x) => x.key !== it.key))} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="table-toolbar" style={{ borderTop: '1px solid var(--border)', borderBottom: 0 }}>
-            <button type="button" className="btn small" onClick={() => setItems([...items, { key: Math.random(), techcard: '', qty: '1' }])}>{tr("+ Mahsulot")}</button>
-          </div>
-        </div>
-        <div className="form-actions">
-          <button type="button" className="btn ghost" onClick={onClose}>{tr("Bekor")}</button>
-          <button className="btn primary">{tr("Saqlash")}</button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-function ProdOrderCard({ id, onClose, onChanged }) {
-  const { user } = useAuth()
-  const [stamp, setStamp] = useState(0)
-  const { data: po, error } = useFetch(`/production/orders/${id}/`, { stamp })
-  const jobs = useFetch('/production/jobs/', { production_order: id, stamp })
-  const whs = useFetch('/warehouse/warehouses/')
-  const [wh, setWh] = useState({ materials_warehouse: '', products_warehouse: '' })
-  const [edit, setEdit] = useState(false)
-  const [openJob, setOpenJob] = useState(null)
-  if (!po) return <Drawer onClose={onClose}><Loading error={error} /></Drawer>
-  const refresh = () => { setStamp((s) => s + 1); onChanged() }
-  const createJobs = async () => {
-    if (!wh.products_warehouse) return toast('Mahsulot omborini tanlang', true)
-    try {
-      const { data } = await api.post(`/production/orders/${id}/create_jobs/`, wh)
-      toast(tr('{n} ta topshiriq yaratildi', { n: data.created }))
-      refresh()
-    } catch (e) { toast(errorText(e), true) }
-  }
-  const cancel = async () => {
-    if (!window.confirm('Buyurtma bekor qilinsinmi?')) return
-    try { await api.post(`/production/orders/${id}/cancel/`); refresh() } catch (e) { toast(errorText(e), true) }
-  }
-  const editable = canEdit(user, 'production')
-  return (
-    <Drawer onClose={onClose}>
-      <div className="page-head">
-        <div><h1>Ishlab chiqarish buyurtmasi №{po.number}</h1><div className="page-sub">{date(po.date)}{po.plan_date ? ` · reja: ${date(po.plan_date)}` : ''}{po.note ? ` · ${po.note}` : ''}</div></div>
-        <Badge kind={JOB_BADGE[po.status]}>{po.status_display}</Badge>
-        <span className="grow" />
-        {editable && po.status === 'new' && <button className="btn icon-only" onClick={() => setEdit(true)} title={tr("Tahrirlash")}><Icon name="edit" size={16} /></button>}
-        {editable && !['done', 'cancelled'].includes(po.status) && <button className="btn" onClick={cancel}>{tr("Bekor qilish")}</button>}
-        <button className="btn" onClick={onClose}><Icon name="back" size={16} /> {tr("Orqaga")}</button>
-      </div>
-      <div className="table-wrap">
-        <table className="t">
-          <thead><tr><th>{tr("Mahsulot")}</th><th>{tr("Texkarta")}</th><th className="num">{tr("Buyurtma")}</th><th className="num">{tr("Ishlab chiqarildi")}</th></tr></thead>
-          <tbody>
-            {po.items.map((i) => (
-              <tr key={i.id}><td className="bold">{i.product_name}</td><td>{i.techcard_name}</td><td className="num">{qty(i.qty)} {i.unit}</td>
-                <td className={'num ' + (Number(i.produced) >= Number(i.qty) ? 'green bold' : '')}>{qty(i.produced)}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {editable && !['done', 'cancelled'].includes(po.status) && (
-        <div className="card" style={{ marginTop: 12 }}>
-          <h3 style={{ marginBottom: 10 }}>{tr("Topshiriqlar yaratish")}</h3>
-          <div className="filters">
-            <select value={wh.materials_warehouse} onChange={(e) => setWh({ ...wh, materials_warehouse: e.target.value })}>
-              <option value="">{tr("Materiallar ombori: avtomatik")}</option>
-              {(whs.data || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-            <select value={wh.products_warehouse} onChange={(e) => setWh({ ...wh, products_warehouse: e.target.value })}>
-              <option value="">{tr("Mahsulot ombori…")}</option>
-              {(whs.data || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-            <button className="btn primary small" onClick={createJobs}>{tr("Yaratish")}</button>
-          </div>
-          <div className="hint">{tr("Har bir mahsulot uchun texkarta texjarayoni bo'yicha bosqichli topshiriq yaratiladi.")}</div>
-        </div>
-      )}
-      <h2 style={{ marginTop: 16 }}>{tr("Topshiriqlar")}</h2>
-      <div className="table-wrap">
-        <table className="t">
-          <tbody>
-            {(jobs.data || []).map((j) => (
-              <tr key={j.id} className="clickable" onClick={() => setOpenJob(j.id)}>
-                <td className="bold">№{j.number}</td><td>{j.title}</td><td className="num">{qty(j.produced_qty)} / {qty(j.qty)}</td>
-                <td><Badge kind={JOB_BADGE[j.status]}>{j.status_display}</Badge></td>
-              </tr>
-            ))}
-            {jobs.data && !jobs.data.length && <tr><td className="empty">{tr("Hali topshiriq yaratilmagan")}</td></tr>}
-          </tbody>
-        </table>
-      </div>
-      {edit && <ProdOrderForm item={po} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); refresh() }} />}
-      {openJob && <JobCard id={openJob} onClose={() => setOpenJob(null)} onChanged={refresh} />}
-    </Drawer>
-  )
-}
-
-export function ProdOrdersTab() {
-  const { user } = useAuth()
-  const [stamp, setStamp] = useState(0)
-  const [status, setStatus] = useState('')
-  const { data, error } = useFetch('/production/orders/', { status: status || undefined, stamp })
-  const [form, setForm] = useState(false)
-  const [open, setOpen] = useState(null)
-  return (
-    <>
-      <div className="table-wrap">
-        <div className="table-toolbar filters">
-          {canCreate(user, 'production') && <button className="btn primary small" onClick={() => setForm(true)}>{tr("+ Buyurtma")}</button>}
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">{tr("Holat: hammasi")}</option>
-            {JOB_STATUSES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
-        </div>
-        {!data ? <Loading error={error} /> : (
-          <table className="t">
-            <thead><tr><th>№</th><th>{tr("Sana")}</th><th>{tr("Mahsulotlar")}</th><th>{tr("Reja sana")}</th><th className="num">{tr("Topshiriqlar")}</th><th>{tr("Holat")}</th></tr></thead>
-            <tbody>
-              {data.map((po) => (
-                <tr key={po.id} className="clickable" onClick={() => setOpen(po.id)}>
-                  <td className="bold">{po.number}</td><td>{date(po.date)}</td>
-                  <td>{po.items.map((i) => `${i.product_name} × ${qty(i.qty)}`).join(', ')}</td>
-                  <td>{date(po.plan_date)}</td><td className="num">{po.jobs_count}</td>
-                  <td><Badge kind={JOB_BADGE[po.status]}>{po.status_display}</Badge></td>
-                </tr>
-              ))}
-              {!data.length && <tr><td colSpan={6} className="empty">{tr("Buyurtmalar yo'q")}</td></tr>}
-            </tbody>
-          </table>
-        )}
-      </div>
-      {form && <ProdOrderForm onClose={() => setForm(false)} onSaved={(po) => { setForm(false); setStamp((s) => s + 1); setOpen(po.id) }} />}
-      {open && <ProdOrderCard id={open} onClose={() => setOpen(null)} onChanged={() => setStamp((s) => s + 1)} />}
-    </>
-  )
-}
-
-/* ------------------------------------------------------------ bosqichlarni bajarish jurnali */
 export function CompletionsTab() {
   const [f, setF] = useState({ date_from: monthStartISO(), date_to: todayISO(), employee: '' })
   const params = Object.fromEntries(Object.entries(f).filter(([, v]) => v !== ''))

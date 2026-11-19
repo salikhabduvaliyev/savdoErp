@@ -590,3 +590,98 @@ td.ellipsis { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white
 .pnl-t .pnl-grand td { background: var(--primary-soft); font-size: 16px; }
 .pnl-toggle { display: inline-flex; align-items: center; gap: 4px; color: inherit; font-weight: inherit; padding: 0; }
 .pnl-side { display: grid; gap: 12px; }
+
+/* ---------------- qidiruvli tanlash (SearchSelect) ---------------- */
+.ss { position: relative; min-width: 0; }
+.ss-btn { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--input-bg); color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.ss-btn:hover { border-color: var(--primary); }
+.ss.open .ss-btn { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+.ss.disabled .ss-btn { background: var(--surface-2); color: var(--muted); cursor: default; }
+.ss-btn > svg { flex: none; margin-left: auto; color: var(--muted); }
+.ss-val, .ss-ph { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-ph { color: var(--muted); }
+.ss-sub { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.ss-pop { position: absolute; left: 0; top: calc(100% + 4px); min-width: 100%; width: max-content; max-width: min(520px, 90vw); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); z-index: 60; overflow: hidden; }
+.ss-search { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--muted); }
+.ss-search input { border: 0; outline: none; background: none; color: var(--text); font: inherit; width: 100%; }
+.ss-list { max-height: 300px; overflow-y: auto; padding: 4px; }
+.ss-item { display: flex; justify-content: space-between; gap: 12px; width: 100%; text-align: left; padding: 7px 10px; border: 0; background: none; border-radius: 8px; cursor: pointer; font: inherit; color: var(--text); }
+.ss-item small { color: var(--muted); white-space: nowrap; }
+.ss-item.active { background: var(--primary-soft); }
+.ss-item.sel { font-weight: 600; color: var(--primary); }
+.ss-item.muted { color: var(--muted); }
+.ss-empty { padding: 10px; color: var(--muted); }
+.ss-create { display: flex; align-items: center; gap: 6px; width: 100%; padding: 9px 12px; border: 0; border-top: 1px solid var(--border); background: none; color: var(--primary); font: inherit; font-weight: 500; cursor: pointer; text-align: left; }
+.ss-create:hover { background: var(--primary-soft); }
+
+/* ---------------- sahifalash va ommaviy amallar ---------------- */
+.pager { display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 8px 12px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2); }
+.pager span { padding: 0 8px; }
+.bulk { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.bulk-count { min-width: 26px; text-align: center; padding: 3px 8px; border: 1px solid var(--border); border-radius: 8px; font-weight: 600; background: var(--surface); }
+.bulk-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 210px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); padding: 4px; z-index: 40; }
+.bulk-menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 0; }
+.bulk-row { position: relative; }
+.bulk-item { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 8px 10px; border: 0; background: none; border-radius: 7px; font: inherit; color: var(--text); cursor: pointer; text-align: left; }
+.bulk-item:hover { background: var(--surface-2); }
+.bulk-item.danger { color: var(--red); }
+.bulk-item:disabled { color: var(--muted); cursor: default; }
+.bulk-sub { top: 0; left: calc(100% + 4px); }
+
+/* ---------------- filtr paneli (umumiy) ---------------- */
+.filter-actions { align-items: center; flex-wrap: wrap; }
+.filter-actions .grow { flex: 1; }
+
+/* ---------------- ishlab chiqarish buyurtmasi ---------------- */
+.start-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 16px; align-items: start; }
+.start-grid > label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-2); }
+@media (max-width: 800px) { .start-grid { grid-template-columns: 1fr; } }
+.warn-box { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--red) 10%, transparent); color: var(--red); font-weight: 500; }
+.ok-box { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--green-soft); color: var(--green); font-weight: 500; }
+.po-items { display: grid; gap: 12px; margin-top: 4px; }
+.po-item { padding: 14px 16px; }
+.po-item + .po-item { margin-top: 0; }
+.po-item-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.po-item-foot { display: grid; grid-template-columns: minmax(120px, 1fr) auto auto; gap: 12px; align-items: center; margin-top: 10px; }
+.stage-flow { display: flex; gap: 6px; flex-wrap: wrap; }
+.stage-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; color: var(--text-2); }
+.stage-chip small { color: var(--muted); }
+.stage-chip.done { background: var(--green-soft); border-color: transparent; color: var(--green); }
+.stage-chip.current { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.history { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.history li { padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 13px; }
+.history .h-time { color: var(--muted); margin-right: 8px; }
+.history .h-changes { margin-top: 4px; color: var(--text-2); }
+.history s { color: var(--muted); }
+
+/* ---------------- bo'lim ekrani (ishni boshlash) ---------------- */
+.board-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.board-head h1 { margin: 0; }
+.dep-tabs { display: flex; gap: 4px; flex-wrap: wrap; background: var(--surface-3); padding: 4px; border-radius: 12px; }
+.dep-tabs button { border: 0; background: none; padding: 8px 14px; border-radius: 9px; font: inherit; font-weight: 500; color: var(--text-2); cursor: pointer; }
+.dep-tabs button.active { background: var(--surface); color: var(--primary); box-shadow: var(--shadow-xs); }
+.tcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; }
+@media (max-width: 520px) { .tcards { grid-template-columns: 1fr; } }
+.tcard { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--border-strong); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow-xs); display: grid; gap: 12px; }
+.tcard.in_progress { border-left-color: var(--primary); }
+.tcard.paused { border-left-color: #d97706; }
+.tcard.blocked { border-left-color: var(--red); }
+.tcard.waiting-prev { opacity: .7; }
+.tcard-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.tcard-title { font-size: 17px; font-weight: 700; }
+.tcard-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.tcard-flow { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.tcard-flow .cur { color: var(--primary); font-weight: 600; }
+.tcard-nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tcard-nums > div { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+.tcard-nums small { display: block; color: var(--muted); font-size: 11px; }
+.tcard-nums b { font-size: 16px; }
+.tcard-mats { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mat-chip { font-size: 12px; padding: 4px 8px; border-radius: 8px; background: var(--surface-3); color: var(--text-2); }
+.tcard-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn.huge { padding: 12px 22px; font-size: 16px; font-weight: 600; border-radius: 12px; }
+.btn.huge-ghost { padding: 12px 16px; font-size: 15px; border-radius: 12px; }
+.qty-stepper { display: inline-flex; align-items: center; gap: 4px; }
+.qty-stepper button { width: 42px; height: 46px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); font-size: 20px; cursor: pointer; color: var(--text); }
+.qty-stepper input { width: 80px; height: 46px; text-align: center; font-size: 18px; font-weight: 600; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--input-bg); color: var(--text); }
+.emp-select { height: 46px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--input-bg); color: var(--text); font: inherit; max-width: 220px; }

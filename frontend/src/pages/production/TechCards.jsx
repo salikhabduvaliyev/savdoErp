@@ -6,6 +6,7 @@ import { Badge, Field, Loading, Modal, toast, useFetch } from '../../components/
 import { money, num, qty } from '../../format'
 import { t } from '../../i18n'
 import { IconBtn } from '../../components/Icon'
+import { SearchSelect } from '../../components/Controls'
 
 const UNITS = [['pcs', t("dona")], ['m', 'm'], ['m2', 'm²'], ['kg', t("kg")], ['set', t("to'plam")]]
 const CUR = [['UZS', t("so'm")], ['USD', 'USD']]
@@ -41,17 +42,13 @@ function TechCardForm({ item, onClose, onSaved }) {
       <form onSubmit={submit}>
         <div className="form three">
           <Field label={t("Mahsulot (natija)")}>
-            <select value={v.product} onChange={(e) => setV({ ...v, product: e.target.value })} required>
-              <option value="">{t("— tanlang —")}</option>
-              {(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <SearchSelect value={v.product} onChange={(id) => setV({ ...v, product: id })} placeholder={t("— tanlang —")}
+              options={(products.data || []).map((p) => ({ value: p.id, label: p.name, sub: p.code }))} />
           </Field>
           <Field label={t('Chiqish miqdori') + (prod ? `, ${t(prod.unit_display)}` : '')}><input type="number" step="any" min="0" value={v.output_qty} onChange={(e) => setV({ ...v, output_qty: e.target.value })} required /></Field>
           <Field label={t("Texjarayon (bosqichlar)")}>
-            <select value={v.process} onChange={(e) => setV({ ...v, process: e.target.value })}>
-              <option value="">—</option>
-              {(processes.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <SearchSelect value={v.process} onChange={(id) => setV({ ...v, process: id })} empty="—"
+              options={(processes.data || []).map((p) => ({ value: p.id, label: p.name, sub: t('{n} bosqich', { n: p.stages.length }) }))} />
           </Field>
           <Field label={t("Texkarta nomi (bo'sh — mahsulot nomi)")}><input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></Field>
           <Field label={t("Izoh")}><input value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} /></Field>
@@ -65,10 +62,8 @@ function TechCardForm({ item, onClose, onSaved }) {
               {rows.map((r) => (
                 <tr key={r.key}>
                   <td>
-                    <select className="cell" value={r.material} onChange={(e) => setRow(r.key, { material: e.target.value })}>
-                      <option value="">{t("— material —")}</option>
-                      {(materials.data || []).map((m) => <option key={m.id} value={m.id}>{m.name} ({m.unit_display})</option>)}
-                    </select>
+                    <SearchSelect value={r.material} onChange={(id) => setRow(r.key, { material: id })} placeholder={t("— material —")}
+                      options={(materials.data || []).map((m) => ({ value: m.id, label: m.name, sub: t(m.unit_display) }))} />
                   </td>
                   <td className="num"><input className="cell" value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} /> {matById[String(r.material)]?.unit_display}</td>
                   <td>
@@ -183,10 +178,8 @@ function ProcessForm({ item, onClose, onSaved }) {
           ))}
         </ol>
         <div className="filters">
-          <select value={add} onChange={(e) => setAdd(e.target.value)} style={{ flex: 1 }}>
-            <option value="">{t("— bosqich qo'shish —")}</option>
-            {(ops.data || []).map((o) => <option key={o.id} value={o.id}>{o.name} · {o.department_name}</option>)}
-          </select>
+          <div style={{ flex: 1 }}><SearchSelect value={add} onChange={(id) => setAdd(id)} placeholder={t("— bosqich qo'shish —")}
+            options={(ops.data || []).map((o) => ({ value: o.id, label: o.name, sub: o.department_name }))} /></div>
           <button type="button" className="btn small" disabled={!add} onClick={() => { setStages([...stages, { key: Math.random(), operation: add }]); setAdd('') }}>{t("Qo'shish")}</button>
         </div>
         <div className="form-actions">

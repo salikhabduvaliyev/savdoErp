@@ -7,11 +7,12 @@ import { Badge, useFetch } from '../../components/ui'
 import { money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import { convertPrice, curLabel, CurrencyOptions } from '../../currency'
+import { SearchSelect } from '../../components/Controls'
 
 const cur = curLabel
 
 export default function SaleForm({ sale, onClose, onSaved }) {
-  const clients = useFetch('/crm/counterparties/', { is_active: true })
+  const clients = useFetch('/crm/counterparties/', { is_active: true, with_debt: 1 })
   const warehouses = useFetch('/warehouse/warehouses/')
   const priceTypes = useFetch('/warehouse/price-types/')
   const fromOrder = !!sale?.order
@@ -64,6 +65,7 @@ export default function SaleForm({ sale, onClose, onSaved }) {
     if (c?.price_type && !fromOrder) changePriceType(c.price_type)
   }
 
+  const client = (clients.data || []).find((c) => String(c.id) === String(v.client))
   const own = useLinesTotal(lines)
   const subtotal = orderLines.reduce((a, l) => a + Number(l.amount), 0) + own
   const total = subtotal - Number(v.discount || 0)
@@ -104,24 +106,31 @@ export default function SaleForm({ sale, onClose, onSaved }) {
       <div className="doc-grid">
         <div>
           <DocField label="Mijoz" required>
-            <select value={v.client} onChange={(e) => pickClient(e.target.value)} disabled={fromOrder}>
-              <option value="">{tr('— tanlang —')}</option>
-              {(clients.data || []).map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ''}</option>)}
-            </select>
+            <SearchSelect value={v.client} onChange={(id) => pickClient(id)} disabled={fromOrder} placeholder={tr('Mijozni tanlang…')}
+              options={(clients.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.phone }))}
+              onCreate={async (name) => {
+                const n = name || window.prompt(tr('Yangi mijoz nomi'))
+                if (!n) return
+                try { const { data } = await api.post('/crm/counterparties/', { name: n }); clients.reload(); pickClient(data.id) } catch (e) { setError(errorText(e)) }
+              }} createLabel={tr('Yangi mijoz')} />
           </DocField>
+          {client && (
+            <div className="party-card">
+              {client.phone && <div><Icon name="user" size={14} /> {client.phone}</div>}
+              {client.price_type_name && <div className="muted small">{tr('Narx turi')}: {client.price_type_name}</div>}
+              {client.receivable && Object.entries(client.receivable).filter(([, x]) => Number(x) !== 0).map(([c, x]) => (
+                <div key={c} className={Number(x) > 0 ? 'red small' : 'green small'}>{Number(x) > 0 ? tr('Qarzi') : tr('Avans')}: {money(Math.abs(Number(x)), c)}</div>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <DocField label="Ombor" required>
-            <select value={v.warehouse ?? ''} onChange={(e) => setF('warehouse', e.target.value)}>
-              <option value="">—</option>
-              {(warehouses.data || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
+            <SearchSelect value={v.warehouse ?? ''} onChange={(id) => setF('warehouse', id)} options={(warehouses.data || []).map((w) => ({ value: w.id, label: w.name }))} />
           </DocField>
           <DocField label="Narx turi">
-            <select value={v.price_type ?? ''} onChange={(e) => changePriceType(e.target.value)}>
-              <option value="">—</option>
-              {(priceTypes.data || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({cur(p.currency)})</option>)}
-            </select>
+            <SearchSelect value={v.price_type ?? ''} onChange={(id) => changePriceType(id)} empty="—"
+              options={(priceTypes.data || []).map((p) => ({ value: p.id, label: p.name, sub: cur(p.currency) }))} />
           </DocField>
         </div>
         <div>

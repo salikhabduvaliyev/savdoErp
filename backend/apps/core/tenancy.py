@@ -51,11 +51,15 @@ class TenantMiddleware:
 
         set_context(None, None)
         reset_rate_cache()
+        from .audit import set_user
+
+        set_user(None)
         try:
             return self.get_response(request)
         finally:
             set_context(None, None)
             reset_rate_cache(False)
+            set_user(None)
 
 
 class TenantManager(models.Manager):

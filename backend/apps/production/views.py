@@ -279,7 +279,7 @@ class ProductionOrderViewSet(viewsets.ModelViewSet):
     module = "production"
     filterset_fields = ["status", "client_order"]
     search_fields = ["=number", "note"]
-    action_perms = {"create_jobs": "create", "cancel": "edit"}
+    action_perms = {"create_jobs": "create", "cancel": "edit", "requirements": "view"}
 
     def get_queryset(self):
         qs = ProductionOrder.objects.select_related("client_order").prefetch_related("items__techcard__product")
@@ -289,14 +289,51 @@ class ProductionOrderViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user, branch_id=_main_branch_id())
 
+    def perform_update(self, serializer):
+        po = serializer.instance
+        if po.status in (ProductionOrder.Status.DONE, ProductionOrder.Status.CANCELLED):
+            raise serializers.ValidationError({"detail": "Bajarilgan yoki bekor qilingan buyurtmani tahrirlab bo'lmaydi"})
+        if "items" in serializer.validated_data and po.jobs.exclude(status=ProductionJob.Status.CANCELLED).exists():
+            raise serializers.ValidationError({"detail": "Ish boshlangan — mahsulotlarni o'zgartirish uchun avval topshiriqlarni bekor qiling"})
+        serializer.save()
+
+    @transaction.atomic
+    def perform_destroy(self, po):
+        active = po.jobs.exclude(status=ProductionJob.Status.CANCELLED)
+        if active.filter(tasks__done_qty__gt=0).exists():
+            raise serializers.ValidationError({"detail": "Bosqichlar bajarilgan — o'chirib bo'lmaydi, bekor qiling"})
+        for j in active:
+            services.cancel_job(j)
+        po.jobs.all().delete()
+        po.delete()
+
+    @action(detail=True, methods=["get"])
+    def requirements(self, request, pk=None):
+        """Ishni boshlashdan oldin material yetarliligi: ?warehouse=ID"""
+        from apps.warehouse.models import Warehouse
+
+        wh = Warehouse.objects.filter(pk=request.query_params.get("warehouse")).first()
+        return Response(services.production_order_requirements(self.get_object(), wh))
+
     @action(detail=True, methods=["post"])
     def create_jobs(self, request, pk=None):
+        """Ishni boshlash: {materials_warehouse, products_warehouse, allow_negative}"""
+        from apps.core import audit
         from apps.warehouse.models import Warehouse
 
         po = self.get_object()
         mw = Warehouse.objects.filter(pk=request.data.get("materials_warehouse")).first()
         pw = Warehouse.objects.filter(pk=request.data.get("products_warehouse")).first()
-        jobs = services.create_jobs_for_production_order(po, materials_warehouse=mw, products_warehouse=pw, user=request.user)
+        if not pw:
+            raise serializers.ValidationError({"products_warehouse": "Mahsulot qaysi omborga tushishini tanlang"})
+        allow = bool(request.data.get("allow_negative"))
+        short = [r for r in services.production_order_requirements(po, mw) if Decimal(r["shortage"]) > 0]
+        if short and not allow:
+            return Response({"detail": "Material yetarli emas", "shortages": short}, status=409)
+        jobs = services.create_jobs_for_production_order(po, materials_warehouse=mw, products_warehouse=pw,
+                                                         user=request.user, allow_negative=allow)
+        audit.log("start", po, {"Topshiriqlar": [None, ", ".join(f"№{j.number}" for j in jobs)],
+                                "Minusga ruxsat": [None, "ha" if allow else "yo'q"]})
         return Response({"created": len(jobs), "jobs": [j.id for j in jobs]})
 
     @action(detail=True, methods=["post"])
@@ -326,10 +363,11 @@ class TaskSerializer(serializers.ModelSerializer):
     is_overdue = serializers.BooleanField(read_only=True)
     overdue_days = serializers.IntegerField(read_only=True)
     materials = serializers.SerializerMethodField()
+    flow = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductionTask
-        fields = [
+        fields = ["flow",
             "id", "job", "job_number", "job_title", "position", "order", "order_number", "client_name", "operation",
             "operation_name", "department", "department_name", "unit", "piece_rate", "plan_qty", "done_qty",
             "remaining", "defect_qty", "status", "status_display", "progress", "deadline", "planned_date",
@@ -339,6 +377,18 @@ class TaskSerializer(serializers.ModelSerializer):
 
     def get_client_name(self, obj):
         return obj.order.client.name if obj.order_id else None
+
+    def get_flow(self, obj):
+        """Ketma-ketlik: oldingi bosqichdan kelgan (hozir bajarish mumkin) miqdor, oldingi va keyingi bosqich."""
+        if not obj.job_id:
+            return {"ready": str(obj.remaining), "prev": None, "next": None}
+        tasks = sorted(obj.job.tasks.all(), key=lambda t: (t.position, t.id))
+        i = next((k for k, t in enumerate(tasks) if t.id == obj.id), 0)
+        prev = tasks[i - 1] if i > 0 else None
+        nxt = tasks[i + 1] if i + 1 < len(tasks) else None
+        ready = obj.remaining if prev is None or not obj.job.techcard_id else max(Decimal("0"), min(obj.remaining, prev.done_qty - obj.done_qty))
+        return {"ready": str(ready), "prev": prev.department.name if prev else None, "next": nxt.department.name if nxt else None,
+                "prev_done": str(prev.done_qty) if prev else None}
 
     def get_job_title(self, obj):
         return obj.job.title if obj.job_id else None

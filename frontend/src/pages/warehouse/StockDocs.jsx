@@ -7,7 +7,7 @@ import { cleanNum, DocField, DocFooter, DocPage, DocTitle, newKey, Positions, us
 import Icon from '../../components/Icon'
 import { Badge, Loading, Modal, MoneyBag, toast, useFetch } from '../../components/ui'
 import { downloadFile } from '../../components/Download'
-import { convertPrice, CurrencyOptions, curLabel } from '../../currency'
+import { convertPrice, CurrencyOptions, curLabel, baseCurrency } from '../../currency'
 import { date, money, qty, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { DropMenu, SearchSelect, usePager } from '../../components/Controls'
@@ -68,7 +68,7 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
   useEffect(() => { if (loaded.data) fill(loaded.data) }, [loaded.data]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!docId && !v) {
-      setV({ date: todayISO(), warehouse: '', to_warehouse: '', counterparty: '', currency: 'UZS', posted: true, plan_date: '', note: '' })
+      setV({ date: todayISO(), warehouse: '', to_warehouse: '', counterparty: '', currency: baseCurrency(), posted: true, plan_date: '', note: '' })
     }
   }, [docId, v])
   useEffect(() => {

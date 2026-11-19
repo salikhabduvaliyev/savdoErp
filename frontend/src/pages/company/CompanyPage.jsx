@@ -7,7 +7,7 @@ import { date, money, num, todayISO } from '../../format'
 import { AccessFields } from '../settings/SettingsPage'
 import { t } from '../../i18n'
 import Icon, { IconBtn } from '../../components/Icon'
-import { curLabel, currencyOptions } from '../../currency'
+import { curLabel, currencyOptions, baseCurrency } from '../../currency'
 import History from './History'
 
 const TABS = [
@@ -462,7 +462,7 @@ function Accounts({ user }) {
             { name: 'opening_balance', label: t("Boshlang'ich qoldiq"), type: 'number' },
             { name: 'is_active', label: t("Faol"), type: 'checkbox' },
           ]}
-          defaults={{ kind: 'cash', currency: 'UZS', opening_balance: 0, is_active: true }}
+          defaults={{ kind: 'cash', currency: baseCurrency(), opening_balance: 0, is_active: true }}
           onClose={() => setForm(null)} onSaved={() => { setForm(null); setStamp((s) => s + 1); toast('Saqlandi') }} />
       )}
     </>

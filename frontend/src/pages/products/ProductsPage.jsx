@@ -8,7 +8,7 @@ import { usePager } from '../../components/Controls'
 import EntityForm from '../../components/EntityForm'
 import Icon, { IconBtn } from '../../components/Icon'
 import { Badge, Field, Loading, Modal, toast, useFetch } from '../../components/ui'
-import { curLabel, CurrencyOptions, currencyOptions } from '../../currency'
+import { curLabel, CurrencyOptions, currencyOptions, baseCurrency } from '../../currency'
 import { date, money, qty } from '../../format'
 import { t } from '../../i18n'
 
@@ -114,8 +114,8 @@ function ProductPage({ id: id0, newType, defaults, groups, priceTypes, onClose, 
 
   const init = (p) => {
     setV({
-      name: '', type: newType || 'goods', code: '', sku: '', barcode: '', unit: 'pcs', currency: 'UZS', purchase_price: '0',
-      min_price: '0', min_price_currency: 'UZS', weight: '0', volume: '0', min_qty: '0', description: '', is_active: true,
+      name: '', type: newType || 'goods', code: '', sku: '', barcode: '', unit: 'pcs', currency: baseCurrency(), purchase_price: '0',
+      min_price: '0', min_price_currency: baseCurrency(), weight: '0', volume: '0', min_qty: '0', description: '', is_active: true,
       group: '', supplier: '', ...defaults, ...(p || {}),
     })
     setPrices(Object.fromEntries(Object.entries(p?.prices || {}).map(([k, x]) => [k, cleanNum(x)])))
@@ -435,7 +435,7 @@ function PriceTypes({ user }) {
           { name: 'currency', label: t('Valyuta'), type: 'select', options: currencyOptions(), noEmpty: true },
           { name: 'is_default', label: t('Asosiy (sotuvda standart)'), type: 'checkbox' },
         ]}
-        defaults={{ currency: 'UZS' }} onClose={() => setForm(null)}
+        defaults={{ currency: baseCurrency() }} onClose={() => setForm(null)}
         onSaved={() => { setForm(null); setStamp((s) => s + 1); toast(t('Saqlandi')) }} />}
     </>
   )

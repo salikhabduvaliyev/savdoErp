@@ -1,4 +1,4 @@
-import{q as c,t as a,m as r,d as s,b as l}from"./index-M44EnVwJ.js";const t=n=>String(n??"").replace(/[&<>"]/g,i=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[i]),$=`
+import{q as c,t as a,m as r,d as s,b as l}from"./index-C0O_1nYT.js";const t=n=>String(n??"").replace(/[&<>"]/g,i=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[i]),$=`
   * { box-sizing: border-box; } body { font-family: Arial, sans-serif; color: #111; margin: 24px; font-size: 13px; }
   h1 { font-size: 18px; margin: 0 0 4px; } .muted { color: #555; } .row { display: flex; justify-content: space-between; gap: 24px; margin: 12px 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 12px; } th, td { border: 1px solid #333; padding: 5px 7px; }

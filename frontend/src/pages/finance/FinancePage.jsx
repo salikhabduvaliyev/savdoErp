@@ -5,7 +5,7 @@ import { money, monthLabel } from '../../format'
 import TransactionForm from './TransactionForm'
 import Payments from './Payments'
 import { t as tr } from '../../i18n'
-import { CurrencyOptions, curLabel } from '../../currency'
+import { CurrencyOptions, curLabel, baseCurrency } from '../../currency'
 import Icon from '../../components/Icon'
 
 function Debts({ kind }) {
@@ -45,7 +45,7 @@ function periodOf(kind) {
 
 function Pnl() {
   const [period, setPeriod] = useState(() => periodOf('month'))
-  const [currency, setCurrency] = useState('UZS')
+  const [currency, setCurrency] = useState(baseCurrency)
   const [open, setOpen] = useState({ revenue: true, opex: true, other: true })
   const { data, error } = useFetch('/finance/pnl/', { ...period, currency })
   const groupOf = (rows, i) => { for (let j = i; j >= 0; j--) if (rows[j].level === 0) return rows[j].key; return null }

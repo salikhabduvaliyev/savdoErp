@@ -8,7 +8,7 @@ import { SearchSelect } from '../../components/Controls'
 import { Badge, toast, useFetch } from '../../components/ui'
 import { money, todayISO } from '../../format'
 import { t } from '../../i18n'
-import { convertPrice } from '../../currency'
+import { convertPrice, baseCurrency } from '../../currency'
 import { CurrencyOptions } from '../../currency'
 
 const toLines = (items) => (items || []).map((i) => ({
@@ -22,7 +22,7 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
   const priceTypes = useFetch('/warehouse/price-types/')
   const [order, setOrder] = useState(initial || null)
   const [v, setV] = useState(() => ({
-    date: todayISO(), currency: 'UZS', amount: '', volume: '0', plan_date: '', production_date: '', client: '',
+    date: todayISO(), currency: baseCurrency(), amount: '', volume: '0', plan_date: '', production_date: '', client: '',
     manager: '', operator: '', note: '', extra: {}, ...(initial || {}),
   }))
   const [lines, setLines] = useState(() => toLines(initial?.items))

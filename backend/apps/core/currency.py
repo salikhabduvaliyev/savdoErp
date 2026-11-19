@@ -21,12 +21,21 @@ DEFAULTS = [
 ]
 
 
+def company_base_currency():
+    """Kompaniyaning asosiy (hisob) valyutasi — hisobotlar va yangi hujjatlar uchun standart.
+    Kurslar ichki tarzda doim so'mga nisbatan saqlanadi (CBU)."""
+    c = CurrencyDef.objects.filter(is_base=True).values_list("code", flat=True).first()
+    return c or BASE_CURRENCY
+
+
 def ensure_default_currencies(company=None):
     """Kompaniya uchun asosiy valyutalar (so'm — asosiy, USD)."""
     kw = {"company": company} if company else {}
+    has_base = CurrencyDef.objects.filter(is_base=True).exists()
     for i, (code, name, symbol, is_base) in enumerate(DEFAULTS):
         CurrencyDef.objects.get_or_create(code=code, defaults={
-            "name": name, "symbol": symbol, "is_base": is_base, "auto_update": not is_base, "position": i, **kw})
+            "name": name, "symbol": symbol, "is_base": is_base and not has_base, "auto_update": code != BASE_CURRENCY,
+            "position": i, **kw})
 
 
 def fetch_cbu(on_date=None):

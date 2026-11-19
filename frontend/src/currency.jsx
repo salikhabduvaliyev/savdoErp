@@ -1,4 +1,4 @@
-// Valyutalar ma'lumotnomasi (Sozlamalar → Valyutalar). Asosiy valyuta — so'm (UZS).
+// Valyutalar ma'lumotnomasi (Sozlamalar → Valyutalar). Kurslar so'mga nisbatan; asosiy (hisob) valyutani kompaniya tanlaydi.
 import { useEffect, useState } from 'react'
 import api from './api'
 import { t } from './i18n'
@@ -21,6 +21,8 @@ export function loadCurrencies(force = false) {
 
 export const getCurrencies = () => list
 export const findCurrency = (code) => list.find((c) => c.code === code)
+/** Kompaniyaning asosiy (hisob) valyutasi — hisobotlar va yangi hujjatlar uchun standart */
+export const baseCurrency = () => (list.find((c) => c.is_base) || {}).code || 'UZS'
 
 /** Ko'rsatish uchun qisqa nom: UZS → so'm, USD → USD, EUR → EUR */
 export function curLabel(code) {

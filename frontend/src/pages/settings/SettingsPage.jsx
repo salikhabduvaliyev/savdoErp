@@ -422,7 +422,6 @@ function Roles({ editable, onChanged }) {
 
 /* ---------------- Umumiy sozlamalar ---------------- */
 const GENERAL = [
-  { name: 'default_currency', label: t("Asosiy valyuta (yangi hujjat uchun)"), type: 'select', options: [['UZS', t("so'm")], ['USD', 'USD']] },
   { name: 'order_number_start', label: t("Buyurtma raqamlari shu sondan keyin boshlanadi"), type: 'number' },
   { name: 'sale_number_start', label: t("Sotuv raqamlari shu sondan keyin boshlanadi"), type: 'number' },
   { name: 'daily_capacity', label: t("Kalendar: kunlik sig'im, m²"), type: 'number', hint: "Yuklama % = kun hajmi / sig'im" },

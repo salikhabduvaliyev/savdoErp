@@ -155,11 +155,13 @@ class SaleViewSet(viewsets.ModelViewSet):
 
         from django.utils import timezone
 
+        from apps.core.currency import company_base_currency
+
         p = request.query_params
         today = timezone.localdate()
         d1 = date_cls.fromisoformat(p["date_from"]) if p.get("date_from") else today.replace(day=1)
         d2 = date_cls.fromisoformat(p["date_to"]) if p.get("date_to") else today
-        data = services.profitability(d1, d2, by=p.get("by", "product"), currency=(p.get("currency") or "UZS").upper(),
+        data = services.profitability(d1, d2, by=p.get("by", "product"), currency=(p.get("currency") or company_base_currency()).upper(),
                                       warehouse=p.get("warehouse") or None)
         return Response({"date_from": d1, "date_to": d2, **data})
 

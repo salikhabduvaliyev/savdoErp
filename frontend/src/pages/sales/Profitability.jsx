@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { Loading, Stat, useFetch } from '../../components/ui'
 import { usePager } from '../../components/Controls'
 import Icon from '../../components/Icon'
-import { CurrencyOptions } from '../../currency'
+import { CurrencyOptions, baseCurrency } from '../../currency'
 import { money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 
@@ -11,7 +11,7 @@ const BY = [['product', tr('Tovarlar')], ['client', tr('Mijozlar')], ['seller', 
 const monthStart = () => todayISO().slice(0, 8) + '01'
 
 export default function Profitability() {
-  const [f, setF] = useState({ date_from: monthStart(), date_to: todayISO(), by: 'product', currency: 'UZS' })
+  const [f, setF] = useState({ date_from: monthStart(), date_to: todayISO(), by: 'product', currency: baseCurrency() })
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState(['profit', -1])
   const { data, error } = useFetch('/sales/profitability/', f)

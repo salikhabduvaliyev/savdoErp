@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import TenantUser, module_perm
 
-from .models import Branch, Company, Currency, CurrencyDef, CustomField, ExchangeRate, SystemSettings
+from .models import BASE_CURRENCY, Branch, Company, Currency, CurrencyDef, CustomField, ExchangeRate, SystemSettings
 from .money import RateNotFound, get_rate
 
 
@@ -54,23 +54,40 @@ class CurrencyDefSerializer(serializers.ModelSerializer):
     rate = serializers.SerializerMethodField()
     rate_date = serializers.SerializerMethodField()
     rate_source = serializers.SerializerMethodField()
+    base_rate = serializers.SerializerMethodField()
 
     class Meta:
         model = CurrencyDef
         fields = ["id", "code", "name", "symbol", "is_base", "auto_update", "is_active", "position",
-                  "rate", "rate_date", "rate_source"]
+                  "rate", "rate_date", "rate_source", "base_rate"]
         read_only_fields = ["is_base"]
 
     def _last(self, obj):
         if not hasattr(obj, "_last_rate"):
-            obj._last_rate = None if obj.is_base else ExchangeRate.objects.filter(currency=obj.code).order_by("-date").first()
+            obj._last_rate = None if obj.code == BASE_CURRENCY else ExchangeRate.objects.filter(currency=obj.code).order_by("-date").first()
         return obj._last_rate
 
     def get_rate(self, obj):
-        if obj.is_base:
+        """1 birlik = necha so'm (kurslar so'mga nisbatan saqlanadi — CBU)."""
+        if obj.code == BASE_CURRENCY:
             return "1"
         r = self._last(obj)
         return str(r.usd_uzs) if r else None
+
+    def get_base_rate(self, obj):
+        """1 birlik = necha asosiy valyuta (asosiy valyuta so'm bo'lmasa)."""
+        from decimal import Decimal
+
+        from .currency import company_base_currency
+        from .money import RateNotFound, convert
+
+        base = self.context.setdefault("base_currency", company_base_currency())
+        if base == BASE_CURRENCY or obj.code == base:
+            return None
+        try:
+            return str(convert(Decimal("1"), obj.code, base).quantize(Decimal("0.000001")).normalize())
+        except RateNotFound:
+            return None
 
     def get_rate_date(self, obj):
         r = self._last(obj)
@@ -88,7 +105,7 @@ class CurrencyDefSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Kod 3 ta lotin harfi (masalan EUR)")
         qs = CurrencyDef.objects.filter(code=v)
         if self.instance:
-            if self.instance.code != v and self.instance.is_base:
+            if self.instance.code != v and (self.instance.is_base or self.instance.code == BASE_CURRENCY):
                 raise serializers.ValidationError("Asosiy valyuta kodini o'zgartirib bo'lmaydi")
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
@@ -117,8 +134,25 @@ class CurrencyDefViewSet(viewsets.ModelViewSet):
         from rest_framework.exceptions import ValidationError
 
         if instance.is_base or instance.code in ("UZS", "USD"):
-            raise ValidationError("Asosiy valyutalarni (so'm, USD) o'chirib bo'lmaydi — nofaol qiling")
+            raise ValidationError("Asosiy valyutani va so'm/USD'ni o'chirib bo'lmaydi — nofaol qiling")
         instance.delete()
+
+    @action(detail=True, methods=["post"])
+    def make_base(self, request, pk=None):
+        """Kompaniyaning asosiy (hisob) valyutasini belgilash: hisobotlar va yangi hujjatlar shu valyutada.
+        Kurslar o'zgarmaydi — ular so'mga nisbatan saqlanadi va kross-kurs orqali hisoblanadi."""
+        from django.db import transaction
+
+        cur = self.get_object()
+        with transaction.atomic():
+            CurrencyDef.objects.exclude(pk=cur.pk).filter(is_base=True).update(is_base=False)
+            cur.is_base = True
+            cur.is_active = True
+            cur.save(update_fields=["is_base", "is_active"])
+            st = SystemSettings.load()
+            st.default_currency = cur.code
+            st.save(update_fields=["default_currency"])
+        return Response(self.get_serializer(cur).data)
 
     @action(detail=False, methods=["post"])
     def refresh(self, request):

@@ -644,7 +644,7 @@
   "Yuridik shaxs": "Юр. лицо",
   "Zararli buyurtma yo'q": "Убыточных заказов нет",
   "Zayavkalar yo'q": "Заявок нет",
-  "asosiy": "основной",
+  "asosiy": "основная",
   "barchasi": "все",
   "biriktirilmagan": "не привязан",
   "bosh": "главный",
@@ -1095,5 +1095,11 @@
   "Brauzerda ochish": "Открыть в браузере",
   "Excel (.xlsx) formatida yuklab olish": "Скачать в формате Excel (.xlsx)",
   "PDF formatida (chop etish → PDF sifatida saqlash)": "В формате PDF (печать → сохранить как PDF)",
-  "CSV formatida yuklab olish": "Скачать в формате CSV"
+  "CSV formatida yuklab olish": "Скачать в формате CSV",
+  "Asosiy (hisob) valyuta": "Учётная валюта",
+  "Asosiy valyuta {c} qilinsinmi?\nHisobotlar va yangi hujjatlar shu valyutada bo'ladi. Mavjud hujjatlar o'zgarmaydi.": "Сделать {c} учётной валютой?\nОтчёты и новые документы будут в этой валюте. Существующие документы не изменятся.",
+  "Asosiy valyuta: {c}": "Учётная валюта: {c}",
+  "Hisobotlar (foyda va zarar, foydalilik, dashboard) va yangi hujjatlar shu valyutada. Boshqa valyutalar kurs bo'yicha qayta hisoblanadi.": "Отчёты (прибыли и убытки, прибыльность, дашборд) и новые документы — в этой валюте. Остальные валюты пересчитываются по курсу.",
+  "Kurs: 1 birlik = necha so'm (CBU). Hujjatda operatsiya sanasidagi (yoki undan oldingi eng yaqin) kurs ishlatiladi.": "Курс: 1 единица = сколько сумов (ЦБ). В документе используется курс на дату операции (или ближайший предыдущий).",
+  "Asosiy qilish": "Сделать учётной"
 }

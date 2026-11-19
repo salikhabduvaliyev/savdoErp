@@ -36,13 +36,13 @@ function CurrencyForm({ item, onClose, onSaved }) {
             </select>
           </Field>
         )}
-        <Field label="Kod (ISO)"><input value={v.code} maxLength={3} onChange={(e) => setV({ ...v, code: e.target.value.toUpperCase() })} required disabled={item?.is_base} placeholder="EUR" /></Field>
+        <Field label="Kod (ISO)"><input value={v.code} maxLength={3} onChange={(e) => setV({ ...v, code: e.target.value.toUpperCase() })} required disabled={item?.is_base || item?.code === 'UZS'} placeholder="EUR" /></Field>
         <Field label="Belgi"><input value={v.symbol} maxLength={8} onChange={(e) => setV({ ...v, symbol: e.target.value })} placeholder="€" /></Field>
         <Field label="Nomi" full><input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} required /></Field>
-        {!item?.is_base && (
+        {item?.code !== 'UZS' && (
           <div className="full">
             <label className="check"><input type="checkbox" checked={v.auto_update} onChange={(e) => setV({ ...v, auto_update: e.target.checked })} /> {t("Kursni CBU'dan avtomatik olish (har kuni)")}</label>
-            <label className="check"><input type="checkbox" checked={v.is_active} onChange={(e) => setV({ ...v, is_active: e.target.checked })} /> {t('Faol (hujjatlarda tanlanadi)')}</label>
+            <label className="check"><input type="checkbox" checked={v.is_active} disabled={item?.is_base} onChange={(e) => setV({ ...v, is_active: e.target.checked })} /> {t('Faol (hujjatlarda tanlanadi)')}</label>
           </div>
         )}
         <div className="full form-actions">
@@ -128,6 +128,13 @@ export default function Currencies({ editable }) {
       reload()
     } catch (e) { toast(errorText(e), true) } finally { setBusy(false) }
   }
+  const makeBase = async (code) => {
+    const c = (data || []).find((x) => x.code === code)
+    if (!c || c.is_base) return
+    if (!window.confirm(t("Asosiy valyuta {c} qilinsinmi?\nHisobotlar va yangi hujjatlar shu valyutada bo'ladi. Mavjud hujjatlar o'zgarmaydi.", { c: `${c.code} — ${t(c.name)}` }))) return
+    try { await api.post(`/core/currencies/${c.id}/make_base/`); toast(t('Asosiy valyuta: {c}', { c: c.code })); reload() } catch (e) { toast(errorText(e), true) }
+  }
+  const base = (data || []).find((c) => c.is_base)
   const remove = async (c) => {
     if (!window.confirm(t("O'chirilsinmi?") + `\n${c.code}`)) return
     try { await api.delete(`/core/currencies/${c.id}/`); reload() } catch (e) { toast(errorText(e), true) }
@@ -137,12 +144,23 @@ export default function Currencies({ editable }) {
       <div className="page-head">
         <div>
           <h1>{t('Valyutalar')}</h1>
-          <div className="page-sub">{t("Asosiy valyuta — so'm. Kurs: 1 birlik = necha so'm. Hujjatda operatsiya sanasidagi (yoki undan oldingi eng yaqin) kurs ishlatiladi.")}</div>
+          <div className="page-sub">{t("Kurs: 1 birlik = necha so'm (CBU). Hujjatda operatsiya sanasidagi (yoki undan oldingi eng yaqin) kurs ishlatiladi.")}</div>
         </div>
         <span className="grow" />
         {editable && <button className="btn" onClick={refresh} disabled={busy}><Icon name="refresh" size={16} /> {t("CBU'dan yangilash")}</button>}
         {editable && <button className="btn primary" onClick={() => setForm({ item: null })}><Icon name="plus" size={16} /> {t('Valyuta')}</button>}
       </div>
+      {data && (
+        <div className="card base-cur">
+          <div>
+            <div className="base-cur-label">{t('Asosiy (hisob) valyuta')}</div>
+            <div className="muted small">{t("Hisobotlar (foyda va zarar, foydalilik, dashboard) va yangi hujjatlar shu valyutada. Boshqa valyutalar kurs bo'yicha qayta hisoblanadi.")}</div>
+          </div>
+          <select value={base?.code || 'UZS'} disabled={!editable} onChange={(e) => makeBase(e.target.value)}>
+            {data.filter((c) => c.is_active || c.is_base).map((c) => <option key={c.code} value={c.code}>{c.code} — {t(c.name)}</option>)}
+          </select>
+        </div>
+      )}
       {!data ? <Loading error={error} /> : (
         <div className="table-wrap">
           <table className="t">
@@ -150,15 +168,19 @@ export default function Currencies({ editable }) {
             <tbody>
               {data.map((c) => (
                 <Fragment key={c.id}>
-                  <tr className={c.is_base ? '' : 'clickable'} onClick={() => !c.is_base && setOpen(open === c.id ? null : c.id)}>
-                    <td className="bold">{!c.is_base && <Icon name={open === c.id ? 'chevron-down' : 'chevron-right'} size={14} />} {c.code}</td>
-                    <td>{t(c.name)}{c.is_base && <span className="muted small"> · {t('asosiy')}</span>}</td>
+                  <tr className={c.code === 'UZS' ? '' : 'clickable'} onClick={() => c.code !== 'UZS' && setOpen(open === c.id ? null : c.id)}>
+                    <td className="bold">{c.code !== 'UZS' && <Icon name={open === c.id ? 'chevron-down' : 'chevron-right'} size={14} />} {c.code}</td>
+                    <td>{t(c.name)}{c.is_base && <Badge kind="confirmed">{t('asosiy')}</Badge>}</td>
                     <td>{c.symbol}</td>
-                    <td className="num bold">{c.is_base ? '1' : c.rate ? `${num(c.rate, 2)} ${t("so'm")}` : <span className="red">{t('kiritilmagan')}</span>}</td>
+                    <td className="num bold">
+                      {c.code === 'UZS' ? '1' : c.rate ? `${num(c.rate, 2)} ${t("so'm")}` : <span className="red">{t('kiritilmagan')}</span>}
+                      {c.base_rate && <div className="small muted">= {num(c.base_rate, 4)} {base?.code}</div>}
+                    </td>
                     <td className="small">{c.rate_date ? date(c.rate_date) : '—'}</td>
-                    <td className="small">{c.is_base ? '—' : c.auto_update ? <Badge kind="confirmed">{t('CBU avtomatik')}</Badge> : <Badge kind="draft">{t("qo'lda")}</Badge>}</td>
+                    <td className="small">{c.code === 'UZS' ? '—' : c.auto_update ? <Badge kind="confirmed">{t('CBU avtomatik')}</Badge> : <Badge kind="draft">{t("qo'lda")}</Badge>}</td>
                     <td>{c.is_active ? <Badge kind="ok">{t('Faol')}</Badge> : <Badge kind="low">{t('Nofaol')}</Badge>}</td>
                     <td className="num" onClick={(e) => e.stopPropagation()}>
+                      {editable && !c.is_base && c.is_active && <IconBtn icon="check" title="Asosiy qilish" onClick={() => makeBase(c.code)} />}
                       {editable && <IconBtn icon="edit" title="Tahrirlash" onClick={() => setForm({ item: c })} />}
                       {editable && !c.is_base && !['UZS', 'USD'].includes(c.code) && <IconBtn icon="delete" danger title="O'chirish" onClick={() => remove(c)} />}
                     </td>

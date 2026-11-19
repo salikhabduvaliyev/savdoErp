@@ -774,3 +774,8 @@ table.t.prof-t td, table.t.prof-t th { padding-left: 7px; padding-right: 7px; }
 .export-opt.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, transparent); }
 .export-opt input { accent-color: var(--primary); }
 .doc-import-err { max-height: 220px; overflow: auto; margin: 8px 0 0; padding-left: 18px; color: var(--red); font-size: 13px; }
+/* Valyutalar: asosiy (hisob) valyuta */
+.base-cur { display: flex; align-items: center; gap: 18px; padding: 14px 18px; margin-bottom: 14px; }
+.base-cur > div { flex: 1; }
+.base-cur-label { font-weight: 600; margin-bottom: 2px; }
+.base-cur select { min-width: 240px; border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; font: inherit; background: var(--input-bg); color: var(--text); }

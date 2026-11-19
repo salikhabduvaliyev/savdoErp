@@ -334,6 +334,21 @@ class StockDocTests(TestCase):
         self.assertIn(r.status_code, (200, 201), r.content)
         return r.json()
 
+    def test_company_base_currency(self):
+        cur = {c["code"]: c for c in self.api.get("/api/core/currencies/").json()}
+        self.assertTrue(cur["UZS"]["is_base"])
+        r = self.api.post(f"/api/core/currencies/{cur['USD']['id']}/make_base/")
+        self.assertEqual(r.status_code, 200, r.content)
+        cur = {c["code"]: c for c in self.api.get("/api/core/currencies/").json()}
+        self.assertTrue(cur["USD"]["is_base"])
+        self.assertFalse(cur["UZS"]["is_base"])
+        self.assertEqual(cur["UZS"]["rate"], "1")  # kurslar so'mga nisbatan qoladi
+        self.assertEqual(cur["USD"]["rate"], "12000.0000")
+        self.assertEqual(D(cur["EUR"]["base_rate"]), (D("13000") / D("12000")).quantize(D("0.000001")))
+        self.assertEqual(self.api.get("/api/sales/profitability/").json()["currency"], "USD")
+        # asosiy valyutani o'chirib bo'lmaydi
+        self.assertEqual(self.api.delete(f"/api/core/currencies/{cur['USD']['id']}/").status_code, 400)
+
     def test_stock_as_of_date_export_and_excel_import(self):
         import io
         from datetime import timedelta

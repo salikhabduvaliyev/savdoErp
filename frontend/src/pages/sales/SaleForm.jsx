@@ -6,7 +6,7 @@ import Icon from '../../components/Icon'
 import { Badge, useFetch } from '../../components/ui'
 import { money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
-import { convertPrice, curLabel, CurrencyOptions } from '../../currency'
+import { convertPrice, curLabel, CurrencyOptions, baseCurrency } from '../../currency'
 import { SearchSelect } from '../../components/Controls'
 
 const cur = curLabel
@@ -18,7 +18,7 @@ export default function SaleForm({ sale, onClose, onSaved }) {
   const fromOrder = !!sale?.order
   const [v, setV] = useState(() => ({
     client: sale?.client || '', warehouse: sale?.warehouse || '', price_type: sale?.price_type || '',
-    currency: sale?.currency || 'UZS', date: sale?.date || todayISO(), discount: sale?.discount || '0', note: sale?.note || '',
+    currency: sale?.currency || baseCurrency(), date: sale?.date || todayISO(), discount: sale?.discount || '0', note: sale?.note || '',
   }))
   const orderLines = (sale?.items || []).filter((i) => i.order)
   const [lines, setLines] = useState(() => (sale?.items || []).filter((i) => !i.order).map((i) => ({

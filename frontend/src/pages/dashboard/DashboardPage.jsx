@@ -4,7 +4,7 @@ import { Loading, MoneyBag, Stat, useFetch } from '../../components/ui'
 import { MONTHS, money, monthStartISO, pct, todayISO } from '../../format'
 import { ProductionDashboard } from '../production/Board'
 import { t } from '../../i18n'
-import { curLabel } from '../../currency'
+import { curLabel, baseCurrency } from '../../currency'
 
 const PERIODS = {
   month: () => ({ date_from: monthStartISO(), date_to: todayISO() }),
@@ -39,7 +39,7 @@ function Chart({ months, currency }) {
 
 function Director() {
   const [period, setPeriod] = useState('year')
-  const [cur, setCur] = useState('UZS')
+  const [cur, setCur] = useState(baseCurrency)
   const { data, error } = useFetch('/dashboard/director/', PERIODS[period]())
   if (!data) return <Loading error={error} />
   return (

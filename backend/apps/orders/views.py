@@ -217,6 +217,13 @@ class OrderViewSet(viewsets.ModelViewSet):
         return Response({"job": job.id, "job_number": job.number, "created_tasks": created, "materials": shortages})
 
     @action(detail=True, methods=["get"])
+    def material_plan(self, request, pk=None):
+        """Material ehtiyoji: pozitsiyalar texkartasi (me'yor × miqdor) + smeta, berilgani va qoldiq bilan."""
+        from apps.production.services import order_material_plan
+
+        return Response(order_material_plan(self.get_object()))
+
+    @action(detail=True, methods=["get"])
     def shortages(self, request, pk=None):
         from apps.warehouse.services import order_shortages
 

@@ -6,6 +6,7 @@ import { Badge, Loading, Progress, Stat, toast, useFetch } from '../../component
 import { date, pct, qty, shortDate } from '../../format'
 import { cleanNum } from '../../components/DocEditor'
 import { t as tr } from '../../i18n'
+import { promptDialog } from '../../components/Confirm'
 
 /* Bo'lim ekrani (ishni boshlash): katta tugmalar, ketma-ket bosqichlar, ijrochi — kirgan xodim */
 function TaskCard({ t, onDone, employees, me }) {
@@ -89,7 +90,7 @@ function TaskCard({ t, onDone, employees, me }) {
               ✓ {tr('Bajarildi')} {qty(amount)} {unit}
             </button>
             {t.status === 'in_progress' && (
-              <button className="btn huge-ghost" disabled={busy} onClick={() => call('pause', { reason: window.prompt(tr("To'xtatish sababi:"), '') || '' })}>❚❚ {tr("To'xtatish")}</button>
+              <button className="btn huge-ghost" disabled={busy} onClick={async () => { const r = await promptDialog(tr("To'xtatish sababi:")); if (r !== null) call('pause', { reason: r }) }}>❚❚ {tr("To'xtatish")}</button>
             )}
           </>
         )}

@@ -10,6 +10,7 @@ import { money, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { convertPrice, baseCurrency } from '../../currency'
 import { CurrencyOptions } from '../../currency'
+import { confirmDialog } from '../../components/Confirm'
 
 const toLines = (items) => (items || []).map((i) => ({
   key: newKey(), product: i.product, name: i.name, code: i.product_code || '', unit: i.unit, qty: cleanNum(i.qty),
@@ -87,8 +88,8 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
       setBusy(false)
     }
   }
-  const close = () => {
-    if (dirty && !window.confirm(t("Saqlanmagan o'zgarishlar bor. Yopilsinmi?"))) return
+  const close = async () => {
+    if (dirty && !await confirmDialog(t("Saqlanmagan o'zgarishlar bor. Yopilsinmi?"))) return
     if (saved) onSaved(order)
     else onClose()
   }

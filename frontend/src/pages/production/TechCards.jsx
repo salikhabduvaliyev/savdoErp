@@ -7,88 +7,11 @@ import { money, num, qty } from '../../format'
 import { t } from '../../i18n'
 import { IconBtn } from '../../components/Icon'
 import { SearchSelect } from '../../components/Controls'
+import { confirmDialog } from '../../components/Confirm'
+import { TechCardForm } from './TechCardForm'
 
 const UNITS = [['pcs', t("dona")], ['m', 'm'], ['m2', 'm²'], ['kg', t("kg")], ['set', t("to'plam")]]
 const CUR = [['UZS', t("so'm")], ['USD', 'USD']]
-
-/* ------------------------------------------------------------ texkarta */
-function TechCardForm({ item, onClose, onSaved }) {
-  const products = useFetch('/warehouse/products/', { type: 'product,goods', is_active: true })
-  const materials = useFetch('/warehouse/products/', { type: 'raw,goods,product', is_active: true })
-  const processes = useFetch('/production/processes/')
-  const [v, setV] = useState(() => ({ name: item?.name || '', product: item?.product || '', output_qty: item?.output_qty || '1',
-    process: item?.process || '', note: item?.note || '', is_active: item?.is_active ?? true }))
-  const [rows, setRows] = useState(() => item?.materials?.map((m) => ({ key: m.id, material: m.material, qty: m.qty, operation: m.operation || '' }))
-    || [{ key: 1, material: '', qty: '', operation: '' }])
-  const [error, setError] = useState(null)
-  const proc = (processes.data || []).find((p) => String(p.id) === String(v.process))
-  const prod = (products.data || []).find((p) => String(p.id) === String(v.product))
-  const matById = Object.fromEntries((materials.data || []).map((m) => [String(m.id), m]))
-
-  const submit = async (e) => {
-    e.preventDefault()
-    const payload = { ...v, process: v.process || null, name: v.name || prod?.name || '',
-      materials: rows.filter((r) => r.material && r.qty).map((r) => ({ material: r.material, qty: r.qty, operation: r.operation || null })) }
-    try {
-      item ? await api.patch(`/production/techcards/${item.id}/`, payload) : await api.post('/production/techcards/', payload)
-      onSaved()
-    } catch (err) { setError(errorText(err)) }
-  }
-  const setRow = (key, patch) => setRows(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
-
-  return (
-    <Modal title={item ? `Texkarta: ${item.name}` : 'Yangi texkarta'} onClose={onClose} wide>
-      {error && <div className="error">{error}</div>}
-      <form onSubmit={submit}>
-        <div className="form three">
-          <Field label={t("Mahsulot (natija)")}>
-            <SearchSelect value={v.product} onChange={(id) => setV({ ...v, product: id })} placeholder={t("— tanlang —")}
-              options={(products.data || []).map((p) => ({ value: p.id, label: p.name, sub: p.code }))} />
-          </Field>
-          <Field label={t('Chiqish miqdori') + (prod ? `, ${t(prod.unit_display)}` : '')}><input type="number" step="any" min="0" value={v.output_qty} onChange={(e) => setV({ ...v, output_qty: e.target.value })} required /></Field>
-          <Field label={t("Texjarayon (bosqichlar)")}>
-            <SearchSelect value={v.process} onChange={(id) => setV({ ...v, process: id })} empty="—"
-              options={(processes.data || []).map((p) => ({ value: p.id, label: p.name, sub: t('{n} bosqich', { n: p.stages.length }) }))} />
-          </Field>
-          <Field label={t("Texkarta nomi (bo'sh — mahsulot nomi)")}><input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></Field>
-          <Field label={t("Izoh")}><input value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} /></Field>
-          <div><label className="check" style={{ marginTop: 26 }}><input type="checkbox" checked={v.is_active} onChange={(e) => setV({ ...v, is_active: e.target.checked })} /> {t("Faol")}</label></div>
-        </div>
-        {proc && <p className="hint">Bosqichlar: {proc.stages.map((s) => s.operation_name).join(' → ')}</p>}
-        <div className="table-wrap" style={{ marginTop: 12 }}>
-          <table className="t">
-            <thead><tr><th style={{ width: '45%' }}>{t("Material")}</th><th className="num">Me'yor ({qty(v.output_qty || 1)} {prod?.unit_display || 'birlik'} uchun)</th><th>{t("Qaysi bosqichda")}</th><th /></tr></thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.key}>
-                  <td>
-                    <SearchSelect value={r.material} onChange={(id) => setRow(r.key, { material: id })} placeholder={t("— material —")}
-                      options={(materials.data || []).map((m) => ({ value: m.id, label: m.name, sub: t(m.unit_display) }))} />
-                  </td>
-                  <td className="num"><input className="cell" value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} /> {matById[String(r.material)]?.unit_display}</td>
-                  <td>
-                    <select className="cell" value={r.operation} onChange={(e) => setRow(r.key, { operation: e.target.value })}>
-                      <option value="">{t("Birinchi bosqichda")}</option>
-                      {(proc?.stages || []).map((s) => <option key={s.id} value={s.operation}>{s.operation_name}</option>)}
-                    </select>
-                  </td>
-                  <td className="num"><IconBtn icon="delete" danger title="O\'chirish" onClick={() => setRows(rows.filter((x) => x.key !== r.key))} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="table-toolbar" style={{ borderTop: '1px solid var(--border)', borderBottom: 0 }}>
-            <button type="button" className="btn small" onClick={() => setRows([...rows, { key: Math.random(), material: '', qty: '', operation: '' }])}>{t("+ Material")}</button>
-          </div>
-        </div>
-        <div className="form-actions">
-          <button type="button" className="btn ghost" onClick={onClose}>{t("Bekor")}</button>
-          <button className="btn primary">{t("Saqlash")}</button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
 
 export function TechCardsTab() {
   const { user } = useAuth()
@@ -97,7 +20,7 @@ export function TechCardsTab() {
   const { data, error } = useFetch('/production/techcards/', { search: search || undefined, stamp })
   const [form, setForm] = useState(null)
   const remove = async (tc) => {
-    if (!window.confirm(`"${tc.name}" o'chirilsinmi?`)) return
+    if (!await confirmDialog(`"${tc.name}" o'chirilsinmi?`)) return
     try { await api.delete(`/production/techcards/${tc.id}/`); setStamp((s) => s + 1) } catch (e) { toast(errorText(e), true) }
   }
   return (
@@ -128,7 +51,7 @@ export function TechCardsTab() {
         )}
       </div>
       <div className="legend"><span>{t("Texkarta — mahsulotni ishlab chiqarish retsepti: qaysi materialdan qancha va qaysi bosqichda sarflanadi.")}</span></div>
-      {form && <TechCardForm item={form.item} onClose={() => setForm(null)} onSaved={() => { setForm(null); setStamp((s) => s + 1); toast('Texkarta saqlandi') }} />}
+      {form && <TechCardForm item={form.item} onClose={() => { setForm(null); setStamp((s) => s + 1) }} onSaved={(d) => { setForm(null); setStamp((s) => s + 1); toast(d ? t('Texkarta saqlandi') : t("O'chirildi")) }} />}
     </>
   )
 }
@@ -197,7 +120,7 @@ export function ProcessesTab() {
   const { data, error } = useFetch('/production/processes/', { stamp })
   const [form, setForm] = useState(null)
   const remove = async (p) => {
-    if (!window.confirm(`"${p.name}" o'chirilsinmi?`)) return
+    if (!await confirmDialog(`"${p.name}" o'chirilsinmi?`)) return
     try { await api.delete(`/production/processes/${p.id}/`); setStamp((s) => s + 1) } catch (e) { toast(errorText(e), true) }
   }
   if (!data) return <Loading error={error} />
@@ -233,7 +156,7 @@ export function StagesTab() {
   const [form, setForm] = useState(null)
   const [depForm, setDepForm] = useState(null)
   const remove = async (o) => {
-    if (!window.confirm(`"${o.name}" o'chirilsinmi?`)) return
+    if (!await confirmDialog(`"${o.name}" o'chirilsinmi?`)) return
     try { await api.delete(`/production/operations/${o.id}/`); setStamp((s) => s + 1) } catch (e) { toast(errorText(e), true) }
   }
   if (!data || !deps.data) return <Loading error={error || deps.error} />

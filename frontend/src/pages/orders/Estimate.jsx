@@ -7,6 +7,7 @@ import { SearchSelect } from '../../components/Controls'
 import Icon from '../../components/Icon'
 import { IconBtn } from '../../components/Icon'
 import { curLabel } from '../../currency'
+import { promptDialog } from '../../components/Confirm'
 
 function AddMaterialRow({ estimateId, materials, onAdded }) {
   const [v, setV] = useState({ material: '', qty: '', waste_pct: '0', price: '' })
@@ -84,7 +85,7 @@ export default function Estimate({ order, onChanged }) {
     } catch (e) { toast(errorText(e), true) }
   }
   const newVersion = async () => {
-    const note = window.prompt("Yangi versiya izohi (nima o'zgardi?)", '') ?? null
+    const note = await promptDialog("Yangi versiya izohi (nima o'zgardi?)")
     if (note === null) return
     try {
       await api.post(`/orders/${order.id}/new_estimate/`, { note })

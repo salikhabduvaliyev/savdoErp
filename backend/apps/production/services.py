@@ -312,8 +312,10 @@ def techcard_cost(techcard):
     if techcard.process_id:
         for st in techcard.process.stages.select_related("operation"):
             labor += convert(st.operation.piece_rate, "UZS", cur) * out
+    extra = Decimal(techcard.extra_cost or 0)
     return {"materials": (mat / out).quantize(Decimal("0.01")), "labor": (labor / out).quantize(Decimal("0.01")),
-            "total": ((mat + labor) / out).quantize(Decimal("0.01")), "currency": cur}
+            "extra": (extra / out).quantize(Decimal("0.01")),
+            "total": ((mat + labor + extra) / out).quantize(Decimal("0.01")), "currency": cur}
 
 
 def production_order_requirements(po: ProductionOrder, warehouse=None):
@@ -365,3 +367,78 @@ def production_order_from_client_order(order, user=None):
         order.status = order.Status.CONFIRMED
         order.save(update_fields=["status", "updated_at"])
     return po, True
+
+
+def material_unit_cost(material):
+    """Materialning joriy o'rtacha tannarxi (omborlardagi qoldiq bo'yicha, bo'lmasa xarid narxi)."""
+    stocks = [st for st in material.stocks.all() if st.qty > 0]
+    q = sum((st.qty for st in stocks), ZERO)
+    return (sum((st.qty * st.avg_cost for st in stocks), ZERO) / q) if q else material.purchase_price
+
+
+def order_material_plan(order):
+    """Mijoz buyurtmasi uchun material ehtiyoji (MoySklad: Заказ → Материалы).
+
+    Pozitsiyalardagi mahsulotlar texkartasi bo'yicha: me'yor / chiqish miqdori × buyurtma miqdori,
+    ustiga faol smetaning A bloki (chiqindi bilan). Berilgani (ombordan chiqim), rezerv va bo'sh qoldiq bilan.
+    """
+    from django.db.models import Q, Sum
+
+    from apps.warehouse.models import Material, Reservation, Stock, StockMove
+
+    products, need = [], {}
+
+    def add(mat, qty, source):
+        r = need.setdefault(mat.id, {"material": mat, "need": ZERO, "sources": []})
+        r["need"] += qty
+        r["sources"].append(source)
+
+    for it in order.items.select_related("product"):
+        if not it.product_id:
+            continue
+        tc = TechCard.objects.filter(product=it.product, is_active=True).order_by("id").first()
+        products.append({"item": it.id, "product": it.product_id, "name": it.product.name, "code": it.product.code,
+                         "qty": str(_q(Decimal(it.qty))), "unit": it.product.get_unit_display(),
+                         "techcard": tc.id if tc else None, "techcard_name": tc.name if tc else None,
+                         "needs_techcard": it.product.type == Material.Type.PRODUCT and not tc})
+        if not tc:
+            continue
+        out = tc.output_qty or Decimal("1")
+        for m in tc.materials.select_related("material"):
+            if not m.material.is_stocked:
+                continue
+            norm = Decimal(m.qty) / out
+            add(m.material, _q(norm * Decimal(it.qty)),
+                {"kind": "techcard", "label": it.product.name, "qty": str(_q(Decimal(it.qty))), "norm": str(_q(norm)),
+                 "need": str(_q(norm * Decimal(it.qty))), "techcard": tc.id})
+
+    est = order.active_estimate
+    if est:
+        for row in est.materials.select_related("material"):
+            q = _q(row.qty_with_waste)
+            add(row.material, q, {"kind": "estimate", "label": f"Smeta v{est.version}" if hasattr(est, "version") else "Smeta",
+                                  "qty": None, "norm": None, "need": str(q)})
+
+    issued_q = StockMove.objects.filter(type=StockMove.Type.OUT, material_id__in=list(need)).filter(
+        Q(order=order) | Q(job__order=order) | Q(job__production_order__client_order=order))
+    issued = {r["material_id"]: r["s"] for r in issued_q.values("material_id").annotate(s=Sum("qty"))}
+    reserved = {r["material_id"]: r["s"] for r in Reservation.objects.filter(order=order, material_id__in=list(need))
+                .values("material_id").annotate(s=Sum("qty"))}
+    free = {}
+    for st in Stock.objects.filter(material_id__in=list(need)):
+        free[st.material_id] = free.get(st.material_id, ZERO) + (st.qty - st.reserved)
+
+    rows = []
+    for mid, r in need.items():
+        mat = r["material"]
+        iss = issued.get(mid) or ZERO
+        res = reserved.get(mid) or ZERO
+        left = max(ZERO, r["need"] - iss)
+        avail = free.get(mid, ZERO)
+        short = max(ZERO, left - res - max(avail, ZERO))
+        rows.append({"material": mid, "name": mat.name, "code": mat.code, "unit": mat.get_unit_display(),
+                     "need": str(_q(r["need"])), "issued": str(_q(iss)), "left": str(_q(left)),
+                     "reserved": str(_q(res)), "available": str(_q(avail)), "shortage": str(_q(short)),
+                     "sources": r["sources"]})
+    rows.sort(key=lambda x: (-Decimal(x["shortage"]), x["name"]))
+    return {"products": products, "rows": rows}

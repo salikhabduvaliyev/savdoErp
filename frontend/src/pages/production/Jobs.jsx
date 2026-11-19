@@ -8,6 +8,7 @@ import { date, monthStartISO, money, num, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import Icon, { IconBtn } from '../../components/Icon'
 import { SearchSelect } from '../../components/Controls'
+import { confirmDialog } from '../../components/Confirm'
 
 const JOB_STATUSES = [['new', tr("Yangi")], ['in_progress', tr("Jarayonda")], ['done', tr("Bajarildi")], ['cancelled', tr("Bekor qilindi")]]
 const JOB_BADGE = { new: 'new', in_progress: 'in_production', done: 'done', cancelled: 'cancelled' }
@@ -110,7 +111,7 @@ export function JobCard({ id, onClose, onChanged }) {
   if (!j) return <Drawer onClose={onClose}><Loading error={error} /></Drawer>
   const refresh = () => { setStamp((s) => s + 1); onChanged?.() }
   const cancel = async () => {
-    if (!window.confirm('Topshiriq bekor qilinsinmi?')) return
+    if (!await confirmDialog('Topshiriq bekor qilinsinmi?')) return
     try { await api.post(`/production/jobs/${id}/cancel/`); toast('Bekor qilindi'); refresh() } catch (e) { toast(errorText(e), true) }
   }
   const editable = canEdit(user, 'production')

@@ -4,6 +4,7 @@ import { t } from '../i18n'
 import { date, num } from '../format'
 import { Badge, Field, Loading, Modal, toast, useFetch } from './ui'
 import { IconBtn } from './Icon'
+import { confirmDialog } from './Confirm'
 
 export const FIELD_TYPES = [
   ['text', t("Matn")], ['number', t("Son")], ['date', t("Sana")], ['bool', t("Ha/Yo'q")], ['select', t("Ro'yxatdan tanlash")], ['user', t("Xodim")],
@@ -151,7 +152,7 @@ export function CustomFieldsManager({ entity, editable = true, embedded = false,
   const [form, setForm] = useState(null)
   const refresh = () => { setStamp((s) => s + 1); onChanged?.() }
   const remove = async (f) => {
-    if (!window.confirm(t('"{n}" maydoni o\'chirilsinmi? Kiritilgan qiymatlar ko\'rinmay qoladi.', { n: f.name }))) return
+    if (!await confirmDialog(t('"{n}" maydoni o\'chirilsinmi? Kiritilgan qiymatlar ko\'rinmay qoladi.', { n: f.name }))) return
     try { await api.delete(`/core/custom-fields/${f.id}/`); refresh() } catch (e) { toast(errorText(e), true) }
   }
   const body = !data ? <Loading error={error} /> : (

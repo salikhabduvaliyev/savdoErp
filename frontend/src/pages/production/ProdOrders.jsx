@@ -10,6 +10,7 @@ import { Badge, Loading, Modal, Progress, toast, useFetch } from '../../componen
 import { date, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import { JobCard } from './Jobs'
+import { confirmDialog } from '../../components/Confirm'
 
 const STATUSES = [['new', tr('Yangi')], ['in_progress', tr('Jarayonda')], ['done', tr('Bajarildi')], ['cancelled', tr('Bekor qilindi')]]
 const BADGE = { new: 'new', in_progress: 'in_production', done: 'done', cancelled: 'cancelled' }
@@ -117,7 +118,7 @@ function StartModal({ po, onClose, onStarted }) {
   const short = (req.data || []).filter((r) => Number(r.shortage) > 0)
   const [busy, setBusy] = useState(false)
   const start = async () => {
-    if (short.length && !window.confirm(tr("Material yetarli emas. Shunda ham boshlansinmi? Ombordagi qoldiq minusga ketadi."))) return
+    if (short.length && !await confirmDialog(tr("Material yetarli emas. Shunda ham boshlansinmi? Ombordagi qoldiq minusga ketadi."))) return
     setBusy(true)
     try {
       const { data } = await api.post(`/production/orders/${po.id}/create_jobs/`, { materials_warehouse: mw, products_warehouse: pw, allow_negative: short.length > 0 })
@@ -200,11 +201,11 @@ function ProdOrderCard({ id, onClose, onChanged }) {
   const editable = canEdit(user, 'production')
   const started = (jobs.data || []).some((j) => j.status !== 'cancelled')
   const cancel = async () => {
-    if (!window.confirm(tr('Buyurtma bekor qilinsinmi?'))) return
+    if (!await confirmDialog(tr('Buyurtma bekor qilinsinmi?'))) return
     try { await api.post(`/production/orders/${id}/cancel/`); refresh() } catch (e) { toast(errorText(e), true) }
   }
   const remove = async () => {
-    if (!window.confirm(tr("Buyurtma o'chirilsinmi? Boshlanmagan topshiriqlar ham o'chiriladi."))) return
+    if (!await confirmDialog(tr("Buyurtma o'chirilsinmi? Boshlanmagan topshiriqlar ham o'chiriladi."))) return
     try { await api.delete(`/production/orders/${id}/`); toast(tr("O'chirildi")); onChanged(); onClose() } catch (e) { toast(errorText(e), true) }
   }
   return (

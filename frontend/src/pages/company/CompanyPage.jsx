@@ -9,6 +9,7 @@ import { t } from '../../i18n'
 import Icon, { IconBtn } from '../../components/Icon'
 import { curLabel, currencyOptions, baseCurrency } from '../../currency'
 import History from './History'
+import { confirmDialog } from '../../components/Confirm'
 
 const TABS = [
   ['info', t("Kompaniya ma'lumotlari")],
@@ -265,7 +266,7 @@ function Departments({ editable }) {
   const [form, setForm] = useState(null)
   const refresh = () => { setForm(null); setStamp((s) => s + 1); toast('Saqlandi') }
   const remove = async (url, name) => {
-    if (!window.confirm(`"${name}" o'chirilsinmi?`)) return
+    if (!await confirmDialog(`"${name}" o'chirilsinmi?`)) return
     try { await api.delete(url); setStamp((s) => s + 1) } catch (e) { toast(errorText(e), true) }
   }
   if (!deps.data || !ops.data) return <Loading error={deps.error || ops.error} />

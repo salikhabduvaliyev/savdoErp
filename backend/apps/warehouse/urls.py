@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .doc_views import StockDocViewSet, turnover
+from .doc_views import StockDocViewSet, turnover, turnover_moves
 
 from .views import (
     MaterialGroupViewSet,
@@ -21,4 +21,4 @@ router.register("materials", ProductViewSet, basename="material")  # eski nom (m
 router.register("stock", StockViewSet, basename="stock")
 router.register("moves", StockMoveViewSet, basename="move")
 router.register("docs", StockDocViewSet, basename="stock-doc")
-urlpatterns = [path("turnover/", turnover)] + router.urls
+urlpatterns = [path("turnover/", turnover), path("turnover/moves/", turnover_moves)] + router.urls

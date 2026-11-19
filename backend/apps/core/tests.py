@@ -605,3 +605,62 @@ class StockDocTests(TestCase):
         with tenant_context(self.c):
             t = Transaction.objects.get(kind="client_payment", client=self.cli)
             self.assertIsNone(t.sale_id)
+
+    def test_turnover_sums_and_material_moves(self):
+        from datetime import timedelta
+
+        past = T - timedelta(days=40)
+        self.doc("enter", [{"material": self.m.id, "qty": "10", "price": "100"}], date=str(past))
+        self.doc("enter", [{"material": self.m.id, "qty": "10", "price": "200"}])
+        self.doc("loss", [{"material": self.m.id, "qty": "4"}])
+        self.doc("move", [{"material": self.m.id, "qty": "6"}], to_warehouse=self.w2.id)
+        p = {"date_from": str(T - timedelta(days=5)), "date_to": str(T)}
+        r = self.api.get("/api/warehouse/turnover/", p).json()["rows"][0]
+        # ko'chirish umumiy aylanmada ko'rinmaydi; chiqim o'rtacha narxda (150)
+        self.assertEqual((r["opening"], r["income"], r["outcome"], r["closing"]), ("10", "10", "4", "16"))
+        self.assertEqual((D(r["opening_sum"]), D(r["income_sum"]), D(r["outcome_sum"]), D(r["closing_sum"])),
+                         (D("1000"), D("2000"), D("600"), D("2400")))
+        r = self.api.get("/api/warehouse/turnover/", {**p, "warehouse": self.w1.id}).json()["rows"][0]
+        self.assertEqual((r["income"], r["outcome"], r["closing"]), ("10", "10", "10"))
+        mv = self.api.get("/api/warehouse/turnover/moves/", {**p, "material": self.m.id, "warehouse": self.w1.id}).json()
+        self.assertEqual((mv["opening"], mv["closing"], len(mv["rows"])), ("10", "10", 3))
+        self.assertEqual(mv["rows"][0]["ref"]["kind"], "doc")
+        self.assertEqual([x["balance"] for x in mv["rows"]], ["20", "16", "10"])
+
+    def test_techcard_norms_drive_order_materials(self):
+        import io
+
+        from openpyxl import Workbook
+
+        from apps.orders.models import Order, OrderItem
+        from apps.production.models import TechCard, TechCardMaterial
+
+        with tenant_context(self.c):
+            prod = Material.objects.create(name="Deraza", type="product", unit="pcs", currency="UZS")
+            tc = TechCard.objects.create(name="Deraza", product=prod, output_qty=D("2"), extra_cost=D("50"))
+            TechCardMaterial.objects.create(techcard=tc, material=self.m, qty=D("5"))
+            o = Order.objects.create(client=self.cli, currency="UZS", plan_date=T)
+            OrderItem.objects.create(order=o, product=prod, name="Deraza", qty=D("3"), price=D("1000"))
+        set_context(None, None)
+        self.doc("enter", [{"material": self.m.id, "qty": "4", "price": "100"}])
+        plan = self.api.get(f"/api/orders/{o.id}/material_plan/").json()
+        self.assertEqual(plan["products"][0]["techcard"], tc.id)
+        row = plan["rows"][0]
+        # me'yor 5 / 2 dona × 3 dona = 7.5; omborda 4 → 3.5 yetishmaydi
+        self.assertEqual((D(row["need"]), D(row["available"]), D(row["shortage"])), (D("7.5"), D("4"), D("3.5")))
+        self.assertEqual(D(row["sources"][0]["norm"]), D("2.5"))
+        card = self.api.get(f"/api/production/techcards/{tc.id}/").json()
+        self.assertEqual(D(card["cost"]["extra"]), D("25"))
+        self.assertEqual(D(card["materials"][0]["unit_cost"]), D("100"))
+        # Excel'dan materiallar me'yori
+        wb = Workbook()
+        wb.active.append(["Nomi", "Miqdor"])
+        wb.active.append(["Profil", 1.5])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        buf.name = "tc.xlsx"
+        r = self.api.post("/api/production/techcards/import_materials/", {"file": buf}, format="multipart")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(D(r.json()["lines"][0]["qty"]), D("1.5"))
+        self.assertEqual(self.api.get("/api/production/techcards/import_template/").status_code, 200)

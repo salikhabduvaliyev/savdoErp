@@ -12,6 +12,7 @@ import { STATUSES } from './OrderList'
 import { useRefs } from './OrdersPage'
 import { t as tr } from '../../i18n'
 import Icon from '../../components/Icon'
+import { TechCardForm } from '../production/TechCardForm'
 
 export default function OrderDetail() {
   const { id } = useParams()
@@ -25,7 +26,6 @@ export default function OrderDetail() {
   const refs = useRefs()
   const tasks = useFetch('/production/tasks/', { order: id, stamp })
   const txs = useFetch('/finance/transactions/', { order: id, stamp })
-  const shortages = useFetch(`/orders/${id}/shortages/`, { stamp })
 
   if (!o) return <Loading error={error} />
   const refresh = () => { reload(); setStamp((s) => s + 1) }
@@ -166,22 +166,7 @@ export default function OrderDetail() {
         </>
       )}
 
-      {tab === 'materials' && (
-        <div className="table-wrap">
-          <table className="t">
-            <thead><tr><th>{tr("Material")}</th><th className="num">{tr("Kerak (chiqindi bilan, berilgani ayirilgan)")}</th><th className="num">{tr("Yetishmaydi")}</th></tr></thead>
-            <tbody>
-              {(shortages.data || []).map((m) => (
-                <tr key={m.material_id}>
-                  <td>{m.material}</td>
-                  <td className="num">{qty(m.need)} {m.unit}</td>
-                  <td className={'num ' + (Number(m.shortage) > 0 ? 'red bold' : 'green')}>{Number(m.shortage) > 0 ? `${qty(m.shortage)} ${m.unit}` : 'Yetarli'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {tab === 'materials' && <OrderMaterials key={stamp} order={o} />}
 
       {edit && <OrderForm refs={refs} order={o} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); refresh() }} />}
       {pay && (
@@ -191,6 +176,71 @@ export default function OrderDetail() {
           onClose={() => setPay(null)}
           onSaved={() => { setPay(null); refresh() }}
         />
+      )}
+    </>
+  )
+}
+
+/* Buyurtma → Material (MoySklad: texkarta me'yori × buyurtma miqdori) */
+function OrderMaterials({ order }) {
+  const [stamp, setStamp] = useState(0)
+  const [tc, setTc] = useState(null)
+  const [open, setOpen] = useState({})
+  const { data, error } = useFetch(`/orders/${order.id}/material_plan/`, { stamp })
+  const techcards = useFetch(tc?.id ? `/production/techcards/${tc.id}/` : null)
+  if (!data) return <Loading error={error} />
+  const short = data.rows.filter((r) => Number(r.shortage) > 0).length
+  return (
+    <>
+      {data.products.length > 0 && (
+        <div className="om-products">
+          {data.products.map((p) => (
+            <div key={p.item} className={'om-prod' + (p.needs_techcard ? ' warn' : '')}>
+              <div><b>{p.name}</b> <span className="muted">× {qty(p.qty)} {tr(p.unit)}</span></div>
+              {p.techcard
+                ? <button type="button" className="link-btn small" onClick={() => setTc({ id: p.techcard })}><Icon name="production" size={13} /> {p.techcard_name}</button>
+                : p.needs_techcard
+                  ? <button type="button" className="link-btn small red" onClick={() => setTc({ product: p.product })}>{tr("Texkarta yo'q — yaratish")}</button>
+                  : <span className="small muted">{tr("tayyor tovar (texkartasiz)")}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="table-wrap">
+        <table className="t">
+          <thead><tr>
+            <th>{tr('Material')}</th><th className="num">{tr('Kerak')}</th><th className="num">{tr('Berilgan')}</th><th className="num">{tr('Qolgan')}</th>
+            <th className="num">{tr('Rezerv')}</th><th className="num">{tr("Omborda bo'sh")}</th><th className="num">{tr('Yetishmaydi')}</th>
+          </tr></thead>
+          <tbody>
+            {data.rows.map((m) => [
+              <tr key={m.material} className="clickable" onClick={() => setOpen((o) => ({ ...o, [m.material]: !o[m.material] }))}>
+                <td><Icon name={open[m.material] ? 'chevron-down' : 'chevron-right'} size={13} /> {m.code && <b className="pos-code">{m.code}</b>} {m.name}</td>
+                <td className="num bold">{qty(m.need)} {tr(m.unit)}</td>
+                <td className="num">{Number(m.issued) ? qty(m.issued) : '—'}</td>
+                <td className="num">{qty(m.left)}</td>
+                <td className="num">{Number(m.reserved) ? qty(m.reserved) : '—'}</td>
+                <td className={'num ' + (Number(m.available) < 0 ? 'red' : '')}>{qty(m.available)}</td>
+                <td className={'num ' + (Number(m.shortage) > 0 ? 'red bold' : 'green')}>{Number(m.shortage) > 0 ? `${qty(m.shortage)} ${tr(m.unit)}` : tr('Yetarli')}</td>
+              </tr>,
+              open[m.material] && m.sources.map((s, i) => (
+                <tr key={`${m.material}-${i}`} className="om-src">
+                  <td colSpan={7}>
+                    {s.kind === 'techcard'
+                      ? <>{s.label}: {qty(s.qty)} × {qty(s.norm)} {tr(m.unit)} ({tr("texkarta me'yori")}) = <b>{qty(s.need)} {tr(m.unit)}</b></>
+                      : <>{s.label}: <b>{qty(s.need)} {tr(m.unit)}</b> ({tr('chiqindi bilan')})</>}
+                  </td>
+                </tr>
+              )),
+            ])}
+            {!data.rows.length && <tr><td colSpan={7} className="empty">{tr("Material ehtiyoji yo'q: pozitsiyalardagi mahsulotlarga texkarta biriktiring yoki smetaning A blokini to'ldiring.")}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">{short > 0 ? tr('{n} ta material yetishmaydi.', { n: short }) + ' ' : ''}{tr("Kerak = texkarta me'yori ÷ chiqish miqdori × buyurtmadagi miqdor (+ smeta). Qatorni bosing — hisob tafsiloti.")}</p>
+      {tc && (tc.product || techcards.data) && (
+        <TechCardForm item={tc.product ? null : techcards.data} presetProduct={tc.product}
+          onClose={() => setTc(null)} onSaved={() => { setTc(null); setStamp((x) => x + 1) }} />
       )}
     </>
   )

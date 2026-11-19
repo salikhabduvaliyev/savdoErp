@@ -11,6 +11,7 @@ import { Badge, Field, Loading, Modal, toast, useFetch } from '../../components/
 import { curLabel, CurrencyOptions, currencyOptions, baseCurrency } from '../../currency'
 import { date, money, qty } from '../../format'
 import { t } from '../../i18n'
+import { confirmDialog } from '../../components/Confirm'
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const PRODUCT_TYPES = [
@@ -140,13 +141,13 @@ function ProductPage({ id: id0, newType, defaults, groups, priceTypes, onClose, 
       if (close) onSaved()
     } catch (err) { setError(errorText(err)) } finally { setBusy(false) }
   }
-  const close = () => {
-    if (dirty && !window.confirm(t("Saqlanmagan o'zgarishlar bor. Yopilsinmi?"))) return
+  const close = async () => {
+    if (dirty && !await confirmDialog(t("Saqlanmagan o'zgarishlar bor. Yopilsinmi?"))) return
     if (changed) onSaved()
     else onClose()
   }
   const remove = async () => {
-    if (!window.confirm(t("O'chirilsinmi?") + `\n${v.name}`)) return
+    if (!await confirmDialog(t("O'chirilsinmi?") + `\n${v.name}`)) return
     try { await api.delete(`/warehouse/products/${id}/`); toast(t("O'chirildi")); onSaved() } catch (err) { setError(errorText(err)) }
   }
   const tree = flatTree(groups)
@@ -289,7 +290,7 @@ function Products({ user }) {
   const setOpen = (val) => { const p = new URLSearchParams(params); if (val) p.set('open', val); else p.delete('open'); setParams(p) }
   const reload = () => setStamp((s) => s + 1)
   const removeGroup = async (g) => {
-    if (!window.confirm(t("O'chirilsinmi?") + `\n${g.name}`)) return
+    if (!await confirmDialog(t("O'chirilsinmi?") + `\n${g.name}`)) return
     try { await api.delete(`/warehouse/groups/${g.id}/`); if (String(f.group) === String(g.id)) setF({ ...f, group: '' }); reload() } catch (e) { toast(errorText(e), true) }
   }
   const curGroup = (groups.data || []).find((g) => String(g.id) === String(f.group))
@@ -400,7 +401,7 @@ function PriceTypes({ user }) {
   const { data, error } = useFetch('/warehouse/price-types/', { stamp })
   const [form, setForm] = useState(null)
   const remove = async (r) => {
-    if (!window.confirm(t("O'chirilsinmi?") + `\n${r.name}`)) return
+    if (!await confirmDialog(t("O'chirilsinmi?") + `\n${r.name}`)) return
     try { await api.delete(`/warehouse/price-types/${r.id}/`); setStamp((s) => s + 1) } catch (e) { toast(errorText(e), true) }
   }
   return (

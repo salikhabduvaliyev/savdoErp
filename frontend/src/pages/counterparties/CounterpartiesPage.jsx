@@ -10,6 +10,7 @@ import { money } from '../../format'
 import { t } from '../../i18n'
 import { IconBtn } from '../../components/Icon'
 import { usePager } from '../../components/Controls'
+import { confirmDialog } from '../../components/Confirm'
 
 const COLUMNS = [
   { key: 'name', label: t("Nomi"), fixed: true },
@@ -34,7 +35,7 @@ function GroupsManager({ onClose, onChanged, editable }) {
   const [form, setForm] = useState(null)
   const refresh = () => { setStamp((s) => s + 1); onChanged() }
   const remove = async (url, name) => {
-    if (!window.confirm(t('"{n}" o\'chirilsinmi?', { n: name }))) return
+    if (!await confirmDialog(t('"{n}" o\'chirilsinmi?', { n: name }))) return
     try { await api.delete(url); refresh() } catch (e) { toast(errorText(e), true) }
   }
   const list = (title, rows, url, kind) => (
@@ -108,7 +109,7 @@ export default function CounterpartiesPage() {
   const show = view.show
 
   const remove = async (item) => {
-    if (!window.confirm(t('"{n}" o\'chirilsinmi?', { n: item.name }))) return
+    if (!await confirmDialog(t('"{n}" o\'chirilsinmi?', { n: item.name }))) return
     try { await api.delete(`/crm/counterparties/${item.id}/`); toast(t("O'chirildi")); setStamp((s) => s + 1) } catch (e) { toast(errorText(e), true) }
   }
   const debtCell = (bag) => (

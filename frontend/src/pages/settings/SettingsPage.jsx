@@ -8,6 +8,7 @@ import { Badge, Field, Loading, Modal, toast, useFetch, DialogMode } from '../..
 import { date } from '../../format'
 import { t } from '../../i18n'
 import Currencies from './Currencies'
+import { confirmDialog } from '../../components/Confirm'
 
 const SECTIONS = [
   { grp: 'Jamoa', items: [['users', t("Foydalanuvchilar"), 'user'], ['roles', t("Rollar va huquqlar"), 'roles']] },
@@ -275,7 +276,7 @@ function Roles({ editable, onChanged }) {
     } catch (e) { toast(errorText(e), true) }
   }
   const remove = async () => {
-    if (!window.confirm(`"${draft.name}" roli o'chirilsinmi?`)) return
+    if (!await confirmDialog(`"${draft.name}" roli o'chirilsinmi?`)) return
     try {
       await api.delete(`/auth/roles/${draft.id}/`)
       setSelId(null)
@@ -496,7 +497,7 @@ function References({ user }) {
   const [form, setForm] = useState(null)
   const editable = canEdit(user, 'settings') || canEdit(user, 'finance')
   const remove = async (item) => {
-    if (!window.confirm(`"${item.name}" o'chirilsinmi?`)) return
+    if (!await confirmDialog(`"${item.name}" o'chirilsinmi?`)) return
     try { await api.delete(`/finance/categories/${item.id}/`); setStamp((s) => s + 1) } catch (e) { toast(errorText(e), true) }
   }
   return (

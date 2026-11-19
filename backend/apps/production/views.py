@@ -7,6 +7,7 @@ from django.db.models import ProtectedError, Q, Sum
 from django_filters import rest_framework as filters
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.accounts.permissions import module_perm
@@ -151,23 +152,32 @@ class TechCardMaterialSerializer(serializers.ModelSerializer):
     material_name = serializers.CharField(source="material.name", read_only=True)
     unit = serializers.CharField(source="material.get_unit_display", read_only=True)
     operation_name = serializers.CharField(source="operation.name", read_only=True, default=None)
+    code = serializers.CharField(source="material.code", read_only=True)
+    currency = serializers.CharField(source="material.currency", read_only=True)
+    unit_cost = serializers.SerializerMethodField()
 
     class Meta:
         model = TechCardMaterial
-        fields = ["id", "material", "material_name", "unit", "qty", "operation", "operation_name"]
+        fields = ["id", "material", "material_name", "code", "unit", "qty", "operation", "operation_name", "unit_cost", "currency"]
+
+    def get_unit_cost(self, obj):
+        return str(q2(services.material_unit_cost(obj.material)))
 
 
 class TechCardSerializer(serializers.ModelSerializer):
     materials = TechCardMaterialSerializer(many=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_unit = serializers.CharField(source="product.get_unit_display", read_only=True)
+    product_code = serializers.CharField(source="product.code", read_only=True)
+    product_currency = serializers.CharField(source="product.currency", read_only=True)
     process_name = serializers.CharField(source="process.name", read_only=True, default=None)
     cost = serializers.SerializerMethodField()
 
     class Meta:
         model = TechCard
-        fields = ["id", "name", "product", "product_name", "product_unit", "output_qty", "process", "process_name",
-                  "note", "is_active", "materials", "cost"]
+        fields = ["id", "name", "product", "product_name", "product_code", "product_unit", "product_currency", "output_qty",
+                  "process", "process_name", "note", "instructions", "extra_cost", "is_active", "materials", "cost",
+                  "created_at", "updated_at"]
 
     def get_cost(self, obj):
         try:
@@ -206,6 +216,7 @@ class TechCardViewSet(viewsets.ModelViewSet):
     serializer_class = TechCardSerializer
     module = "production"
     search_fields = ["name", "product__name"]
+    action_perms = {"import_materials": "view"}
     filterset_fields = ["product", "process", "is_active"]
 
     def get_queryset(self):
@@ -214,6 +225,32 @@ class TechCardViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         _protected(instance, "Texkarta topshiriqlarda ishlatilgan — o'chirib bo'lmaydi, nofaol qiling")
+
+    @action(detail=False, methods=["get"])
+    def import_template(self, request):
+        """Materiallar importi shabloni (xlsx): Kod, Artikul, Nomi, Miqdor (me'yor)."""
+        from apps.warehouse.excel import template_response
+        from apps.warehouse.models import Material
+
+        mats = list(Material.objects.filter(is_active=True).exclude(type=Material.Type.SERVICE).order_by("name"))
+        return template_response("texkarta", mats, with_price=False)
+
+    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
+    def import_materials(self, request):
+        """Excel/CSV'dan materiallar me'yori: {lines, errors}. Texkarta saqlanmaydi — forma to'ldiriladi."""
+        from apps.warehouse.excel import parse_items
+        from apps.warehouse.models import Material
+
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"detail": "Fayl tanlanmagan"}, status=400)
+        if f.size > 5 * 1024 * 1024:
+            return Response({"detail": "Fayl juda katta (5 MB gacha)"}, status=400)
+        try:
+            lines, errors = parse_items(f, Material.objects.exclude(type=Material.Type.SERVICE), with_price=False)
+        except Exception as e:  # noqa: BLE001 — buzilgan fayl
+            return Response({"detail": f"Faylni o'qib bo'lmadi: {e}"}, status=400)
+        return Response({"lines": lines, "errors": errors})
 
 
 # =================================================================== ishlab chiqarish buyurtmasi

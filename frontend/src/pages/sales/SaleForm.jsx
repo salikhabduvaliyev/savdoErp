@@ -8,6 +8,7 @@ import { money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import { convertPrice, curLabel, CurrencyOptions, baseCurrency } from '../../currency'
 import { SearchSelect } from '../../components/Controls'
+import { confirmDialog, promptDialog } from '../../components/Confirm'
 
 const cur = curLabel
 
@@ -83,7 +84,7 @@ export default function SaleForm({ sale, onClose, onSaved }) {
       onSaved(data.id, complete)
     } catch (err) { setError(errorText(err)) } finally { setBusy(false) }
   }
-  const close = () => { if (!dirty || window.confirm(tr("Saqlanmagan o'zgarishlar bor. Yopilsinmi?"))) onClose() }
+  const close = async () => { if (!dirty || await confirmDialog(tr("Saqlanmagan o'zgarishlar bor. Yopilsinmi?"))) onClose() }
   const ok = !busy && v.client
 
   return (
@@ -109,7 +110,7 @@ export default function SaleForm({ sale, onClose, onSaved }) {
             <SearchSelect value={v.client} onChange={(id) => pickClient(id)} disabled={fromOrder} placeholder={tr('Mijozni tanlang…')}
               options={(clients.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.phone }))}
               onCreate={async (name) => {
-                const n = name || window.prompt(tr('Yangi mijoz nomi'))
+                const n = name || await promptDialog(tr('Yangi mijoz nomi'))
                 if (!n) return
                 try { const { data } = await api.post('/crm/counterparties/', { name: n }); clients.reload(); pickClient(data.id) } catch (e) { setError(errorText(e)) }
               }} createLabel={tr('Yangi mijoz')} />

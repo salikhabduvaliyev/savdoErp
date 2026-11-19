@@ -97,6 +97,8 @@ class TechCard(TenantModel, TimeStamped):
     output_qty = qty_field(default=Decimal("1"))
     process = models.ForeignKey(TechProcess, null=True, blank=True, on_delete=models.PROTECT, related_name="techcards")
     note = models.CharField(max_length=300, blank=True)
+    instructions = models.TextField(blank=True, help_text="Ishlab chiqarish ko'rsatmasi (MoySklad: Инструкции)")
+    extra_cost = money_field(help_text="Qo'shimcha xarajat chiqish miqdori uchun, mahsulot valyutasida (MoySklad: Деньги)")
     is_active = models.BooleanField(default=True)
 
     class Meta:

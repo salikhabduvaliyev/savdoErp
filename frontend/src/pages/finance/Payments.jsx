@@ -10,6 +10,7 @@ import { Badge, Loading, Modal, MoneyBag, Stat, toast, useFetch } from '../../co
 import { curLabel } from '../../currency'
 import { date, money, todayISO } from '../../format'
 import { t } from '../../i18n'
+import { confirmDialog, promptDialog } from '../../components/Confirm'
 
 /* Hujjat turlari: yo'nalish + hisob turi (kassa/bank) */
 const DOC = {
@@ -71,7 +72,7 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
     } catch (err) { setError(errorText(err)) } finally { setBusy(false) }
   }
   const remove = async () => {
-    if (!window.confirm(t("O'chirilsinmi?"))) return
+    if (!await confirmDialog(t("O'chirilsinmi?"))) return
     try { await api.delete(`/finance/transactions/${item.id}/`); toast(t("O'chirildi")); onSaved(true) } catch (err) { setError(errorText(err)) }
   }
   const pick = (d) => {
@@ -106,7 +107,7 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
               empty={dir === 'in' ? undefined : '—'} placeholder={t('Kontragentni tanlang…')}
               options={(cps.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.phone }))}
               onCreate={async (name) => {
-                const n = name || window.prompt(t('Yangi kontragent nomi'))
+                const n = name || await promptDialog(t('Yangi kontragent nomi'))
                 if (!n) return
                 try { const { data } = await api.post('/crm/counterparties/', { name: n }); cps.reload(); set('counterparty', data.id) } catch (e) { setError(errorText(e)) }
               }} createLabel={t('Yangi kontragent')} />
@@ -232,7 +233,7 @@ export default function Payments({ onChanged }) {
   const { rows, pager } = usePager(data?.results, 50, JSON.stringify(q))
   const reload = () => { setStamp((s) => s + 1); onChanged?.() }
   const removeSel = async () => {
-    if (!window.confirm(t("Tanlangan to'lovlar o'chirilsinmi?"))) return
+    if (!await confirmDialog(t("Tanlangan to'lovlar o'chirilsinmi?"))) return
     let n = 0
     for (const id of selected) { try { await api.delete(`/finance/transactions/${id}/`); n++ } catch (e) { toast(errorText(e), true) } }
     toast(t('Bajarildi: {n} ta', { n }))

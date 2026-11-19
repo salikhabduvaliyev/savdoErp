@@ -335,66 +335,20 @@ class StockDocViewSet(viewsets.ModelViewSet):
         return Response(StockDocSerializer(doc).data, status=201)
 
 
-def _turnover(request):
-    """Aylanma (MoySklad "Обороты"): davr boshi, kirim, chiqim, davr oxiri — material va ombor bo'yicha."""
-    p = request.query_params
-    d1 = date_cls.fromisoformat(p["date_from"]) if p.get("date_from") else date_cls.today().replace(day=1)
-    d2 = date_cls.fromisoformat(p["date_to"]) if p.get("date_to") else date_cls.today()
-    moves = StockMove.objects.all()
-    if p.get("warehouse"):
-        wid = int(p["warehouse"])
-        moves = moves.filter(Q(warehouse_id=wid) | Q(to_warehouse_id=wid))
-    else:
-        wid = None
-    if p.get("group"):
-        moves = moves.filter(material__group_id=p["group"])
-
-    def signed(qs, before):
-        res = defaultdict(lambda: [Decimal("0"), Decimal("0")])  # [kirim, chiqim]
-        for mv in qs.values("material_id", "type", "qty", "warehouse_id", "to_warehouse_id"):
-            q = Decimal(mv["qty"])
-            inc = out = Decimal("0")
-            if mv["type"] == "in":
-                inc = q
-            elif mv["type"] == "out":
-                out = q
-            elif mv["type"] == "adjust":
-                inc, out = (q, Decimal("0")) if q > 0 else (Decimal("0"), -q)
-            elif mv["type"] == "transfer":
-                if wid is None:
-                    continue  # umumiy hisobda ko'chirish qoldiqni o'zgartirmaydi
-                if mv["to_warehouse_id"] == wid:
-                    inc = q
-                if mv["warehouse_id"] == wid:
-                    out = q
-            r = res[mv["material_id"]]
-            r[0] += inc
-            r[1] += out
-        return res
-
-    opening = signed(moves.filter(date__lt=d1), True)
-    period = signed(moves.filter(date__range=(d1, d2)), False)
-    ids = set(opening) | set(period)
-    mats = {m.id: m for m in Material.objects.filter(id__in=ids)}
-    rows = []
-    for mid in ids:
-        m = mats.get(mid)
-        if not m:
-            continue
-        o = opening[mid][0] - opening[mid][1] if mid in opening else Decimal("0")
-        i, out = period[mid] if mid in period else (Decimal("0"), Decimal("0"))
-        stock = Stock.objects.filter(material_id=mid, **({"warehouse_id": wid} if wid else {})).aggregate(v=Sum("avg_cost"))
-        rows.append({"material": mid, "name": m.name, "code": m.sku, "unit": m.get_unit_display(),
-                     "opening": str(o), "income": str(i), "outcome": str(out), "closing": str(o + i - out),
-                     "currency": m.currency, "avg_cost": str(stock["v"] or m.purchase_price)})
-    rows.sort(key=lambda r: r["name"])
-    return Response({"date_from": d1, "date_to": d2, "rows": rows})
-
-
 from rest_framework.decorators import api_view, permission_classes  # noqa: E402
 
 
 @api_view(["GET"])
 @permission_classes([module_perm("warehouse")])
 def turnover(request):
-    return _turnover(request)
+    from .turnover import turnover_rows
+    return Response(turnover_rows(request.query_params))
+
+
+@api_view(["GET"])
+@permission_classes([module_perm("warehouse")])
+def turnover_moves(request):
+    from .turnover import material_moves
+    if not request.query_params.get("material"):
+        raise ValidationError({"material": "Tovarni tanlang"})
+    return Response(material_moves(request.query_params))

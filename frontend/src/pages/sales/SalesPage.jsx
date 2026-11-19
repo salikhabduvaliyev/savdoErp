@@ -14,6 +14,7 @@ import { BulkMenu, DropMenu, SearchSelect, usePager } from '../../components/Con
 import { DocList } from '../warehouse/StockDocs'
 import Icon, { IconBtn } from '../../components/Icon'
 import { curLabel, CurrencyOptions } from '../../currency'
+import { confirmDialog } from '../../components/Confirm'
 
 const STATUSES = [['draft', tr("Qoralama")], ['completed', tr("Yakunlangan")], ['cancelled', tr("Bekor qilingan")]]
 const cur = curLabel
@@ -107,7 +108,7 @@ function SaleCard({ id, onClose, onChanged }) {
   }
   const remove = async () => {
     const msg = tr("Sotuv o'chirilsinmi?") + (s.status === 'completed' ? '\n' + tr('Tovarlar omborga qaytariladi.') : '') + (Number(s.paid) > 0 ? '\n' + tr("To'lovlar o'chirilmaydi — mijozning avansi bo'lib qoladi.") : '')
-    if (!window.confirm(msg)) return
+    if (!await confirmDialog(msg)) return
     try { await api.delete(`/sales/${id}/`); toast(tr("O'chirildi")); onChanged(); onClose() } catch (e) { toast(errorText(e), true) }
   }
   const editable = canEdit(user, 'sales') && s.status !== 'cancelled'
@@ -233,7 +234,7 @@ function SalesList() {
   const { rows: pageRows, pager } = usePager(data?.results, 50, JSON.stringify(q))
   const toggleRow = (id) => setSelected((x) => (x.includes(id) ? x.filter((y) => y !== id) : [...x, id]))
   const bulk = async (action, confirmText) => {
-    if (confirmText && !window.confirm(confirmText)) return
+    if (confirmText && !await confirmDialog(confirmText)) return
     try {
       const { data: r } = await api.post('/sales/bulk/', { ids: selected, action })
       if (r.errors?.length) toast(r.errors.join('\n'), true)

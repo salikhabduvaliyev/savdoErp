@@ -285,9 +285,9 @@ select.chip { border-radius: 9px; }
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field label { font-size: 12.5px; font-weight: 500; color: var(--text-2); }
 .field input, .field select, .field textarea,
-:is(.doc-field-input, .inline-pick, .price-row, .filter-grid, .pnl-filter, .prof-dates, .side-form .row, .table-toolbar) :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; font: inherit; background: var(--input-bg); color: var(--text); transition: border-color .12s, box-shadow .12s; }
+:is(.doc-field-input, .inline-pick, .price-row, .filter-grid, .pnl-filter, .prof-dates, .confirm-box, .side-form .row, .table-toolbar) :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; font: inherit; background: var(--input-bg); color: var(--text); transition: border-color .12s, box-shadow .12s; }
 .field input:focus, .field select:focus, .field textarea:focus,
-:is(.doc-field-input, .inline-pick, .price-row, .filter-grid, .prof-dates, .side-form .row, .table-toolbar) :is(input, select, textarea):focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+:is(.doc-field-input, .inline-pick, .price-row, .filter-grid, .prof-dates, .confirm-box, .side-form .row, .table-toolbar) :is(input, select, textarea):focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
 .field input:disabled, .field select:disabled,
 :is(.doc-field-input, .inline-pick, .price-row, .side-form .row) :is(input, select, textarea):disabled { background: var(--surface-2); color: var(--muted); }
 .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
@@ -779,3 +779,42 @@ table.t.prof-t td, table.t.prof-t th { padding-left: 7px; padding-right: 7px; }
 .base-cur > div { flex: 1; }
 .base-cur-label { font-weight: 600; margin-bottom: 2px; }
 .base-cur select { min-width: 240px; border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; font: inherit; background: var(--input-bg); color: var(--text); }
+
+/* Tasdiqlash modali (confirmDialog / promptDialog) */
+.confirm-back { z-index: 200; align-items: flex-start; padding-top: 18vh; }
+.confirm-box { max-width: 440px; padding: 22px 24px 18px; }
+.confirm-msg p { margin: 0 0 6px; line-height: 1.5; }
+.confirm-msg p:first-child { font-weight: 600; font-size: 15px; }
+.confirm-input { width: 100%; margin-top: 10px; }
+.confirm-box .form-actions { margin-top: 16px; }
+
+/* Aylanma (Обороты) */
+.turn-filter { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; }
+.turn-filter > label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--text-2); }
+.turn-filter > label.turn-moved { flex-direction: row; align-items: center; padding-bottom: 10px; }
+.turn-filter :is(input:not([type=checkbox]), select) { border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; font: inherit; background: var(--input-bg); color: var(--text); }
+.turn-filter :is(input, select):focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+.turn-t th.grp { text-align: center; border-left: 1px solid var(--border); }
+.turn-t th.sub { font-size: 11px; }
+.turn-t .grp-l { border-left: 1px solid var(--border); }
+.turn-t tr.selected td { background: color-mix(in srgb, var(--primary) 9%, transparent); }
+.turn-drawer { width: min(1000px, 100%); }
+.turn-sum { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.turn-sum > div { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 3px; }
+.turn-sum span { font-size: 12px; color: var(--muted); }
+.turn-sum b { font-size: 16px; }
+@media (max-width: 640px) { .turn-sum { grid-template-columns: repeat(2, 1fr); } }
+
+/* Texnologik karta */
+.tc-tabs { align-items: flex-end; }
+.tc-tabs > button { background: none; border: 0; padding: 8px 14px; font: inherit; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.tc-tabs > button:hover { color: var(--text); }
+.tc-tabs > button.active { color: var(--text); border-bottom-color: var(--primary); }
+.tc-tab-act { margin-left: auto; padding-bottom: 6px; }
+.tc-mat tr.tc-stage-start td { border-top: 2px solid var(--border-strong); }
+.tc-add { padding: 10px 12px; border-top: 1px solid var(--border); }
+.tc-instr { width: 100%; border: 1px solid var(--border-strong); border-radius: 9px; padding: 10px 12px; font: inherit; background: var(--input-bg); color: var(--text); resize: vertical; }
+.om-products { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.om-prod { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 220px; }
+.om-prod.warn { border-color: color-mix(in srgb, var(--red) 45%, var(--border)); }
+tr.om-src td { background: var(--surface-2); font-size: 12.5px; color: var(--text-2); padding-left: 40px; }

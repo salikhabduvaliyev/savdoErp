@@ -7,6 +7,7 @@ import { date, money } from '../../format'
 import { t } from '../../i18n'
 import { curLabel, CurrencyOptions } from '../../currency'
 import { BulkMenu, SearchSelect, usePager } from '../../components/Controls'
+import { confirmDialog } from '../../components/Confirm'
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const STATUSES = [
@@ -62,7 +63,7 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
   // MoySklad "Изменить": tanlanganlar ustida amal
   const bulk = async (action, extra = {}, confirmText) => {
     if (!selected.length) return
-    if (confirmText && !window.confirm(confirmText)) return
+    if (confirmText && !await confirmDialog(confirmText)) return
     try {
       const { data: r } = await api.post('/orders/bulk/', { ids: selected, action, ...extra })
       if (r.errors?.length) toast(r.errors.join('\n'), true)

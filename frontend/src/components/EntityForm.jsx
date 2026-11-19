@@ -3,6 +3,7 @@ import api, { errorText } from '../api'
 import { Field, FullPage, Modal, toast } from './ui'
 import Icon from './Icon'
 import { t } from '../i18n'
+import { confirmDialog } from './Confirm'
 
 /**
  * Oddiy CRUD forma.
@@ -40,7 +41,7 @@ export default function EntityForm({ title, url, item, fields, defaults = {}, on
   }
 
   const remove = async () => {
-    if (!window.confirm(t("O'chirilsinmi?") + (title ? `
+    if (!await confirmDialog(t("O'chirilsinmi?") + (title ? `
 ${t(title)}` : ''))) return
     setBusy(true)
     try {

@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { canEdit, useAuth } from '../../auth'
 import { Warehouses } from '../company/CompanyPage'
-import { DocList, Turnover } from './StockDocs'
+import { DocList } from './StockDocs'
+import { groupOptions, Turnover } from './Turnover'
 import { Link } from 'react-router-dom'
 import { Badge, Loading, Modal, MoneyBag, useFetch } from '../../components/ui'
 import Icon from '../../components/Icon'
@@ -22,19 +23,6 @@ const EXPORT_FMTS = [
   ['pdf', 'PDF formatida (chop etish → PDF sifatida saqlash)', 'print'],
   ['csv', 'CSV formatida yuklab olish', 'download'],
 ]
-
-/** Guruhlar daraxti → chekinishli ro'yxat */
-function groupOptions(groups) {
-  const kids = {}
-  groups.forEach((g) => { (kids[g.parent || 0] = kids[g.parent || 0] || []).push(g) })
-  const out = []
-  const walk = (pid, depth) => (kids[pid] || []).sort((x, y) => x.name.localeCompare(y.name)).forEach((g) => {
-    out.push([g.id, '   '.repeat(depth) + g.name])
-    walk(g.id, depth + 1)
-  })
-  walk(0, 0)
-  return out
-}
 
 /* Qoldiqlarni yuklab olish (MoySklad "Печать / Экспорт": brauzerda, Excel, PDF, CSV) */
 function StockExport({ params, rows, totals, title, onClose }) {

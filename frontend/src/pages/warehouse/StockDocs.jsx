@@ -11,6 +11,7 @@ import { convertPrice, CurrencyOptions, curLabel, baseCurrency } from '../../cur
 import { date, money, qty, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { DropMenu, SearchSelect, usePager } from '../../components/Controls'
+import { confirmDialog, promptDialog } from '../../components/Confirm'
 
 /* Hujjat turlari sozlamasi */
 export const DOC_TYPES = {
@@ -139,11 +140,11 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
     } catch (err) { setError(errorText(err)) }
   }
   const remove = async () => {
-    if (!window.confirm(t("Hujjat o'chirilsinmi?") + (v.posted ? `\n${t("Qoldiqlar qaytariladi.")}` : ''))) return
+    if (!await confirmDialog(t("Hujjat o'chirilsinmi?") + (v.posted ? `\n${t("Qoldiqlar qaytariladi.")}` : ''))) return
     try { await api.delete(`/warehouse/docs/${docId}/?type=${type}`); toast(t("O'chirildi")); onSaved() } catch (err) { setError(errorText(err)) }
   }
-  const close = () => {
-    if (dirty && !window.confirm(t("Saqlanmagan o'zgarishlar bor. Yopilsinmi?"))) return
+  const close = async () => {
+    if (dirty && !await confirmDialog(t("Saqlanmagan o'zgarishlar bor. Yopilsinmi?"))) return
     if (changed) onSaved()
     else onClose()
   }
@@ -226,7 +227,7 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
               <SearchSelect value={v.counterparty || ''} onChange={(id) => set('counterparty', id)} disabled={!editable}
                 options={(parties.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.phone }))}
                 onCreate={async (name) => {
-                  const n = name || window.prompt(t('Yangi kontragent nomi'))
+                  const n = name || await promptDialog(t('Yangi kontragent nomi'))
                   if (!n) return
                   try { const { data } = await api.post('/crm/counterparties/', { name: n }); parties.reload(); set('counterparty', data.id) } catch (e) { setError(errorText(e)) }
                 }} createLabel={t('Yangi kontragent')} />
@@ -431,44 +432,5 @@ export function DocList({ type }) {
         />
       )}
     </>
-  )
-}
-
-/* ------------------------------------------------------------ aylanma (Обороты) */
-export function Turnover() {
-  const first = todayISO().slice(0, 8) + '01'
-  const [f, setF] = useState({ date_from: first, date_to: todayISO(), warehouse: '' })
-  const warehouses = useFetch('/warehouse/warehouses/')
-  const { rows: pageRows, pager } = usePager(data?.rows, 50, JSON.stringify(f))
-  const { data, error } = useFetch('/warehouse/turnover/', Object.fromEntries(Object.entries(f).filter(([, x]) => x)))
-  return (
-    <div className="table-wrap">
-      <div className="table-toolbar filters">
-        <input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—
-        <input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} />
-        <select value={f.warehouse} onChange={(e) => setF({ ...f, warehouse: e.target.value })}>
-          <option value="">{t('Ombor: hammasi')}</option>
-          {(warehouses.data || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-        </select>
-      </div>
-      {!data ? <Loading error={error} /> : (
-        <table className="t">
-          <thead><tr><th>{t('Tovar')}</th><th>{t('Birlik')}</th><th className="num">{t('Davr boshida')}</th><th className="num">{t('Kirim')}</th><th className="num">{t('Chiqim')}</th><th className="num">{t('Davr oxirida')}</th></tr></thead>
-          <tbody>
-            {pageRows.map((r) => (
-              <tr key={r.material}>
-                <td>{r.code && <b className="pos-code">{r.code}</b>} {r.name}</td><td className="muted">{t(r.unit)}</td>
-                <td className="num">{qty(r.opening)}</td>
-                <td className="num green">{Number(r.income) ? '+' + qty(r.income) : '—'}</td>
-                <td className="num red">{Number(r.outcome) ? '−' + qty(r.outcome) : '—'}</td>
-                <td className="num bold">{qty(r.closing)}</td>
-              </tr>
-            ))}
-            {!data.rows.length && <tr><td colSpan={6} className="empty">{t("Davrda harakat yo'q")}</td></tr>}
-          </tbody>
-        </table>
-      )}
-      {pager}
-    </div>
   )
 }

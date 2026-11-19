@@ -6,6 +6,7 @@ import Icon, { IconBtn } from '../../components/Icon'
 import { Badge, Field, Loading, Modal, toast, useFetch } from '../../components/ui'
 import { date, num, todayISO } from '../../format'
 import { t } from '../../i18n'
+import { confirmDialog } from '../../components/Confirm'
 
 function CurrencyForm({ item, onClose, onSaved }) {
   const cbu = useFetch(item ? null : '/core/currencies/cbu/')
@@ -72,7 +73,7 @@ function RateHistory({ cur, editable, onChanged }) {
     try { await api.patch(`/core/rates/${edit.id}/`, { rate: edit.rate, source: "qo'lda" }); setEdit(null); reload() } catch (e) { toast(errorText(e), true) }
   }
   const remove = async (r) => {
-    if (!window.confirm(t("O'chirilsinmi?"))) return
+    if (!await confirmDialog(t("O'chirilsinmi?"))) return
     try { await api.delete(`/core/rates/${r.id}/`); reload() } catch (e) { toast(errorText(e), true) }
   }
   return (
@@ -131,12 +132,12 @@ export default function Currencies({ editable }) {
   const makeBase = async (code) => {
     const c = (data || []).find((x) => x.code === code)
     if (!c || c.is_base) return
-    if (!window.confirm(t("Asosiy valyuta {c} qilinsinmi?\nHisobotlar va yangi hujjatlar shu valyutada bo'ladi. Mavjud hujjatlar o'zgarmaydi.", { c: `${c.code} — ${t(c.name)}` }))) return
+    if (!await confirmDialog(t("Asosiy valyuta {c} qilinsinmi?\nHisobotlar va yangi hujjatlar shu valyutada bo'ladi. Mavjud hujjatlar o'zgarmaydi.", { c: `${c.code} — ${t(c.name)}` }))) return
     try { await api.post(`/core/currencies/${c.id}/make_base/`); toast(t('Asosiy valyuta: {c}', { c: c.code })); reload() } catch (e) { toast(errorText(e), true) }
   }
   const base = (data || []).find((c) => c.is_base)
   const remove = async (c) => {
-    if (!window.confirm(t("O'chirilsinmi?") + `\n${c.code}`)) return
+    if (!await confirmDialog(t("O'chirilsinmi?") + `\n${c.code}`)) return
     try { await api.delete(`/core/currencies/${c.id}/`); reload() } catch (e) { toast(errorText(e), true) }
   }
   return (

@@ -16,7 +16,7 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import module_perm
 from apps.core.models import SystemSettings
-from apps.core.money import MoneyBag, q2
+from apps.core.money import MoneyBag, convert, q2
 from apps.finance import services as fin
 from apps.orders.models import Order
 from apps.orders.services import order_costing
@@ -36,6 +36,78 @@ def _month_start(d, back=0):
         m += 12
         y -= 1
     return date(y, m, 1)
+
+
+def _base_sum(bag, base):
+    """Ko'p valyutali summani asosiy valyutaga (joriy kurs) — faqat saralash uchun."""
+    total = ZERO
+    for cur, v in bag.items():
+        try:
+            total += convert(Decimal(v), cur, base)
+        except Exception:  # noqa: BLE001 — kurs yo'q
+            total += Decimal(v)
+    return total
+
+
+def _boss_extras(date_from, date_to):
+    """Rahbar uchun: eng ko'p sotilgan 5 tovar, eng katta 5 qarzdor, bizning 5 kreditor, kassa, sotuvlar soni."""
+    from apps.core.currency import company_base_currency
+    from apps.crm.models import Counterparty
+    from apps.sales.models import Sale, SaleItem
+    from apps.warehouse.models import Material, Stock
+
+    base = company_base_currency()
+    # --- eng ko'p sotilgan tovarlar (yakunlangan sotuvlar, davr ichida)
+    items = SaleItem.objects.filter(sale__status=Sale.Status.COMPLETED, sale__date__range=(date_from, date_to),
+                                    product__isnull=False).values("product_id", "product__name", "product__code",
+                                                                  "product__unit", "sale__currency")
+    agg = defaultdict(lambda: {"qty": ZERO, "revenue": MoneyBag(), "profit": MoneyBag(), "base": ZERO})
+    names = {}
+    for r in items.annotate(q=Sum("qty"), a=Sum("amount"), c=Sum("cost_amount")):
+        k = r["product_id"]
+        names[k] = (r["product__name"], r["product__code"], r["product__unit"])
+        g = agg[k]
+        g["qty"] += r["q"] or ZERO
+        g["revenue"].add(r["a"] or ZERO, r["sale__currency"])
+        g["profit"].add((r["a"] or ZERO) - (r["c"] or ZERO), r["sale__currency"])
+    for k, g in agg.items():
+        g["base"] = _base_sum(g["revenue"].as_dict(), base)
+    from apps.production.models import Unit
+
+    units = dict(Unit.choices)
+    top_products = [
+        {"product": k, "name": names[k][0], "code": names[k][1], "unit": units.get(names[k][2], names[k][2]),
+         "qty": str(q2(g["qty"])), "revenue": g["revenue"].as_dict(), "profit": g["profit"].as_dict()}
+        for k, g in sorted(agg.items(), key=lambda kv: -kv[1]["base"])[:5]
+    ]
+
+    def top(rows, key):
+        out = []
+        for r in rows:
+            debt = {c: v for c, v in r["debt"].items() if Decimal(v) > 0}
+            if debt:
+                out.append({"id": r[key], "name": r["name"], "debt": debt, "_s": _base_sum(debt, base)})
+        out.sort(key=lambda x: -x["_s"])
+        return [{k: v for k, v in x.items() if k != "_s"} for x in out[:5]]
+
+    cd, sd = fin.client_debts(), fin.supplier_debts()
+    sales = Sale.objects.filter(status=Sale.Status.COMPLETED, date__range=(date_from, date_to))
+    sales_count = sales.count()
+    low_stock = sum(1 for m in Material.objects.filter(min_qty__gt=0, is_active=True)
+                    if sum((st.qty for st in Stock.objects.filter(material=m)), ZERO) <= m.min_qty)
+    return {
+        "base_currency": base,
+        "top_products": top_products,
+        "top_debtors": top(cd["rows"], "client"),
+        "top_creditors": top(sd["rows"], "supplier"),
+        "cash": fin.balances()["total"],
+        "kpi": {
+            "orders": Order.objects.filter(date__range=(date_from, date_to)).exclude(status=Order.Status.CANCELLED).count(),
+            "sales": sales_count,
+            "new_clients": Counterparty.objects.filter(created_at__date__range=(date_from, date_to)).count(),
+            "low_stock": low_stock,
+        },
+    }
 
 
 @api_view(["GET"])
@@ -83,14 +155,20 @@ def director(request):
         key = _month_start(today, i).strftime("%Y-%m")
         months.append({"month": key, "revenue": monthly[key]["revenue"].as_dict(), "profit": monthly[key]["profit"].as_dict()})
 
-    statuses = {row["status"]: row["n"] for row in Order.objects.values("status").annotate(n=Count("id"))}
+    from apps.orders.models import OrderState, ensure_order_states
+
+    ensure_order_states()
+    st_counts = {row["state"]: row["n"] for row in Order.objects.values("state").annotate(n=Count("id"))}
+    extra = _boss_extras(date_from, date_to)
     return Response({
+        **extra,
         "period": {"from": date_from, "to": date_to},
         "revenue": revenue.as_dict(), "cost": cost.as_dict(), "profit": profit.as_dict(), "margin_pct": margin,
         "monthly": months,
         "worst_orders": worst,
         "debts": {"clients": fin.client_debts()["total"], "suppliers": fin.supplier_debts()["total"]},
-        "statuses": [{"status": v, "label": l, "count": statuses.get(v, 0)} for v, l in Order.Status.choices],
+        "statuses": [{"status": st.kind, "label": st.name, "color": st.color, "count": st_counts.get(st.id, 0)}
+                     for st in OrderState.objects.all()],
         "overdue_orders": Order.objects.filter(plan_date__lt=today).exclude(status__in=Order.CLOSED_STATUSES).count(),
     })
 

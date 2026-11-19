@@ -14,6 +14,7 @@ import { Modal, toast, useFetch } from '../../components/ui'
 import { convertPrice, useCurrencies } from '../../currency'
 import { money, qty } from '../../format'
 import { t } from '../../i18n'
+import { NumInput } from '../../components/Inputs'
 
 let seq = 0
 const key = () => `n${++seq}`
@@ -182,7 +183,7 @@ export function TechCardForm({ item, presetProduct, onClose, onSaved }) {
                   <SearchSelect value={v.product} onChange={(x) => set('product', x)} placeholder={t('— mahsulotni tanlang —')} disabled={!editable}
                     options={(products.data || []).map((p) => ({ value: p.id, label: p.name, sub: p.code }))} />
                 </td>
-                <td className="num"><input className="cell num" type="number" step="any" min="0" value={v.output_qty} disabled={!editable} onChange={(e) => set('output_qty', e.target.value)} /></td>
+                <td className="num"><NumInput className="cell num" step="any" min="0" value={v.output_qty} disabled={!editable} onChange={(e) => set('output_qty', e.target.value)} /></td>
                 <td>{t(prod?.unit_display || item?.product_unit || '')}</td>
                 <td className="num bold">{money((matSum + Number(cost?.labor || 0) * out + Number(v.extra_cost || 0)) / out, pcur)}</td>
               </tr>
@@ -214,7 +215,7 @@ export function TechCardForm({ item, presetProduct, onClose, onSaved }) {
                       ) : (first ? stageName(r.operation) : '')}
                     </td>
                     <td>{r.code && <b className="pos-code">{r.code}</b>} {r.name}</td>
-                    <td className="num"><input className="cell num" type="number" step="any" min="0" value={r.qty} disabled={!editable} onChange={(e) => setRow(r.key, { qty: e.target.value })} /></td>
+                    <td className="num"><NumInput className="cell num" step="any" min="0" value={r.qty} disabled={!editable} onChange={(e) => setRow(r.key, { qty: e.target.value })} /></td>
                     <td className="muted">{t(r.unit)}</td>
                     <td className="num small">{money(r.unit_cost, r.currency)}</td>
                     <td className="num">{money(Number(r.qty || 0) * Number(r.unit_cost || 0), r.currency)}</td>
@@ -241,7 +242,7 @@ export function TechCardForm({ item, presetProduct, onClose, onSaved }) {
               <tr><td>{t("Ish haqi (bosqichlar ishbay stavkasi)")}{!id && <div className="small muted">{t('saqlangandan keyin hisoblanadi')}</div>}</td>
                 <td className="num">{money(Number(cost?.labor || 0) * out, pcur)}</td><td className="num">{money(cost?.labor || 0, pcur)}</td></tr>
               <tr><td>{t("Qo'shimcha xarajatlar")} <span className="muted small">({t('elektr, qadoq, transport…')})</span></td>
-                <td className="num"><input className="cell num" type="number" step="any" min="0" value={v.extra_cost} disabled={!editable} onChange={(e) => set('extra_cost', e.target.value)} /></td>
+                <td className="num"><NumInput className="cell num" step="any" min="0" value={v.extra_cost} disabled={!editable} onChange={(e) => set('extra_cost', e.target.value)} /></td>
                 <td className="num">{money(Number(v.extra_cost || 0) / out, pcur)}</td></tr>
             </tbody>
             <tfoot><tr><td>{t('Rejaviy tannarx')}</td>

@@ -268,4 +268,5 @@ def pnl(request):
 @permission_classes([module_perm("finance")])
 def cash_flow(request):
     df, dt = _period(request)
-    return Response(services.cash_flow(df, dt))
+    p = request.query_params
+    return Response(services.cash_flow(df, dt, group=p.get("group") or "day", account=p.get("account") or None))

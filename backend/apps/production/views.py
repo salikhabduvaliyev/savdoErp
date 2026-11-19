@@ -55,11 +55,12 @@ class DepartmentSerializer(serializers.ModelSerializer):
 class OperationSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.name", read_only=True)
     unit_display = serializers.CharField(source="get_unit_display", read_only=True)
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True, default=None)
 
     class Meta:
         model = Operation
         fields = ["id", "name", "department", "department_name", "unit", "unit_display",
-                  "default_rate", "rate_currency", "piece_rate", "description"]
+                  "default_rate", "rate_currency", "piece_rate", "employee", "employee_name", "description"]
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
@@ -84,7 +85,7 @@ class OperationViewSet(viewsets.ModelViewSet):
     public_read = True
 
     def get_queryset(self):
-        return Operation.objects.select_related("department")
+        return Operation.objects.select_related("department", "employee")
 
     def perform_destroy(self, instance):
         _protected(instance, "Bosqich texjarayon yoki topshiriqlarda ishlatilgan — o'chirib bo'lmaydi")
@@ -391,6 +392,7 @@ class TaskSerializer(serializers.ModelSerializer):
     job_number = serializers.IntegerField(source="job.number", read_only=True, default=None)
     job_title = serializers.SerializerMethodField()
     operation_name = serializers.CharField(source="operation.name", read_only=True)
+    operation_employee = serializers.IntegerField(source="operation.employee_id", read_only=True, default=None)
     department_name = serializers.CharField(source="department.name", read_only=True)
     unit = serializers.CharField(source="operation.get_unit_display", read_only=True)
     piece_rate = serializers.DecimalField(source="operation.piece_rate", max_digits=18, decimal_places=2, read_only=True)
@@ -406,7 +408,7 @@ class TaskSerializer(serializers.ModelSerializer):
         model = ProductionTask
         fields = ["flow",
             "id", "job", "job_number", "job_title", "position", "order", "order_number", "client_name", "operation",
-            "operation_name", "department", "department_name", "unit", "piece_rate", "plan_qty", "done_qty",
+            "operation_name", "operation_employee", "department", "department_name", "unit", "piece_rate", "plan_qty", "done_qty",
             "remaining", "defect_qty", "status", "status_display", "progress", "deadline", "planned_date",
             "is_overdue", "overdue_days", "started_at", "finished_at", "blocked_reason", "drawing", "note", "materials",
         ]
@@ -568,13 +570,27 @@ class TaskViewSet(viewsets.ModelViewSet):
             qs = qs.filter(Q(job__branch_id=bid) | Q(job__branch__isnull=True))
         return qs
 
-    def _employee(self):
+    def _employee(self, task=None):
+        """Ijrochi: so'rovda ko'rsatilgan → bosqichning mas'ul xodimi → joriy foydalanuvchi."""
         from apps.hr.models import Employee
 
         emp_id = self.request.data.get("employee")
         if emp_id:
             return Employee.objects.filter(pk=emp_id).first()
+        if task is not None and task.operation.employee_id:
+            return task.operation.employee
         return getattr(self.request.user, "employee", None)
+
+    def _extra(self):
+        from apps.warehouse.models import Material
+
+        out = []
+        for r in self.request.data.get("extra_materials") or []:
+            m = Material.objects.filter(pk=r.get("material")).first()
+            q = Decimal(str(r.get("qty") or 0))
+            if m and q > 0:
+                out.append((m, q))
+        return out
 
     def _done(self, task):
         task.refresh_from_db()
@@ -598,7 +614,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def report(self, request, pk=None):
         task = self.get_object()
-        task.report(request.data.get("done_qty"), request.data.get("defect_qty"), employee=self._employee(), user=request.user)
+        task.report(request.data.get("done_qty"), request.data.get("defect_qty"), employee=self._employee(task), user=request.user)
         return self._done(task)
 
     @action(detail=True, methods=["post"])
@@ -608,15 +624,15 @@ class TaskViewSet(viewsets.ModelViewSet):
         d = request.data
         services.complete_stage(
             task, Decimal(str(d.get("qty") or 0)), defect_qty=Decimal(str(d.get("defect_qty") or 0)),
-            employee=self._employee(), date=date_cls.fromisoformat(d["date"]) if d.get("date") else None,
-            user=request.user, note=d.get("note", ""),
+            employee=self._employee(task), date=date_cls.fromisoformat(d["date"]) if d.get("date") else None,
+            user=request.user, note=d.get("note", ""), extra_materials=self._extra(),
         )
         return self._done(task)
 
     @action(detail=True, methods=["post"])
     def finish(self, request, pk=None):
         task = self.get_object()
-        task.finish(employee=self._employee(), user=request.user)
+        task.finish(employee=self._employee(task), user=request.user)
         return self._done(task)
 
 

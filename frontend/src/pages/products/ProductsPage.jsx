@@ -12,6 +12,7 @@ import { curLabel, CurrencyOptions, currencyOptions, baseCurrency } from '../../
 import { date, money, qty } from '../../format'
 import { t } from '../../i18n'
 import { confirmDialog } from '../../components/Confirm'
+import { NumInput } from '../../components/Inputs'
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const PRODUCT_TYPES = [
@@ -193,9 +194,9 @@ function ProductPage({ id: id0, newType, defaults, groups, priceTypes, onClose, 
           <hr />
           <div className="row"><label>{t("O'lchov birligi")}</label><select value={v.unit} onChange={set('unit')} disabled={!editable}>{UNITS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
           {!isService && <>
-            <div className="row"><label>{t("Og'irlik, kg")}</label><input type="number" step="any" min="0" value={cleanNum(v.weight)} onChange={set('weight')} disabled={!editable} /></div>
-            <div className="row"><label>{t('Hajm, m³')}</label><input type="number" step="any" min="0" value={cleanNum(v.volume)} onChange={set('volume')} disabled={!editable} /></div>
-            <div className="row"><label>{t('Minimal qoldiq')}</label><input type="number" step="any" min="0" value={cleanNum(v.min_qty)} onChange={set('min_qty')} disabled={!editable} /></div>
+            <div className="row"><label>{t("Og'irlik, kg")}</label><NumInput step="any" min="0" value={cleanNum(v.weight)} onChange={set('weight')} disabled={!editable} /></div>
+            <div className="row"><label>{t('Hajm, m³')}</label><NumInput step="any" min="0" value={cleanNum(v.volume)} onChange={set('volume')} disabled={!editable} /></div>
+            <div className="row"><label>{t('Minimal qoldiq')}</label><NumInput step="any" min="0" value={cleanNum(v.min_qty)} onChange={set('min_qty')} disabled={!editable} /></div>
           </>}
           <div className="row"><label>{t('Faol')}</label><div><input type="checkbox" checked={v.is_active} onChange={set('is_active')} disabled={!editable} style={{ width: 18, height: 18, accentColor: 'var(--primary)' }} /></div></div>
         </div>
@@ -210,12 +211,12 @@ function ProductPage({ id: id0, newType, defaults, groups, priceTypes, onClose, 
             <div className="card price-card">
               <div className="price-row">
                 <label>{t('Minimal narx')}</label>
-                <input type="number" step="any" min="0" value={cleanNum(v.min_price)} onChange={set('min_price')} disabled={!editable} />
+                <NumInput step="any" min="0" value={cleanNum(v.min_price)} onChange={set('min_price')} disabled={!editable} />
                 <select value={v.min_price_currency} onChange={set('min_price_currency')} disabled={!editable}><CurrencyOptions withName value={v.min_price_currency} /></select>
               </div>
               <div className="price-row">
                 <label>{t('Xarid narxi')}</label>
-                <input type="number" step="any" min="0" value={cleanNum(v.purchase_price)} onChange={set('purchase_price')} disabled={!editable} />
+                <NumInput step="any" min="0" value={cleanNum(v.purchase_price)} onChange={set('purchase_price')} disabled={!editable} />
                 <select value={v.currency} onChange={set('currency')} disabled={!editable}><CurrencyOptions withName value={v.currency} /></select>
               </div>
               {v.avg_cost && <div className="hint" style={{ margin: '0 0 8px 170px' }}>{t("O'rtacha tannarx (ombor bo'yicha)")}: <b>{money(v.avg_cost, v.currency)}</b></div>}
@@ -223,7 +224,7 @@ function ProductPage({ id: id0, newType, defaults, groups, priceTypes, onClose, 
               {priceTypes.map((p) => (
                 <div key={p.id} className="price-row">
                   <label>{p.name}{p.is_default && <span className="muted small"> · {t('asosiy')}</span>}</label>
-                  <input type="number" step="any" min="0" value={prices[p.id] ?? ''} placeholder="0" disabled={!editable}
+                  <NumInput step="any" min="0" value={prices[p.id] ?? ''} placeholder="0" disabled={!editable}
                     onChange={(e) => { setPrices({ ...prices, [p.id]: e.target.value }); setDirty(true) }} />
                   <span className="price-cur">{curLabel(p.currency)}</span>
                 </div>

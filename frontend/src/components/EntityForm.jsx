@@ -4,6 +4,7 @@ import { Field, FullPage, Modal, toast } from './ui'
 import Icon from './Icon'
 import { t } from '../i18n'
 import { confirmDialog } from './Confirm'
+import { DateInput, NumInput } from './Inputs'
 
 /**
  * Oddiy CRUD forma.
@@ -86,8 +87,10 @@ ${t(title)}` : ''))) return
             )
           } else {
             input = (
-              <input type={f.type || 'text'} step={f.step || (f.type === 'number' ? 'any' : undefined)} value={values[f.name] ?? ''}
-                onChange={(e) => set(f.name, e.target.value)} placeholder={f.placeholder} {...common} />
+              f.type === 'number' ? <NumInput value={values[f.name] ?? ''} onChange={(e) => set(f.name, e.target.value)} placeholder={f.placeholder} {...common} />
+                : f.type === 'date' ? <DateInput value={values[f.name] ?? ''} onChange={(e) => set(f.name, e.target.value)} placeholder={f.placeholder} {...common} />
+                  : <input type={f.type || 'text'} step={f.step} value={values[f.name] ?? ''}
+                    onChange={(e) => set(f.name, e.target.value)} placeholder={f.placeholder} {...common} />
             )
           }
           return [header, <Field key={f.name} label={f.label} full={f.full}>{input}</Field>]

@@ -8,6 +8,7 @@ import Icon from '../../components/Icon'
 import { date, money, qty, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { StockDocForm } from './StockDocs'
+import { DateInput } from '../../components/Inputs'
 
 /** Guruhlar daraxti → chekinishli ro'yxat */
 export function groupOptions(groups) {
@@ -58,8 +59,8 @@ export function Turnover() {
               ))}
             </div>
             <div className="inline-pick">
-              <input type="date" value={f.date_from} onChange={(e) => set('date_from', e.target.value)} />—
-              <input type="date" value={f.date_to} onChange={(e) => set('date_to', e.target.value)} />
+              <DateInput value={f.date_from} onChange={(e) => set('date_from', e.target.value)} />—
+              <DateInput value={f.date_to} onChange={(e) => set('date_to', e.target.value)} />
             </div>
           </label>
           <label>{t('Ombor')}

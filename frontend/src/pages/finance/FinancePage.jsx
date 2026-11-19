@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Loading, MoneyBag, Stat, toast, useFetch } from '../../components/ui'
-import { money, monthLabel } from '../../format'
+import { date, money, monthLabel } from '../../format'
 import TransactionForm from './TransactionForm'
 import Payments from './Payments'
 import { t as tr } from '../../i18n'
 import { CurrencyOptions, curLabel, baseCurrency } from '../../currency'
 import Icon from '../../components/Icon'
+import { DateInput } from '../../components/Inputs'
 
 function Debts({ kind }) {
   const { data, error } = useFetch(kind === 'clients' ? '/finance/client-debts/' : '/finance/supplier-debts/')
@@ -60,8 +61,8 @@ function Pnl() {
               ))}
             </div>
             <div className="inline-pick">
-              <input type="date" value={period.date_from} onChange={(e) => setPeriod({ ...period, date_from: e.target.value })} />—
-              <input type="date" value={period.date_to} onChange={(e) => setPeriod({ ...period, date_to: e.target.value })} />
+              <DateInput value={period.date_from} onChange={(e) => setPeriod({ ...period, date_from: e.target.value })} />—
+              <DateInput value={period.date_to} onChange={(e) => setPeriod({ ...period, date_to: e.target.value })} />
             </div>
           </label>
           <label>{tr('Hisobot valyutasi')}
@@ -107,25 +108,68 @@ function Pnl() {
   )
 }
 
+/* MoySklad "Движение денежных средств": tanlangan davr ichida kunlik (yoki oylik) */
 function CashFlow() {
-  const { data, error } = useFetch('/finance/cash-flow/', { date_from: `${new Date().getFullYear()}-01-01` })
-  if (!data) return <Loading error={error} />
+  const [period, setPeriod] = useState(() => periodOf('month'))
+  const [group, setGroup] = useState('day')
+  const [account, setAccount] = useState('')
+  const accounts = useFetch('/finance/accounts/')
+  const { data, error } = useFetch('/finance/cash-flow/', { ...period, group, account: account || undefined })
+  const label = (r) => (group === 'month' ? monthLabel(r.month) : date(r.key))
   return (
-    <div className="table-wrap">
-      <table className="t">
-        <thead><tr><th>{tr("Oy")}</th><th className="num">{tr("Kirim")}</th><th className="num">{tr("Chiqim")}</th><th className="num">{tr("Sof oqim")}</th></tr></thead>
-        <tbody>
-          {data.map((r) => (
-            <tr key={r.month}>
-              <td>{monthLabel(r.month)}</td>
-              <td className="num green"><MoneyBag bag={r.in} /></td>
-              <td className="num red"><MoneyBag bag={r.out} /></td>
-              <td className="num bold"><MoneyBag bag={r.net} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="filter-panel card">
+        <div className="pnl-filter">
+          <label>{tr('Davr')}
+            <div className="period-links">
+              {[['day', tr('bugun')], ['week', tr('hafta')], ['month', tr('oy')], ['quarter', tr('chorak')], ['year', tr('yil')]].map(([k, l], i) => (
+                <span key={k}>{i > 0 && '·'}<button type="button" className="link-btn" onClick={() => setPeriod(periodOf(k))}>{l}</button></span>
+              ))}
+            </div>
+            <div className="inline-pick">
+              <DateInput value={period.date_from} onChange={(e) => setPeriod({ ...period, date_from: e.target.value })} />—
+              <DateInput value={period.date_to} onChange={(e) => setPeriod({ ...period, date_to: e.target.value })} />
+            </div>
+          </label>
+          <label>{tr('Hisob (kassa/bank)')}
+            <select value={account} onChange={(e) => setAccount(e.target.value)}>
+              <option value="">{tr('Hammasi')}</option>
+              {(accounts.data?.results || accounts.data || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          <label>{tr('Guruhlash')}
+            <div className="segmented">
+              <button type="button" className={group === 'day' ? 'active' : ''} onClick={() => setGroup('day')}>{tr('Kunlik')}</button>
+              <button type="button" className={group === 'month' ? 'active' : ''} onClick={() => setGroup('month')}>{tr('Oylik')}</button>
+            </div>
+          </label>
+        </div>
+      </div>
+      {!data ? <Loading error={error} /> : (
+        <div className="table-wrap">
+          <table className="t">
+            <thead><tr><th>{group === 'month' ? tr('Oy') : tr('Sana')}</th><th className="num">{tr('Kirim')}</th><th className="num">{tr('Chiqim')}</th><th className="num">{tr('Sof oqim')}</th><th className="num">{tr('Qoldiq')}</th></tr></thead>
+            <tbody>
+              <tr className="muted"><td>{tr('Davr boshidagi qoldiq')} ({date(data.date_from)})</td><td /><td /><td /><td className="num bold"><MoneyBag bag={data.opening} /></td></tr>
+              {data.rows.map((r) => (
+                <tr key={r.key}>
+                  <td>{label(r)}</td>
+                  <td className="num green"><MoneyBag bag={r.in} /></td>
+                  <td className="num red"><MoneyBag bag={r.out} /></td>
+                  <td className="num bold"><MoneyBag bag={r.net} /></td>
+                  <td className="num"><MoneyBag bag={r.balance} /></td>
+                </tr>
+              ))}
+              {!data.rows.length && <tr><td colSpan={5} className="empty">{tr("Davrda pul harakati yo'q")}</td></tr>}
+            </tbody>
+            <tfoot>
+              <tr><td>{tr('Jami davr uchun')}</td><td className="num green"><MoneyBag bag={data.totals.in} /></td><td className="num red"><MoneyBag bag={data.totals.out} /></td>
+                <td className="num"><MoneyBag bag={data.totals.net} /></td><td className="num"><MoneyBag bag={data.closing} /></td></tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </>
   )
 }
 

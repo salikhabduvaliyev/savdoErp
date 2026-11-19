@@ -7,12 +7,14 @@ import { date, pct, qty, shortDate } from '../../format'
 import { cleanNum } from '../../components/DocEditor'
 import { t as tr } from '../../i18n'
 import { promptDialog } from '../../components/Confirm'
+import ExtraMaterials, { extraPayload } from './ExtraMaterials'
 
 /* Bo'lim ekrani (ishni boshlash): katta tugmalar, ketma-ket bosqichlar, ijrochi — kirgan xodim */
 function TaskCard({ t, onDone, employees, me }) {
   const ready = Number(t.flow?.ready ?? t.remaining)
   const [done, setDone] = useState('')
-  const myEmp = me && employees.some((e) => e.id === me.id) ? String(me.id) : ''
+  const myEmp = t.operation_employee ? String(t.operation_employee) : me && employees.some((e) => e.id === me.id) ? String(me.id) : ''
+  const [extra, setExtra] = useState([])
   const [emp, setEmp] = useState(myEmp)
   const [busy, setBusy] = useState(false)
   const call = async (action, body) => {
@@ -86,7 +88,7 @@ function TaskCard({ t, onDone, employees, me }) {
               {employees.map((x) => <option key={x.id} value={x.id}>{x.full_name}{me && x.id === me.id ? ` (${tr('men')})` : ''}</option>)}
             </select>
             <button className="btn success huge" disabled={busy || !(amount > 0) || amount > ready}
-              onClick={() => { call('complete', { qty: amount, employee: emp || undefined }); setDone('') }}>
+              onClick={() => { call('complete', { qty: amount, employee: emp || undefined, extra_materials: extraPayload(extra) }); setDone(''); setExtra([]) }}>
               ✓ {tr('Bajarildi')} {qty(amount)} {unit}
             </button>
             {t.status === 'in_progress' && (
@@ -95,6 +97,7 @@ function TaskCard({ t, onDone, employees, me }) {
           </>
         )}
       </div>
+      {running && <ExtraMaterials compact value={extra} onChange={setExtra} />}
       {running && amount > ready && <div className="red small">{tr('Oldingi bosqichdan faqat {n} keldi', { n: qty(ready) })}</div>}
     </div>
   )

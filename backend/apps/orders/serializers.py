@@ -29,7 +29,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source="client.name", read_only=True)
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    status_display = serializers.CharField(source="state_name", read_only=True)
+    state_color = serializers.CharField(source="state.color", read_only=True, default=None)
     manager_name = serializers.CharField(source="manager.full_name", read_only=True, default=None)
     operator_name = serializers.CharField(source="operator.full_name", read_only=True, default=None)
     paid = serializers.SerializerMethodField()
@@ -45,12 +46,12 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             "id", "number", "date", "client", "client_name", "currency", "amount", "volume",
-            "paid", "debt", "status", "status_display", "stage", "progress",
+            "paid", "debt", "status", "state", "state_color", "status_display", "stage", "progress",
             "plan_date", "production_date", "delivered_at", "is_overdue", "overdue_days",
             "manager", "manager_name", "operator", "operator_name", "note", "is_sold", "branch", "branch_name", "extra",
             "items", "production_orders",
         ]
-        read_only_fields = ["number", "delivered_at"]
+        read_only_fields = ["number", "delivered_at", "state"]
         extra_kwargs = {"amount": {"required": False}}
 
     items = OrderItemSerializer(many=True, required=False)

@@ -11,6 +11,7 @@ import { curLabel } from '../../currency'
 import { date, money, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { confirmDialog, promptDialog } from '../../components/Confirm'
+import { DateInput, NumInput } from '../../components/Inputs'
 
 /* Hujjat turlari: yo'nalish + hisob turi (kassa/bank) */
 const DOC = {
@@ -115,7 +116,7 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
         </div>
         <div>
           <DocField label="Summa" required>
-            <div className="inline-pick"><input type="number" step="any" min="0" value={v.amount} onChange={(e) => set('amount', e.target.value)} disabled={!editable} className="big-num" />
+            <div className="inline-pick"><NumInput step="any" min="0" value={v.amount} onChange={(e) => set('amount', e.target.value)} disabled={!editable} className="big-num" />
               <span className="muted">{acc ? curLabel(acc.currency) : ''}</span></div>
           </DocField>
           {dir === 'out' && (
@@ -161,7 +162,7 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
         {linkedDoc && acc && linkedDoc.currency !== acc.currency && (
           <div className="positions-add">
             <span>{t('Hujjat valyutasida ({c})', { c: curLabel(linkedDoc.currency) })}:</span>
-            <input type="number" step="any" style={{ width: 160 }} value={v.order_amount} placeholder={t('bo\'sh — kurs bo\'yicha')} onChange={(e) => set('order_amount', e.target.value)} />
+            <NumInput step="any" style={{ width: 160 }} value={v.order_amount} placeholder={t('bo\'sh — kurs bo\'yicha')} onChange={(e) => set('order_amount', e.target.value)} />
           </div>
         )}
         {item && (item.order || item.sale) && !linkedDoc && (
@@ -190,11 +191,11 @@ function TransferForm({ onClose, onSaved }) {
       <div className="form">
         <label className="field"><span>{t('Qaysi hisobdan')}</span><SearchSelect value={v.from_account} onChange={(id) => setV({ ...v, from_account: id })} options={opts} /></label>
         <label className="field"><span>{t('Qaysi hisobga')}</span><SearchSelect value={v.to_account} onChange={(id) => setV({ ...v, to_account: id })} options={opts.filter((o) => String(o.value) !== String(v.from_account))} /></label>
-        <label className="field"><span>{t('Summa')}{src ? ` (${curLabel(src.currency)})` : ''}</span><input type="number" step="any" value={v.amount} onChange={(e) => setV({ ...v, amount: e.target.value })} /></label>
+        <label className="field"><span>{t('Summa')}{src ? ` (${curLabel(src.currency)})` : ''}</span><NumInput step="any" value={v.amount} onChange={(e) => setV({ ...v, amount: e.target.value })} /></label>
         {src && dst && src.currency !== dst.currency && (
-          <label className="field"><span>{t('Kelgan summa')} ({curLabel(dst.currency)})</span><input type="number" step="any" placeholder={t("bo'sh — kurs bo'yicha")} value={v.to_amount} onChange={(e) => setV({ ...v, to_amount: e.target.value })} /></label>
+          <label className="field"><span>{t('Kelgan summa')} ({curLabel(dst.currency)})</span><NumInput step="any" placeholder={t("bo'sh — kurs bo'yicha")} value={v.to_amount} onChange={(e) => setV({ ...v, to_amount: e.target.value })} /></label>
         )}
-        <label className="field"><span>{t('Sana')}</span><input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></label>
+        <label className="field"><span>{t('Sana')}</span><DateInput value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></label>
         <label className="field full"><span>{t('Izoh')}</span><input value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} /></label>
         <div className="full form-actions">
           <button className="btn ghost" onClick={onClose}>{t('Bekor')}</button>
@@ -263,7 +264,7 @@ export default function Payments({ onChanged }) {
       {showFilter && (
         <div className="filter-panel card">
           <div className="filter-grid">
-            <label>{t('Davr')}<div className="inline-pick"><input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—<input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} /></div></label>
+            <label>{t('Davr')}<div className="inline-pick"><DateInput value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—<DateInput value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} /></div></label>
             <label>{t('Yo\'nalish')}
               <select value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value })}><option value="">{t('hammasi')}</option><option value="in">{t('Kirim')}</option><option value="out">{t('Chiqim')}</option></select>
             </label>

@@ -182,7 +182,8 @@ def _job_cost(job, currency, on_date):
 
 
 @transaction.atomic
-def complete_stage(task, qty, *, defect_qty=ZERO, employee=None, date=None, user=None, note=""):
+def complete_stage(task, qty, *, defect_qty=ZERO, employee=None, date=None, user=None, note="", extra_materials=None):
+    """extra_materials: [(Material, qty)] — texkartadan tashqari sarflangan qo'shimcha materiallar."""
     from apps.hr.models import PieceworkEntry
     from apps.warehouse.models import StockMove
     from apps.warehouse.services import post_move
@@ -217,7 +218,15 @@ def complete_stage(task, qty, *, defect_qty=ZERO, employee=None, date=None, user
                 _issue(m.material, _q(m.qty_with_waste * k), job=job, order=task.order,
                        warehouse=job.materials_warehouse if job else None, date=date, user=user, note=tag)
 
-    # 2) ishbay haq
+    for mat, q in extra_materials or []:
+        q = _q(q)
+        if q > 0:
+            _issue(mat, q, job=job, order=job.order if job else task.order,
+                   warehouse=job.materials_warehouse if job else None, date=date, user=user, note=f"{tag} · qo'shimcha")
+
+    # 2) ishbay haq (ijrochi ko'rsatilmasa — bosqichning mas'ul xodimi)
+    if employee is None and task.operation.employee_id:
+        employee = task.operation.employee
     rate = task.operation.piece_rate or ZERO
     amount = ZERO
     if employee is not None and rate:

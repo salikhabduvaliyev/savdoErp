@@ -5,6 +5,7 @@ import { money, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { curLabel } from '../../currency'
 import { SearchSelect } from '../../components/Controls'
+import { DateInput, NumInput } from '../../components/Inputs'
 
 const KINDS = [
   ['client_payment', t("Mijoz to'lovi (kirim)")],
@@ -56,7 +57,7 @@ export default function TransactionForm({ kind = 'client_payment', order, onClos
             <select {...bind('kind')}>{KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           </Field>
         )}
-        <Field label={t("Sana")}><input type="date" {...bind('date')} required /></Field>
+        <Field label={t("Sana")}><DateInput {...bind('date')} required /></Field>
         <Field label={t("Hisob (kassa/bank)")}>
           <select {...bind('account')} required>
             <option value="">{t("— tanlang —")}</option>
@@ -66,7 +67,7 @@ export default function TransactionForm({ kind = 'client_payment', order, onClos
           </select>
         </Field>
         <Field label={`Summa${account ? ` (${curLabel(account.currency)})` : ''}`}>
-          <input type="number" step="0.01" min="0" {...bind('amount')} required />
+          <NumInput step="0.01" min="0" {...bind('amount')} required />
         </Field>
         {k === 'expense' && (
           <Field label={t("Xarajat turi")}>
@@ -96,7 +97,7 @@ export default function TransactionForm({ kind = 'client_payment', order, onClos
         )}
         {crossCurrency && (
           <Field label={`Buyurtma valyutasida (${curLabel(selOrder.currency)}) — bo'sh qolsa kurs bo'yicha`} full>
-            <input type="number" step="0.01" min="0" {...bind('order_amount')} />
+            <NumInput step="0.01" min="0" {...bind('order_amount')} />
           </Field>
         )}
         <Field label={t("Izoh")} full><input {...bind('description')} /></Field>

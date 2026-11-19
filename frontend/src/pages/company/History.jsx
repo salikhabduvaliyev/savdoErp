@@ -4,6 +4,7 @@ import { SearchSelect, usePager } from '../../components/Controls'
 import Icon from '../../components/Icon'
 import { Badge, Loading, useFetch } from '../../components/ui'
 import { t } from '../../i18n'
+import { DateInput } from '../../components/Inputs'
 
 const ENTITIES = [
   ['order', t('Buyurtma')], ['sale', t('Sotuv')], ['production_order', t('Ishlab chiqarish buyurtmasi')],
@@ -35,7 +36,7 @@ export default function History() {
           <label>{t('Foydalanuvchi')}
             <SearchSelect value={f.user} onChange={(id) => setF({ ...f, user: id })} empty={t('hammasi')} options={(users.data || []).map((u) => ({ value: u.id, label: u.full_name }))} />
           </label>
-          <label>{t('Davr')}<div className="inline-pick"><input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—<input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} /></div></label>
+          <label>{t('Davr')}<div className="inline-pick"><DateInput value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—<DateInput value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} /></div></label>
         </div>
       </div>
       {!data ? <Loading error={error} /> : (

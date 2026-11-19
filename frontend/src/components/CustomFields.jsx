@@ -5,6 +5,7 @@ import { date, num } from '../format'
 import { Badge, Field, Loading, Modal, toast, useFetch } from './ui'
 import { IconBtn } from './Icon'
 import { confirmDialog } from './Confirm'
+import { DateInput, NumInput } from './Inputs'
 
 export const FIELD_TYPES = [
   ['text', t("Matn")], ['number', t("Son")], ['date', t("Sana")], ['bool', t("Ha/Yo'q")], ['select', t("Ro'yxatdan tanlash")], ['user', t("Xodim")],
@@ -36,9 +37,9 @@ function Input({ f, value, onChange, users, compact }) {
     case 'bool':
       return <label className="check"><input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} /> {t('Ha')}</label>
     case 'number':
-      return <input className={cls} type="number" step="any" value={value ?? ''} onChange={(e) => onChange(e.target.value)} required={f.required} />
+      return <NumInput className={cls} step="any" value={value ?? ''} onChange={(e) => onChange(e.target.value)} required={f.required} />
     case 'date':
-      return <input className={cls} type="date" value={value ?? ''} onChange={(e) => onChange(e.target.value)} required={f.required} />
+      return <DateInput className={cls} value={value ?? ''} onChange={(e) => onChange(e.target.value)} required={f.required} />
     case 'select':
       return (
         <select value={value ?? ''} onChange={(e) => onChange(e.target.value)} required={f.required}>
@@ -128,7 +129,7 @@ function FieldForm({ entity, item, onClose, onSaved }) {
             {FIELD_TYPES.map(([k, l]) => <option key={k} value={k}>{t(l)}</option>)}
           </select>
         </Field>
-        <Field label={t('Tartib')}><input type="number" value={v.position} onChange={(e) => setV({ ...v, position: e.target.value })} /></Field>
+        <Field label={t('Tartib')}><NumInput value={v.position} onChange={(e) => setV({ ...v, position: e.target.value })} /></Field>
         {v.type === 'select' && (
           <Field label={t('Variantlar (har biri yangi qatorda)')} full>
             <textarea rows={4} value={v.options} onChange={(e) => setV({ ...v, options: e.target.value })} placeholder={'PVX\nTermo\nAlyumin'} />

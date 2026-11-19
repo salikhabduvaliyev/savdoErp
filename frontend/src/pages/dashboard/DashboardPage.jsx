@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Loading, MoneyBag, Stat, useFetch } from '../../components/ui'
-import { MONTHS, money, monthStartISO, pct, todayISO } from '../../format'
+import { MONTHS, money, monthStartISO, pct, qty, todayISO } from '../../format'
 import { ProductionDashboard } from '../production/Board'
 import { t } from '../../i18n'
 import { curLabel, baseCurrency } from '../../currency'
@@ -59,6 +59,61 @@ function Director() {
         <Stat label={t("Foyda")} bag={data.profit} />
         <Stat label={t("Rentabellik (foyda / tushum)")} value={pct(data.margin_pct.UZS)} sub={t("so'mdagi buyurtmalar · USD buyurtmalar: {n}", { n: pct(data.margin_pct.USD) })} />
       </div>
+      <div className="stats dash-kpi">
+        <Stat label={t("Kassa va bank qoldig'i")} bag={data.cash} />
+        <Stat label={t('Buyurtmalar (davrda)')} value={data.kpi.orders} sub={t('Sotuvlar: {n}', { n: data.kpi.sales })} />
+        <Stat label={t('Yangi kontragentlar')} value={data.kpi.new_clients} sub={t('davr ichida')} />
+        <Stat label={t('Kam qolgan tovarlar')} value={data.kpi.low_stock} valueClass={data.kpi.low_stock ? 'red' : 'green'} sub={<Link to="/warehouse/stock">{t("minimal qoldiqdan kam — ko'rish")}</Link>} />
+      </div>
+      <div className="dash-3">
+        <div className="card">
+          <h2>{t("Eng ko'p sotilgan 5 ta tovar")}</h2>
+          <table className="t dash-t">
+            <tbody>
+              {data.top_products.map((p, i) => (
+                <tr key={p.product}>
+                  <td className="dash-rank">{i + 1}</td>
+                  <td>{p.name}<div className="small muted">{qty(p.qty)} {t(p.unit)} · {t('foyda')} <MoneyBag bag={p.profit} inline /></div></td>
+                  <td className="num bold"><MoneyBag bag={p.revenue} /></td>
+                </tr>
+              ))}
+              {!data.top_products.length && <tr><td className="empty">{t("Davrda sotuv yo'q")}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="card">
+          <h2>{t('Eng katta qarzdorlar (bizga)')}</h2>
+          <table className="t dash-t">
+            <tbody>
+              {data.top_debtors.map((r, i) => (
+                <tr key={r.id}>
+                  <td className="dash-rank">{i + 1}</td>
+                  <td><Link to={`/counterparties/${r.id}`}>{r.name}</Link></td>
+                  <td className="num bold red"><MoneyBag bag={r.debt} /></td>
+                </tr>
+              ))}
+              {!data.top_debtors.length && <tr><td className="empty">{t("Qarzdor yo'q")}</td></tr>}
+            </tbody>
+          </table>
+          <div className="small muted dash-foot">{t('Jami')}: <MoneyBag bag={data.debts.clients} inline /></div>
+        </div>
+        <div className="card">
+          <h2>{t('Bizning qarzlarimiz (yetkazuvchilarga)')}</h2>
+          <table className="t dash-t">
+            <tbody>
+              {data.top_creditors.map((r, i) => (
+                <tr key={r.id}>
+                  <td className="dash-rank">{i + 1}</td>
+                  <td><Link to={`/counterparties/${r.id}`}>{r.name}</Link></td>
+                  <td className="num bold"><MoneyBag bag={r.debt} /></td>
+                </tr>
+              ))}
+              {!data.top_creditors.length && <tr><td className="empty">{t("Qarzimiz yo'q")}</td></tr>}
+            </tbody>
+          </table>
+          <div className="small muted dash-foot">{t('Jami')}: <MoneyBag bag={data.debts.suppliers} inline /></div>
+        </div>
+      </div>
       <div className="grid-2">
         <div className="card">
           <div className="card-head">
@@ -89,7 +144,7 @@ function Director() {
           <div className="card">
             <h2>{t("Statuslar")}</h2>
             <ul className="list-plain">
-              {data.statuses.filter((s) => s.count && s.status !== 'cancelled').map((s) => <li key={s.status}>{t(s.label)}: <b>{s.count}</b></li>)}
+              {data.statuses.filter((s) => s.count && s.status !== 'cancelled').map((s) => <li key={s.label}><span className="grp-dot" style={{ background: s.color }} /> {t(s.label)}: <b>{s.count}</b></li>)}
               {data.overdue_orders > 0 && <li className="red">{t("Kechikkan:")} <b>{data.overdue_orders}</b></li>}
             </ul>
           </div>

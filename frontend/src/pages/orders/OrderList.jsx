@@ -8,6 +8,8 @@ import { t } from '../../i18n'
 import { curLabel, CurrencyOptions } from '../../currency'
 import { BulkMenu, SearchSelect, usePager } from '../../components/Controls'
 import { confirmDialog } from '../../components/Confirm'
+import { StateBadge, useOrderStates } from './OrderStates'
+import { DateInput } from '../../components/Inputs'
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const STATUSES = [
@@ -41,6 +43,7 @@ export const ORDER_COLUMNS = [
 ]
 
 export default function OrderList({ refs, stamp, view, fields = [], onChanged }) {
+  const states = useOrderStates()
   const nav = useNavigate()
   const users = refs.users
   const [f, setF] = useState({})
@@ -92,18 +95,18 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
               <input placeholder={t('Raqam, mijoz yoki izoh')} value={f.search || ''} onChange={set('search')} />
             </label>
             <label>{t('Sana (davr)')}
-              <div className="inline-pick"><input type="date" value={f.date_from || ''} onChange={set('date_from')} />—<input type="date" value={f.date_to || ''} onChange={set('date_to')} /></div>
+              <div className="inline-pick"><DateInput value={f.date_from || ''} onChange={set('date_from')} />—<DateInput value={f.date_to || ''} onChange={set('date_to')} /></div>
             </label>
             <label>{t('Reja sana')}
-              <div className="inline-pick"><input type="date" value={f.plan_from || ''} onChange={set('plan_from')} />—<input type="date" value={f.plan_to || ''} onChange={set('plan_to')} /></div>
+              <div className="inline-pick"><DateInput value={f.plan_from || ''} onChange={set('plan_from')} />—<DateInput value={f.plan_to || ''} onChange={set('plan_to')} /></div>
             </label>
             <label>{t('Mijoz')}
               <SearchSelect value={f.client || ''} onChange={(v) => setF((s0) => ({ ...s0, client: v }))} options={clientOptions} empty={t('hammasi')} />
             </label>
             <label>{t('Status')}
-              <select value={f.status || ''} onChange={set('status')}>
+              <select value={f.state || ''} onChange={set('state')}>
                 <option value="">{t('hammasi')}</option>
-                {STATUSES.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}
+                {states.map((s0) => <option key={s0.id} value={s0.id}>{t(s0.name)}</option>)}
               </select>
             </label>
             <label>{t('Valyuta')}
@@ -134,7 +137,7 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
           <div className="table-toolbar">
             <b>{t('Hammasi')} {data.count}</b>
             <BulkMenu count={selected.length} items={[
-              { label: t('Status'), sub: STATUSES.map(([v, l]) => ({ label: t(l), onClick: () => bulk('status', { status: v }) })) },
+              { label: t('Status'), sub: states.map((s0) => ({ label: t(s0.name), onClick: () => bulk('status', { state: s0.id }) })) },
               { label: t('Nusxa olish'), onClick: () => bulk('copy') },
               { divider: true },
               { label: t("O'chirish"), danger: true, onClick: () => bulk('delete', {}, t("Tanlangan buyurtmalar o'chirilsinmi? To'lov yoki sotuvi borlari o'chirilmaydi.")) },
@@ -188,7 +191,7 @@ export default function OrderList({ refs, stamp, view, fields = [], onChanged })
                       </td>
                     )}
                     {show('production_date') && <td>{date(o.production_date)}</td>}
-                    {show('status') && <td><Badge kind={o.status}>{t(o.status_display)}</Badge></td>}
+                    {show('status') && <td><StateBadge order={o} /></td>}
                     {show('stage') && <td className="muted small">{o.stage || '—'}</td>}
                     {show('manager') && <td className="small">{o.manager_name || '—'}</td>}
                     {show('operator') && <td className="small">{o.operator_name || '—'}</td>}

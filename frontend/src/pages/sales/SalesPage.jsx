@@ -15,6 +15,7 @@ import { DocList } from '../warehouse/StockDocs'
 import Icon, { IconBtn } from '../../components/Icon'
 import { curLabel, CurrencyOptions } from '../../currency'
 import { confirmDialog } from '../../components/Confirm'
+import { DateInput, NumInput } from '../../components/Inputs'
 
 const STATUSES = [['draft', tr("Qoralama")], ['completed', tr("Yakunlangan")], ['cancelled', tr("Bekor qilingan")]]
 const cur = curLabel
@@ -43,8 +44,8 @@ function PayForm({ sale, onClose, onSaved }) {
             {(accounts.data || []).filter((a) => a.is_active).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </Field>
-        <Field label={`Summa${acc ? ` (${cur(acc.currency)})` : ''}`}><input type="number" step="any" min="0" value={v.amount} onChange={(e) => setV({ ...v, amount: e.target.value })} required /></Field>
-        <Field label={tr("Sana")}><input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></Field>
+        <Field label={`Summa${acc ? ` (${cur(acc.currency)})` : ''}`}><NumInput step="any" min="0" value={v.amount} onChange={(e) => setV({ ...v, amount: e.target.value })} required /></Field>
+        <Field label={tr("Sana")}><DateInput value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></Field>
         <Field label={tr("Izoh")}><input value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} /></Field>
         {acc && acc.currency !== sale.currency && <p className="hint full">{tr("Hisob valyutasi sotuv valyutasidan farq qiladi — summa to'lov sanasidagi kurs bo'yicha aylantiriladi.")}</p>}
         <div className="full form-actions">
@@ -263,7 +264,7 @@ function SalesList() {
         <div className="filter-panel card">
           <div className="filter-grid">
             <label>{tr('Davr')}
-              <div className="inline-pick"><input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—<input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} /></div>
+              <div className="inline-pick"><DateInput value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—<DateInput value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} /></div>
             </label>
             <label>{tr('Mijoz')}
               <SearchSelect value={f.client} onChange={(v) => setF({ ...f, client: v })} empty={tr('hammasi')}

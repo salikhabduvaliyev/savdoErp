@@ -12,22 +12,22 @@ export default function OrderKanban({ stamp }) {
 
   if (!data) return <Loading error={error} />
 
-  const drop = async (e, status) => {
+  const drop = async (e, state) => {
     e.preventDefault()
     setOver(null)
     const id = Number(e.dataTransfer.getData('text/plain'))
     const from = data.find((c) => c.cards.some((x) => x.id === id))
-    if (!from || from.status === status) return
+    if (!from || from.state === state) return
     // optimistik yangilash
     const card = from.cards.find((x) => x.id === id)
     setData(data.map((c) => {
-      if (c.status === from.status) return { ...c, cards: c.cards.filter((x) => x.id !== id), count: c.count - 1 }
-      if (c.status === status) return { ...c, cards: [{ ...card, status }, ...c.cards], count: c.count + 1 }
+      if (c.state === from.state) return { ...c, cards: c.cards.filter((x) => x.id !== id), count: c.count - 1 }
+      if (c.state === state) return { ...c, cards: [{ ...card, state }, ...c.cards], count: c.count + 1 }
       return c
     }))
     try {
-      await api.post(`/orders/${id}/set_status/`, { status })
-      toast(`#${card.number} → ${data.find((c) => c.status === status).label}`)
+      await api.post(`/orders/${id}/set_status/`, { state })
+      toast(`#${card.number} → ${data.find((c) => c.state === state).label}`)
     } catch (err) {
       toast(errorText(err), true)
     }
@@ -39,13 +39,13 @@ export default function OrderKanban({ stamp }) {
       <div className="kanban">
         {data.map((col) => (
           <div
-            key={col.status}
-            className={'kcol' + (over === col.status ? ' drop' : '')}
-            onDragOver={(e) => { e.preventDefault(); setOver(col.status) }}
+            key={col.state}
+            className={'kcol' + (over === col.state ? ' drop' : '')}
+            onDragOver={(e) => { e.preventDefault(); setOver(col.state) }}
             onDragLeave={() => setOver(null)}
-            onDrop={(e) => drop(e, col.status)}
+            onDrop={(e) => drop(e, col.state)}
           >
-            <div className="kcol-head">
+            <div className="kcol-head" style={{ borderTop: `3px solid ${col.color}` }}>
               <h3>{t(col.label)}</h3>
               <div className="sub">
                 {col.count} ta{col.count > 0 && <> · <MoneyBag bag={col.total} inline /></>}

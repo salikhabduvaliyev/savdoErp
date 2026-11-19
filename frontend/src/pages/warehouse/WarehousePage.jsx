@@ -13,6 +13,7 @@ import { curLabel } from '../../currency'
 import { date, money, qty, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { usePager } from '../../components/Controls'
+import { DateInput } from '../../components/Inputs'
 
 const STOCK_MODES = [['all', 'Hammasi'], ['positive', 'Musbat'], ['nonzero', 'Noldan farqli'], ['zero', 'Nol'], ['negative', 'Manfiy']]
 const MAT_TYPES = [['raw', 'Xomashyo / material'], ['product', 'Tayyor mahsulot'], ['goods', 'Tovar (qayta sotish)']]
@@ -89,7 +90,7 @@ function Stocks({ stamp }) {
         </div>
         <label className="inline-pick stock-date" title={t("Bo'sh — hozirgi qoldiq")}>
           <span className="muted small">{t('Sanaga qoldiq')}</span>
-          <input type="date" value={f.date} max={todayISO()} onChange={(e) => set('date', e.target.value)} />
+          <DateInput value={f.date} max={todayISO()} onChange={(e) => set('date', e.target.value)} />
         </label>
         <span className="grow" />
         <button className="btn" onClick={() => setExp(true)} disabled={!data}><Icon name="download" size={16} /> {t('Yuklab olish')}</button>

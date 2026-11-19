@@ -11,6 +11,7 @@ import { date, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import { JobCard } from './Jobs'
 import { confirmDialog } from '../../components/Confirm'
+import { DateInput } from '../../components/Inputs'
 
 const STATUSES = [['new', tr('Yangi')], ['in_progress', tr('Jarayonda')], ['done', tr('Bajarildi')], ['cancelled', tr('Bekor qilindi')]]
 const BADGE = { new: 'new', in_progress: 'in_production', done: 'done', cancelled: 'cancelled' }
@@ -78,7 +79,7 @@ function ProdOrderForm({ item, onClose, onSaved }) {
       <DocTitle label="Ishlab chiqarish buyurtmasi" number={item?.number} date={v.date} onDate={(d) => setV({ ...v, date: d })} />
       {error && <div className="error">{error}</div>}
       <div className="doc-grid">
-        <div><DocField label="Tayyor bo'lish sanasi"><input type="date" value={v.plan_date} onChange={(e) => setV({ ...v, plan_date: e.target.value })} /></DocField></div>
+        <div><DocField label="Tayyor bo'lish sanasi"><DateInput value={v.plan_date} onChange={(e) => setV({ ...v, plan_date: e.target.value })} /></DocField></div>
         <div>{item?.client_order_number && <DocField label="Mijoz buyurtmasi"><input readOnly className="muted-input" value={`№${item.client_order_number}`} /></DocField>}</div>
         <div />
       </div>

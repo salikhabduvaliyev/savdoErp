@@ -13,7 +13,7 @@ from apps.core.models import SystemSettings
 from apps.core.tenancy import current_branch_id
 from apps.core.money import MoneyBag
 
-from .models import Estimate, EstimateMaterial, EstimateService, Order
+from .models import Estimate, EstimateMaterial, EstimateService, Order, OrderState, ensure_order_states
 from .serializers import (
     EstimateMaterialSerializer,
     EstimateSerializer,
@@ -29,6 +29,7 @@ class OrderFilter(filters.FilterSet):
     plan_from = filters.DateFilter(field_name="plan_date", lookup_expr="gte")
     plan_to = filters.DateFilter(field_name="plan_date", lookup_expr="lte")
     status = filters.BaseInFilter(field_name="status")
+    state = filters.BaseInFilter(field_name="state_id")
     overdue = filters.BooleanFilter(method="filter_overdue")
     has_debt = filters.BooleanFilter(method="filter_debt")
     department = filters.NumberFilter(field_name="tasks__department", distinct=True)
@@ -92,7 +93,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     action_perms = {"bulk": "view"}
 
     def get_queryset(self):
-        qs = Order.objects.select_related("client", "manager__employee", "operator__employee", "branch").prefetch_related("tasks__department", "items__product", "production_orders")
+        qs = Order.objects.select_related("client", "state", "manager__employee", "operator__employee", "branch").prefetch_related("tasks__department", "items__product", "production_orders")
         bid = current_branch_id()
         if bid:
             qs = qs.filter(branch_id=bid)
@@ -130,20 +131,20 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def set_status(self, request, pk=None):
         order = self.get_object()
-        new = request.data.get("status")
-        if new not in Order.Status.values:
+        target = _target(request.data)
+        if target is None:
             return Response({"detail": "Noto'g'ri status"}, status=400)
-        _apply_status(order, new)
+        _apply_status(order, *target)
         return Response(self.get_serializer(with_paid(Order.objects.filter(pk=order.pk)).first()).data)
 
     @action(detail=False, methods=["post"])
     def bulk_status(self, request):
-        ids, new = request.data.get("ids", []), request.data.get("status")
-        if new not in Order.Status.values:
+        ids, target = request.data.get("ids", []), _target(request.data)
+        if target is None:
             return Response({"detail": "Noto'g'ri status"}, status=400)
         with transaction.atomic():
             for order in Order.objects.filter(id__in=ids):
-                _apply_status(order, new)
+                _apply_status(order, *target)
         return Response({"updated": len(ids)})
 
     @action(detail=False, methods=["post"])
@@ -168,10 +169,10 @@ class OrderViewSet(viewsets.ModelViewSet):
                             raise DjValidationError("to'lov yoki sotuv bor — o'chirib bo'lmaydi, bekor qiling")
                         order.delete()
                     elif act == "status":
-                        new = request.data.get("status")
-                        if new not in Order.Status.values:
+                        target = _target(request.data)
+                        if target is None:
                             raise DjValidationError("noto'g'ri status")
-                        _apply_status(order, new)
+                        _apply_status(order, *target)
                     elif act == "copy":
                         created.append(_copy_order(order, user).id)
                 done += 1
@@ -243,16 +244,16 @@ class OrderViewSet(viewsets.ModelViewSet):
             .exclude(status=Order.Status.DELIVERED, delivered_at__lt=recent)
         )
         data = self.get_serializer(orders, many=True).data
+        ensure_order_states()
         columns = []
-        for value, label in Order.Status.choices:
-            if value == Order.Status.CANCELLED:
-                continue
-            cards = [d for d in data if d["status"] == value]
+        for st in OrderState.objects.exclude(kind=Order.Status.CANCELLED):
+            cards = [d for d in data if d["state"] == st.id]
             bag = MoneyBag()
             for c in cards:
                 bag.add(c["amount"], c["currency"])
-            # Ustun jami valyuta bo'yicha alohida (maketda "22 000 000 so'm" deb aralash edi)
-            columns.append({"status": value, "label": label, "count": len(cards), "total": bag.as_dict(), "cards": cards})
+            # Ustun jami valyuta bo'yicha alohida
+            columns.append({"status": st.kind, "state": st.id, "label": st.name, "color": st.color, "count": len(cards),
+                            "total": bag.as_dict(), "cards": cards})
         return Response(columns)
 
     @action(detail=False, methods=["get"])
@@ -280,10 +281,20 @@ class OrderViewSet(viewsets.ModelViewSet):
         return Response({"start": start, "capacity": str(capacity), "days": result, "unscheduled": unscheduled})
 
 
-def _apply_status(order, new):
+def _target(data):
+    """{state: id} (foydalanuvchi statusi) yoki {status: kind} -> (kind, OrderState|None)."""
+    if data.get("state"):
+        st = OrderState.objects.filter(pk=data["state"]).first()
+        return (st.kind, st) if st else None
+    new = data.get("status")
+    return (new, None) if new in Order.Status.values else None
+
+
+def _apply_status(order, new, state=None):
     from apps.warehouse.services import release_order
 
     order.status = new
+    order.state = state if state is not None and state.kind == new else None
     order.save()
     if new == Order.Status.CANCELLED:
         release_order(order)
@@ -330,3 +341,55 @@ class EstimateViewSet(viewsets.ReadOnlyModelViewSet):
         est.save(update_fields=["is_active"])
         return Response(self.get_serializer(est).data)
 
+
+
+class OrderStateSerializer(serializers.ModelSerializer):
+    kind_display = serializers.SerializerMethodField()
+    orders_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderState
+        fields = ["id", "name", "color", "kind", "kind_display", "position", "orders_count"]
+
+    def get_kind_display(self, obj):
+        return dict(Order.Status.choices).get(obj.kind, obj.kind)
+
+    def get_orders_count(self, obj):
+        return obj.orders.count()
+
+    def validate_kind(self, v):
+        if v not in Order.Status.values:
+            raise serializers.ValidationError("Noto'g'ri tur")
+        return v
+
+
+class OrderStateViewSet(viewsets.ModelViewSet):
+    """Buyurtma statuslari (MoySklad: Статусы)."""
+
+    serializer_class = OrderStateSerializer
+    module = "orders"
+    pagination_class = None
+    action_perms = {"reorder": "edit"}
+
+    def get_queryset(self):
+        ensure_order_states()
+        return OrderState.objects.all()
+
+    def perform_update(self, serializer):
+        old_kind = serializer.instance.kind
+        st = serializer.save()
+        if st.kind != old_kind:  # tur o'zgarsa - shu statusdagi buyurtmalar mantig'i ham yangi turga o'tadi
+            Order.objects.filter(state=st).update(status=st.kind)
+
+    def perform_destroy(self, instance):
+        n = instance.orders.count()
+        if n:
+            raise serializers.ValidationError(
+                {"detail": f"«{instance.name}» statusida {n} ta buyurtma bor - avval ularni boshqa statusga o'tkazing"})
+        instance.delete()
+
+    @action(detail=False, methods=["post"])
+    def reorder(self, request):
+        for i, sid in enumerate(request.data.get("ids", [])):
+            OrderState.objects.filter(pk=sid).update(position=(i + 1) * 10)
+        return Response({"ok": True})

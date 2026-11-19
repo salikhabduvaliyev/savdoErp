@@ -9,6 +9,8 @@ import { t as tr } from '../../i18n'
 import Icon, { IconBtn } from '../../components/Icon'
 import { SearchSelect } from '../../components/Controls'
 import { confirmDialog } from '../../components/Confirm'
+import ExtraMaterials, { extraPayload } from './ExtraMaterials'
+import { DateInput, NumInput } from '../../components/Inputs'
 
 const JOB_STATUSES = [['new', tr("Yangi")], ['in_progress', tr("Jarayonda")], ['done', tr("Bajarildi")], ['cancelled', tr("Bekor qilindi")]]
 const JOB_BADGE = { new: 'new', in_progress: 'in_production', done: 'done', cancelled: 'cancelled' }
@@ -16,12 +18,13 @@ const JOB_BADGE = { new: 'new', in_progress: 'in_production', done: 'done', canc
 /* ------------------------------------------------------------ bosqichni bajarish */
 export function CompleteStageModal({ task, onClose, onSaved }) {
   const emps = useFetch('/hr/employees/', { is_active: true })
-  const [v, setV] = useState({ qty: String(Number(task.remaining ?? (task.plan_qty - task.done_qty))), defect_qty: '0', employee: '', date: todayISO(), note: '' })
+  const [v, setV] = useState({ qty: String(Number(task.remaining ?? (task.plan_qty - task.done_qty))), defect_qty: '0', employee: task.operation_employee ? String(task.operation_employee) : '', date: todayISO(), note: '' })
+  const [extra, setExtra] = useState([])
   const [error, setError] = useState(null)
   const submit = async (e) => {
     e.preventDefault()
     try {
-      await api.post(`/production/tasks/${task.id}/complete/`, { ...v, employee: v.employee || undefined })
+      await api.post(`/production/tasks/${task.id}/complete/`, { ...v, employee: v.employee || undefined, extra_materials: extraPayload(extra) })
       onSaved()
     } catch (err) { setError(errorText(err)) }
   }
@@ -30,16 +33,17 @@ export function CompleteStageModal({ task, onClose, onSaved }) {
       {error && <div className="error">{error}</div>}
       <p className="muted" style={{ marginTop: 0 }}>Reja: {qty(task.plan_qty)} · Bajarilgan: {qty(task.done_qty)} · Qolgan: <b>{qty(task.remaining ?? task.plan_qty - task.done_qty)}</b> {task.unit}</p>
       <form className="form" onSubmit={submit}>
-        <Field label={`Bajarildi, ${task.unit || ''}`}><input type="number" step="any" min="0" value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} required autoFocus /></Field>
-        <Field label={tr("Brak")}><input type="number" step="any" min="0" value={v.defect_qty} onChange={(e) => setV({ ...v, defect_qty: e.target.value })} /></Field>
+        <Field label={`Bajarildi, ${task.unit || ''}`}><NumInput step="any" min="0" value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} required autoFocus /></Field>
+        <Field label={tr("Brak")}><NumInput step="any" min="0" value={v.defect_qty} onChange={(e) => setV({ ...v, defect_qty: e.target.value })} /></Field>
         <Field label={tr("Ijrochi (ishbay haq hisoblanadi)")}>
           <select value={v.employee} onChange={(e) => setV({ ...v, employee: e.target.value })}>
             <option value="">{tr("— men —")}</option>
             {(emps.data || []).map((x) => <option key={x.id} value={x.id}>{x.full_name}{x.department_name ? ` · ${x.department_name}` : ''}</option>)}
           </select>
         </Field>
-        <Field label={tr("Sana")}><input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></Field>
+        <Field label={tr("Sana")}><DateInput value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></Field>
         <Field label={tr("Izoh")} full><input value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} /></Field>
+        <div className="full"><ExtraMaterials value={extra} onChange={setExtra} /></div>
         <p className="hint full" style={{ margin: 0 }}>{tr("Bajarilganda: shu bosqich materiallari ombordan chiqim qilinadi; oxirgi bosqichda tayyor mahsulot omborga kirim qilinadi.")}</p>
         <div className="full form-actions">
           <button type="button" className="btn ghost" onClick={onClose}>{tr("Bekor")}</button>
@@ -73,7 +77,7 @@ function JobForm({ onClose, onSaved, preset }) {
           <SearchSelect value={v.techcard} onChange={(id) => setV({ ...v, techcard: id })} placeholder={tr("— tanlang —")}
             options={(tcs.data || []).map((x) => ({ value: x.id, label: x.product_name, sub: x.name }))} />
         </Field>
-        <Field label={`Miqdor${tc ? `, ${tc.product_unit}` : ''}`}><input type="number" step="any" min="0" value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} required /></Field>
+        <Field label={`Miqdor${tc ? `, ${tc.product_unit}` : ''}`}><NumInput step="any" min="0" value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} required /></Field>
         <div />
         <Field label={tr("Materiallar ombori (bo'sh — qoldiq bor ombordan)")}>
           <select value={v.materials_warehouse} onChange={(e) => setV({ ...v, materials_warehouse: e.target.value })}>
@@ -87,8 +91,8 @@ function JobForm({ onClose, onSaved, preset }) {
             {(whs.data || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
         </Field>
-        <Field label={tr("Boshlash (reja)")}><input type="date" value={v.plan_start} onChange={(e) => setV({ ...v, plan_start: e.target.value })} /></Field>
-        <Field label={tr("Tugatish (reja)")}><input type="date" value={v.plan_end} onChange={(e) => setV({ ...v, plan_end: e.target.value })} /></Field>
+        <Field label={tr("Boshlash (reja)")}><DateInput value={v.plan_start} onChange={(e) => setV({ ...v, plan_start: e.target.value })} /></Field>
+        <Field label={tr("Tugatish (reja)")}><DateInput value={v.plan_end} onChange={(e) => setV({ ...v, plan_end: e.target.value })} /></Field>
         <Field label={tr("Izoh")} full><input value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} /></Field>
         {tc?.cost && <p className="hint full" style={{ margin: 0 }}>Rejaviy tannarx: {money(tc.cost.total, tc.cost.currency)} / {tc.product_unit} (material {money(tc.cost.materials, tc.cost.currency)} + ish haqi {money(tc.cost.labor, tc.cost.currency)})</p>}
         <div className="full form-actions">
@@ -254,8 +258,8 @@ export function CompletionsTab() {
   return (
     <div className="table-wrap">
       <div className="table-toolbar filters">
-        <input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />
-        <input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} />
+        <DateInput value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />
+        <DateInput value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} />
         <select value={f.employee} onChange={(e) => setF({ ...f, employee: e.target.value })}>
           <option value="">{tr("Ijrochi: hammasi")}</option>
           {(emps.data || []).map((x) => <option key={x.id} value={x.id}>{x.full_name}</option>)}
@@ -293,8 +297,8 @@ export function LaborTab() {
   return (
     <>
       <div className="filters" style={{ marginBottom: 12 }}>
-        <input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />
-        <input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} />
+        <DateInput value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />
+        <DateInput value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} />
         {data && <span className="muted">{tr("Jami:")} <b>{money(data.total, 'UZS')}</b></span>}
       </div>
       {!data ? <Loading error={error} /> : (

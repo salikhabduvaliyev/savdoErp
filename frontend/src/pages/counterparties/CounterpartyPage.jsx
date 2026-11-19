@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import api, { errorText } from '../../api'
 import { canCreate, canDelete, canEdit, useAuth } from '../../auth'
@@ -14,20 +14,60 @@ const EMPTY = {
   note: '', is_active: true, extra: {},
 }
 
-function GroupPicker({ groups, value, onChange, disabled }) {
+/* MoySklad "Группы": tanlanganlar teg ko'rinishida, ro'yxatdan qidirib belgilash, yangi guruh yaratish */
+function GroupPicker({ groups, value, onChange, disabled, onCreated }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const box = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const h = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
   const toggle = (id) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id])
+  const sel = groups.filter((g) => value.includes(g.id))
+  const list = groups.filter((g) => !q.trim() || g.name.toLowerCase().includes(q.trim().toLowerCase()))
+  const create = async () => {
+    const name = q.trim()
+    if (!name) return
+    try {
+      const { data } = await api.post('/crm/groups/', { name })
+      onCreated?.(data)
+      onChange([...value, data.id])
+      setQ('')
+    } catch (e) { toast(errorText(e), true) }
+  }
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-      {groups.map((g) => {
-        const on = value.includes(g.id)
-        return (
-          <button key={g.id} type="button" disabled={disabled} onClick={() => toggle(g.id)} className="chip-group"
-            style={{ borderColor: g.color, color: on ? '#fff' : g.color, background: on ? g.color : 'transparent', cursor: 'pointer' }}>
-            {on ? '✓ ' : '+ '}{g.name}
-          </button>
-        )
-      })}
-      {!groups.length && <span className="muted small">{t("Guruhlar yo'q — ro'yxat sahifasida qo'shing")}</span>}
+    <div className={'grp-pick' + (disabled ? ' disabled' : '')} ref={box}>
+      <div className="grp-box" onClick={() => !disabled && setOpen(true)}>
+        {sel.map((g) => (
+          <span key={g.id} className="grp-tag" style={{ background: g.color || 'var(--primary)' }}>
+            {g.name}{!disabled && <button type="button" onClick={(e) => { e.stopPropagation(); toggle(g.id) }} aria-label={t("Olib tashlash")}>×</button>}
+          </span>
+        ))}
+        {!sel.length && <span className="muted">{t('Guruhni tanlang…')}</span>}
+        <span className="grow" />
+        {!disabled && <span className="grp-caret">▾</span>}
+      </div>
+      {open && (
+        <div className="grp-pop">
+          <input autoFocus value={q} placeholder={t('Qidirish yoki yangi guruh nomi…')} onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); if (e.key === 'Enter') { e.preventDefault(); if (list.length === 1 && !value.includes(list[0].id)) toggle(list[0].id); else if (!list.length) create() } }} />
+          <div className="grp-list">
+            {list.map((g) => (
+              <label key={g.id} className="grp-item">
+                <input type="checkbox" checked={value.includes(g.id)} onChange={() => toggle(g.id)} />
+                <span className="grp-dot" style={{ background: g.color || 'var(--primary)' }} /> {g.name}
+              </label>
+            ))}
+            {!list.length && !q.trim() && <div className="muted small" style={{ padding: 8 }}>{t("Guruhlar yo'q")}</div>}
+          </div>
+          {q.trim() && !groups.some((g) => g.name.toLowerCase() === q.trim().toLowerCase()) && (
+            <button type="button" className="grp-create" onClick={create}>+ {t('«{q}» guruhini yaratish', { q: q.trim() })}</button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -205,7 +245,7 @@ export default function CounterpartyPage() {
               </select>
             </div>
           ))}
-          {row('Guruhlar', <GroupPicker groups={groups.data || []} value={v.groups} onChange={(g) => setV({ ...v, groups: g })} disabled={dis} />)}
+          {row('Guruhlar', <GroupPicker groups={groups.data || []} value={v.groups} onChange={(g) => setV({ ...v, groups: g })} disabled={dis} onCreated={() => groups.reload?.()} />)}
           {row('Turi', (
             <select value={v.kind} onChange={set('kind')} disabled={dis}>{KIND_OPTIONS.map(([k, l]) => <option key={k} value={k}>{t(l)}</option>)}</select>
           ))}

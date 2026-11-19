@@ -55,6 +55,8 @@ class Operation(TenantModel):
     default_rate = money_field(help_text="Xizmat narxi (smeta B blok / bosqich tannarxi)")
     rate_currency = currency_field()
     piece_rate = money_field(help_text="Ishbay to'lov stavkasi, so'm / birlik")
+    employee = models.ForeignKey("hr.Employee", null=True, blank=True, on_delete=models.SET_NULL, related_name="operations",
+                                 help_text="Mas'ul xodim: ijrochi ko'rsatilmasa ishbay haq shu xodimga yoziladi")
     description = models.CharField(max_length=300, blank=True)
 
     class Meta:

@@ -10,6 +10,7 @@ import Icon, { IconBtn } from '../../components/Icon'
 import { curLabel, currencyOptions, baseCurrency } from '../../currency'
 import History from './History'
 import { confirmDialog } from '../../components/Confirm'
+import { DateInput, NumInput } from '../../components/Inputs'
 
 const TABS = [
   ['info', t("Kompaniya ma'lumotlari")],
@@ -139,7 +140,7 @@ function EmployeeForm({ item, departments, roles, branches, user, onClose, onSav
           </select>
         </Field>
         <Field label={t("Telefon")}><input value={v.phone} onChange={set('phone')} /></Field>
-        <Field label={t("Ishga kirgan sana")}><input type="date" value={v.hired_at || ''} onChange={set('hired_at')} /></Field>
+        <Field label={t("Ishga kirgan sana")}><DateInput value={v.hired_at || ''} onChange={set('hired_at')} /></Field>
         <div><label className="check" style={{ marginTop: 22 }}><input type="checkbox" checked={v.is_active} onChange={set('is_active')} /> {t("Ishlayapti (faol)")}</label></div>
         <Field label={t("Izoh")} full><input value={v.note} onChange={set('note')} /></Field>
 
@@ -151,8 +152,8 @@ function EmployeeForm({ item, departments, roles, branches, user, onClose, onSav
                 {PAY_SYSTEMS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
               </select>
             </Field>
-            <Field label={t("Oklad, oyiga")}><input type="number" min="0" value={v.base_salary ?? ''} onChange={set('base_salary')} disabled={!hrEdit} /></Field>
-            <Field label={t("KPI bonus bazasi")}><input type="number" min="0" value={v.kpi_bonus_base ?? ''} onChange={set('kpi_bonus_base')} disabled={!hrEdit} /></Field>
+            <Field label={t("Oklad, oyiga")}><NumInput min="0" value={v.base_salary ?? ''} onChange={set('base_salary')} disabled={!hrEdit} /></Field>
+            <Field label={t("KPI bonus bazasi")}><NumInput min="0" value={v.kpi_bonus_base ?? ''} onChange={set('kpi_bonus_base')} disabled={!hrEdit} /></Field>
           </>
         )}
 

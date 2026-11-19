@@ -11,6 +11,7 @@ import { t } from '../../i18n'
 import { convertPrice, baseCurrency } from '../../currency'
 import { CurrencyOptions } from '../../currency'
 import { confirmDialog } from '../../components/Confirm'
+import { DateInput, NumInput } from '../../components/Inputs'
 
 const toLines = (items) => (items || []).map((i) => ({
   key: newKey(), product: i.product, name: i.name, code: i.product_code || '', unit: i.unit, qty: cleanNum(i.qty),
@@ -135,9 +136,9 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
           </DocField>
         </div>
         <div>
-          <DocField label="Topshirish muddati" required><input type="date" value={v.plan_date || ''} onChange={set('plan_date')} /></DocField>
-          <DocField label="Ishlab chiqarish kuni"><input type="date" value={v.production_date || ''} onChange={set('production_date')} /></DocField>
-          <DocField label="Hajm, m²"><input type="number" step="0.001" min="0" value={v.volume ?? ''} onChange={set('volume')} /></DocField>
+          <DocField label="Topshirish muddati" required><DateInput value={v.plan_date || ''} onChange={set('plan_date')} /></DocField>
+          <DocField label="Ishlab chiqarish kuni"><DateInput value={v.production_date || ''} onChange={set('production_date')} /></DocField>
+          <DocField label="Hajm, m²"><NumInput step="0.001" min="0" value={v.volume ?? ''} onChange={set('volume')} /></DocField>
         </div>
         <div>
           <DocField label="Valyuta" required>

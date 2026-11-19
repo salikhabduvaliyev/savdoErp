@@ -9,6 +9,7 @@ import { date } from '../../format'
 import { t } from '../../i18n'
 import Currencies from './Currencies'
 import { confirmDialog } from '../../components/Confirm'
+import { NumInput } from '../../components/Inputs'
 
 const SECTIONS = [
   { grp: 'Jamoa', items: [['users', t("Foydalanuvchilar"), 'user'], ['roles', t("Rollar va huquqlar"), 'roles']] },
@@ -459,7 +460,7 @@ function General({ editable }) {
                   {g.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
               ) : (
-                <input type="number" step="any" value={data[g.name]} onChange={(e) => setData({ ...data, [g.name]: e.target.value })} disabled={!editable} />
+                <NumInput step="any" value={data[g.name]} onChange={(e) => setData({ ...data, [g.name]: e.target.value })} disabled={!editable} />
               )}
               {g.hint && <span className="small muted">{g.hint}</span>}
             </Field>

@@ -48,6 +48,64 @@ class Base(TestCase):
         set_context(None, None)
 
 
+class NewFeatureRules(Base):
+    """Bosqich xodimi, qo'shimcha materiallar, buyurtma statuslari, pul oqimi."""
+
+    def test_stage_employee_and_extra_materials(self):
+        from apps.hr.models import Employee, PieceworkEntry
+        from apps.production.models import TechCard, TechCardMaterial, TechProcess, TechProcessStage
+        from apps.production.services import complete_stage, create_job_from_techcard
+
+        deraza = Material.objects.create(name="Deraza", type="product", currency="UZS")
+        post_move(StockMove(type="in", material=self.oyna, warehouse=self.wh, qty=100, price=1000))
+        post_move(StockMove(type="in", material=self.profil, warehouse=self.wh, qty=50, price=2))
+        usta = Employee.objects.create(full_name="Usta")
+        self.op_cut.piece_rate = 5000
+        self.op_cut.employee = usta
+        self.op_cut.save()
+        proc = TechProcess.objects.create(name="P")
+        TechProcessStage.objects.create(process=proc, operation=self.op_cut, position=0)
+        tc = TechCard.objects.create(name="Deraza", product=deraza, output_qty=1, process=proc)
+        TechCardMaterial.objects.create(techcard=tc, material=self.oyna, qty=2)
+        job = create_job_from_techcard(tc, 2, materials_warehouse=self.wh, products_warehouse=self.wh)
+        t1 = job.tasks.get()
+        complete_stage(t1, 2, extra_materials=[(self.profil, D("3"))])  # ijrochi ko'rsatilmagan
+        self.assertEqual(self.oyna.stocks.get().qty, D("96"))
+        self.assertEqual(self.profil.stocks.get().qty, D("47"))  # qo'shimcha material chiqim qilindi
+        pw = PieceworkEntry.objects.get(task=t1)
+        self.assertEqual((pw.employee_id, pw.amount), (usta.id, D("10000")))  # bosqichning mas'ul xodimi
+
+    def test_custom_order_states(self):
+        from apps.orders.models import OrderState
+
+        self.assertEqual(self.order.state.kind, "new")
+        extra = OrderState.objects.create(name="O'lchov kutilmoqda", kind="new", color="#000", position=15)
+        self.order.state = extra
+        self.order.save()
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.state_id, extra.id)  # bir turdagi qo'shimcha status saqlanadi
+        self.order.status = "confirmed"  # tizim (masalan, ishlab chiqarishga yuborish) turini o'zgartirdi
+        self.order.save()
+        self.assertEqual(self.order.state.kind, "confirmed")
+        self.assertEqual(self.order.state_name, "Tasdiqlandi")
+
+    def test_cash_flow_daily(self):
+        from apps.finance.models import Account, Transaction
+        from apps.finance.services import cash_flow
+
+        acc = Account.objects.create(name="Kassa", currency="UZS", opening_balance=1000)
+        Transaction.objects.create(account=acc, kind="client_payment", direction="in", amount=500, currency="UZS",
+                                   date=T - timedelta(days=10), client=self.client_obj)
+        Transaction.objects.create(account=acc, kind="client_payment", direction="in", amount=300, currency="UZS",
+                                   date=T - timedelta(days=2), client=self.client_obj)
+        Transaction.objects.create(account=acc, kind="client_payment", direction="in", amount=200, currency="UZS",
+                                   date=T - timedelta(days=1), client=self.client_obj)
+        r = cash_flow(T - timedelta(days=3), T, account=acc.id)
+        self.assertEqual(D(r["opening"]["UZS"]), D("1500"))
+        self.assertEqual([x["key"] for x in r["rows"]], [str(T - timedelta(days=2)), str(T - timedelta(days=1))])
+        self.assertEqual(D(r["closing"]["UZS"]), D("2000"))
+
+
 class MoneyTests(Base):
     def test_bag_keeps_currencies_apart(self):
         bag = MoneyBag().add(13_000_000, "UZS").add(900, "USD")

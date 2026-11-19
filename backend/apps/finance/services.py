@@ -154,15 +154,34 @@ def profit_and_loss(date_from, date_to):
     }
 
 
-def cash_flow(date_from, date_to):
+def cash_flow(date_from, date_to, group="day", account=None):
+    """Pul oqimi (MoySklad "Движение денежных средств"): davr boshidagi qoldiq, kun (yoki oy) bo'yicha
+    kirim / chiqim / sof oqim va har bir qatordan keyingi qoldiq — valyuta bo'yicha alohida."""
+    accs = Account.objects.all()
+    bid = current_branch_id()
+    if bid:
+        accs = accs.filter(Q(branch_id=bid) | Q(branch__isnull=True))
+    if account:
+        accs = accs.filter(pk=account)
+    txs = Transaction.objects.filter(account__in=accs)
+    opening = MoneyBag()
+    for a in accs:
+        opening.add(a.opening_balance, a.currency)
+    for r in txs.filter(date__lt=date_from).values("direction", "currency").annotate(s=Sum("amount")):
+        opening.add(r["s"] if r["direction"] == "in" else -r["s"], r["currency"])
     rows = defaultdict(lambda: {"in": MoneyBag(), "out": MoneyBag()})
-    for t in Transaction.objects.filter(date__range=(date_from, date_to)).values("date", "direction", "currency", "amount"):
-        key = t["date"].strftime("%Y-%m")
-        rows[key][t["direction"]].add(t["amount"], t["currency"])
-    return [
-        {"month": k, "in": v["in"].as_dict(), "out": v["out"].as_dict(), "net": (v["in"] - v["out"]).as_dict()}
-        for k, v in sorted(rows.items())
-    ]
+    fmt = "%Y-%m" if group == "month" else "%Y-%m-%d"
+    for t in txs.filter(date__range=(date_from, date_to)).values("date", "direction", "currency", "amount"):
+        rows[t["date"].strftime(fmt)][t["direction"]].add(t["amount"], t["currency"])
+    out, bal, tin, tout = [], opening, MoneyBag(), MoneyBag()
+    for k, v in sorted(rows.items()):
+        net = v["in"] - v["out"]
+        bal = bal + net
+        tin, tout = tin + v["in"], tout + v["out"]
+        out.append({"key": k, "month": k[:7], "in": v["in"].as_dict(), "out": v["out"].as_dict(), "net": net.as_dict(),
+                    "balance": bal.as_dict()})
+    return {"group": group, "date_from": date_from, "date_to": date_to, "opening": opening.as_dict(), "rows": out,
+            "totals": {"in": tin.as_dict(), "out": tout.as_dict(), "net": (tin - tout).as_dict()}, "closing": bal.as_dict()}
 
 
 def pnl_report(date_from, date_to, currency="UZS"):

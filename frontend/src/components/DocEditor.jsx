@@ -5,6 +5,7 @@ import { money, qty as fmtQty } from '../format'
 import { t } from '../i18n'
 import Icon, { IconBtn } from './Icon'
 import { FullPage, Modal } from './ui'
+import { DateInput, NumInput } from './Inputs'
 
 let keySeq = 0
 export const newKey = () => `k${++keySeq}`
@@ -33,7 +34,7 @@ export function DocTitle({ label, number, date, onDate, children }) {
       <h1>{t(label)} №</h1>
       <input className="doc-num" value={number ?? ''} readOnly placeholder={t('avto')} title={t('Raqam saqlanganda beriladi')} />
       <span className="doc-from">{t('dan')}</span>
-      <input type="date" className="doc-date" value={date || ''} onChange={(e) => onDate?.(e.target.value)} disabled={!onDate} />
+      <DateInput className="doc-date" value={date || ''} onChange={(e) => onDate?.(e.target.value)} disabled={!onDate} />
       {children}
     </div>
   )
@@ -261,13 +262,13 @@ export function Positions({ lines, setLines, currency, priceOf, readOnly, showSt
                       : <input className="cell" value={l.name} onChange={(e) => set(l.key, { name: e.target.value })} />}
                   </td>
                   <td className="num">
-                    {readOnly ? fmtQty(l.qty) : <input className={'cell num' + (short ? ' warn' : '')} inputMode="decimal" value={num(l.qty)} onChange={(e) => set(l.key, { qty: e.target.value })} title={short ? t('Qoldiq yetarli emas') : undefined} />}
+                    {readOnly ? fmtQty(l.qty) : <NumInput className={'cell num' + (short ? ' warn' : '')} value={num(l.qty)} onChange={(e) => set(l.key, { qty: e.target.value })} title={short ? t('Qoldiq yetarli emas') : undefined} />}
                   </td>
                   <td className="muted small">{t(l.unit || '')}</td>
                   {showStock && <td className={'num small ' + (short ? 'red' : 'muted')}>{l.stock !== null && l.stock !== undefined ? fmtQty(l.stock) : '—'}</td>}
                   {extraCols?.cell(l)}
-                  {showPrice && <td className="num">{readOnly ? money(l.price, currency) : <input className="cell num" inputMode="decimal" value={num(l.price)} onChange={(e) => set(l.key, { price: e.target.value })} />}</td>}
-                  {showPrice && showDiscount && <td className="num">{readOnly ? `${Number(l.discount_pct || 0)}%` : <input className="cell num" inputMode="decimal" value={num(l.discount_pct)} onChange={(e) => set(l.key, { discount_pct: e.target.value })} />}</td>}
+                  {showPrice && <td className="num">{readOnly ? money(l.price, currency) : <NumInput className="cell num" value={num(l.price)} onChange={(e) => set(l.key, { price: e.target.value })} />}</td>}
+                  {showPrice && showDiscount && <td className="num">{readOnly ? `${Number(l.discount_pct || 0)}%` : <NumInput className="cell num" value={num(l.discount_pct)} onChange={(e) => set(l.key, { discount_pct: e.target.value })} />}</td>}
                   {showPrice && <td className="num bold">{money(lineAmount(l), currency)}</td>}
                   {!readOnly && <td className="num"><IconBtn icon="delete" danger title="O'chirish" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} /></td>}
                 </tr>

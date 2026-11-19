@@ -40,7 +40,7 @@ function bagKeys(bag) {
 export function MoneyBag({ bag, showZero = false, inline = false }) {
   if (!bag) return <span className="muted">—</span>
   const parts = bagKeys(bag)
-    .filter((c) => showZero ? ['UZS', 'USD'].includes(c) || Number(bag[c]) !== 0 : Number(bag[c]) !== 0)
+    .filter((c) => showZero ? ['UZS', 'USD'].includes(c) || Number(bag[c] || 0) !== 0 : Number(bag[c] || 0) !== 0)
     .map((c) => (
       <div key={c} className={c === 'USD' ? 'usd-line' : ''} style={inline ? { display: 'inline' } : undefined}>
         {money(bag[c], c)}

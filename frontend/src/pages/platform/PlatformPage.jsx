@@ -3,6 +3,7 @@ import api, { errorText } from '../../api'
 import { Badge, Field, Loading, Modal, Stat, toast, useFetch } from '../../components/ui'
 import { date } from '../../format'
 import { t } from '../../i18n'
+import { DateInput, NumInput } from '../../components/Inputs'
 
 const STATUS = [['trial', t("Sinov muddati")], ['active', t("Faol (to'langan)")], ['blocked', t("Bloklangan")]]
 
@@ -48,9 +49,9 @@ function Manage({ c, onClose, onSaved }) {
             {STATUS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
         </Field>
-        <Field label={t("Foydalanuvchilar chegarasi (0 — cheklanmagan)")}><input type="number" min="0" value={v.max_users} onChange={(e) => setV({ ...v, max_users: e.target.value })} /></Field>
-        <Field label={t("Sinov tugash sanasi")}><input type="date" value={v.trial_ends} onChange={(e) => setV({ ...v, trial_ends: e.target.value })} /></Field>
-        <Field label={t("To'langan muddat (gacha)")}><input type="date" value={v.paid_until} onChange={(e) => setV({ ...v, paid_until: e.target.value })} /></Field>
+        <Field label={t("Foydalanuvchilar chegarasi (0 — cheklanmagan)")}><NumInput min="0" value={v.max_users} onChange={(e) => setV({ ...v, max_users: e.target.value })} /></Field>
+        <Field label={t("Sinov tugash sanasi")}><DateInput value={v.trial_ends} onChange={(e) => setV({ ...v, trial_ends: e.target.value })} /></Field>
+        <Field label={t("To'langan muddat (gacha)")}><DateInput value={v.paid_until} onChange={(e) => setV({ ...v, paid_until: e.target.value })} /></Field>
         <Field label={t("Izoh")} full><textarea rows={2} value={v.platform_note} onChange={(e) => setV({ ...v, platform_note: e.target.value })} /></Field>
         <div className="full form-actions">
           <button type="button" className="btn ghost" onClick={onClose}>{t("Yopish")}</button>

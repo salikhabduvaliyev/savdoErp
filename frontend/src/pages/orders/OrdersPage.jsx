@@ -8,6 +8,7 @@ import OrderCalendar from './OrderCalendar'
 import OrderForm from './OrderForm'
 import OrderKanban from './OrderKanban'
 import OrderList, { ORDER_COLUMNS } from './OrderList'
+import { OrderStatesManager } from './OrderStates'
 
 const VIEWS = [
   ['list', t("Ro'yxat")],
@@ -30,6 +31,7 @@ export default function OrdersPage() {
   const [mode, setMode] = useState(() => localStorage.getItem('orders.view') || 'list')
   const [showForm, setShowForm] = useState(false)
   const [fieldsMgr, setFieldsMgr] = useState(false)
+  const [statesMgr, setStatesMgr] = useState(false)
   const [stamp, setStamp] = useState(0)
   const { user } = useAuth()
   const showMoney = can(user, 'finance')
@@ -59,9 +61,10 @@ export default function OrdersPage() {
           ))}
         </div>
         <span className="grow" />
-        <PageSettings view={view} extra={canEdit(user, 'settings') && (
-          <button className="link-btn small" onClick={() => setFieldsMgr(true)}>{t("Qo'shimcha maydonlar…")}</button>
-        )} />
+        <PageSettings view={view} extra={<>
+          {canEdit(user, 'orders') && <button className="link-btn small" onClick={() => setStatesMgr(true)}>{t('Statuslarni boshqarish…')}</button>}
+          {canEdit(user, 'settings') && <button className="link-btn small" onClick={() => setFieldsMgr(true)}>{t("Qo'shimcha maydonlar…")}</button>}
+        </>} />
       </div>
 
       {mode === 'list' && showMoney && view.show('stats') && summary.data && (
@@ -84,6 +87,7 @@ export default function OrdersPage() {
           onSaved={() => { setShowForm(false); refresh() }}
         />
       )}
+      {statesMgr && <OrderStatesManager onClose={() => { setStatesMgr(false); refresh() }} />}
       {fieldsMgr && (
         <Modal title={t("Buyurtma: qo'shimcha maydonlar")} onClose={() => { setFieldsMgr(false); refresh() }} wide>
           <CustomFieldsManager entity="order" />

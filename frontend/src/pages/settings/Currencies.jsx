@@ -7,6 +7,7 @@ import { Badge, Field, Loading, Modal, toast, useFetch } from '../../components/
 import { date, num, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { confirmDialog } from '../../components/Confirm'
+import { DateInput, NumInput } from '../../components/Inputs'
 
 function CurrencyForm({ item, onClose, onSaved }) {
   const cbu = useFetch(item ? null : '/core/currencies/cbu/')
@@ -80,8 +81,8 @@ function RateHistory({ cur, editable, onChanged }) {
     <div className="rate-history">
       {editable && (
         <div className="table-toolbar filters">
-          <input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} />
-          <input type="number" step="any" min="0" placeholder={t('1 {c} = … so\'m', { c: cur.code })} value={v.rate} onChange={(e) => setV({ ...v, rate: e.target.value })} />
+          <DateInput value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} />
+          <NumInput step="any" min="0" placeholder={t('1 {c} = … so\'m', { c: cur.code })} value={v.rate} onChange={(e) => setV({ ...v, rate: e.target.value })} />
           <button className="btn small primary" disabled={!v.rate} onClick={add}><Icon name="plus" size={15} /> {t("Kursni qo'lda kiritish")}</button>
         </div>
       )}

@@ -6,6 +6,7 @@ import Icon from '../../components/Icon'
 import { CurrencyOptions, baseCurrency } from '../../currency'
 import { money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
+import { DateInput } from '../../components/Inputs'
 
 const BY = [['product', tr('Tovarlar')], ['client', tr('Mijozlar')], ['seller', tr('Sotuvchilar')]]
 const monthStart = () => todayISO().slice(0, 8) + '01'
@@ -39,8 +40,8 @@ export default function Profitability() {
           {BY.map(([k, l]) => <button key={k} className={'btn' + (f.by === k ? ' active' : '')} onClick={() => setF({ ...f, by: k })}>{l}</button>)}
         </div>
         <div className="prof-dates">
-          <input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—
-          <input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} />
+          <DateInput value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—
+          <DateInput value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} />
         </div>
         <select className="prof-cur" value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value })}><CurrencyOptions /></select>
         <div className="psearch" style={{ maxWidth: 300, minWidth: 200 }}>

@@ -11,6 +11,44 @@ from apps.core.tenancy import TenantModel
 ZERO = Decimal("0")
 
 
+STATE_DEFAULTS = [
+    ("new", "Yangi", "#2563eb"), ("confirmed", "Tasdiqlandi", "#0891b2"), ("in_production", "Ishlab chiqarishda", "#7c3aed"),
+    ("ready", "Tayyor", "#d97706"), ("delivered", "Topshirildi", "#16a34a"), ("cancelled", "Bekor qilindi", "#dc2626"),
+]
+
+
+class OrderState(TenantModel):
+    """Buyurtma statusi (MoySklad: Настройки → Статусы). Kompaniya o'zi nomlaydi, rang beradi, qo'shadi va o'chiradi.
+
+    `kind` — tizim mantig'i uchun turi (ishlab chiqarishga yuborilganda, sotuvda, bekor qilishda kerak).
+    Bir turda bir nechta status bo'lishi mumkin (masalan, "Yangi" turida: "Qo'ng'iroq qilish", "O'lchov kutilmoqda").
+    """
+
+    name = models.CharField(max_length=60)
+    color = models.CharField(max_length=20, default="#2563eb")
+    kind = models.CharField(max_length=16, default="new")
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "id"]
+        constraints = [models.UniqueConstraint(fields=["company", "name"], name="uniq_order_state_name")]
+
+    def __str__(self):
+        return self.name
+
+
+def ensure_order_states():
+    """Kompaniyada statuslar bo'lmasa — standart to'plam (keyin foydalanuvchi o'zgartiradi)."""
+    if not OrderState.objects.exists():
+        for i, (kind, name, color) in enumerate(STATE_DEFAULTS):
+            OrderState.objects.create(kind=kind, name=name, color=color, position=(i + 1) * 10)
+
+
+def state_for_kind(kind):
+    ensure_order_states()
+    return OrderState.objects.filter(kind=kind).order_by("position", "id").first()
+
+
 class Order(TenantModel, TimeStamped):
     """Buyurtma.
 
@@ -42,6 +80,8 @@ class Order(TenantModel, TimeStamped):
     amount = money_field()
     volume = qty_field(help_text="Hajm, m² — kalendar yuklamasi uchun")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.NEW)
+    state = models.ForeignKey(OrderState, null=True, blank=True, on_delete=models.PROTECT, related_name="orders",
+                              help_text="Foydalanuvchi statusi; turi (kind) = status")
     plan_date = models.DateField(help_text="Mijozga topshirish muddati")
     production_date = models.DateField(null=True, blank=True, help_text="Ishlab chiqarish kalendaridagi kun")
     delivered_at = models.DateField(null=True, blank=True)
@@ -68,7 +108,14 @@ class Order(TenantModel, TimeStamped):
             self.number = last + 1
         if self.status == self.Status.DELIVERED and not self.delivered_at:
             self.delivered_at = timezone.localdate()
+        # tizim statusi o'zgarsa (masalan, ishlab chiqarishga yuborildi) — shu turdagi birinchi foydalanuvchi statusi
+        if self.state_id is None or self.state.kind != self.status:
+            self.state = state_for_kind(self.status)
         super().save(*args, **kwargs)
+
+    @property
+    def state_name(self):
+        return self.state.name if self.state_id else self.get_status_display()
 
     # --- to'lov va qarz (buyurtma valyutasida) ---
     @property

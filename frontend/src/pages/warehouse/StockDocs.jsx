@@ -12,6 +12,7 @@ import { date, money, qty, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { DropMenu, SearchSelect, usePager } from '../../components/Controls'
 import { confirmDialog, promptDialog } from '../../components/Confirm'
+import { DateInput } from '../../components/Inputs'
 
 /* Hujjat turlari sozlamasi */
 export const DOC_TYPES = {
@@ -249,7 +250,7 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
               <select value={v.currency} onChange={(e) => changeCurrency(e.target.value)} disabled={!editable}><CurrencyOptions withName value={v.currency} /></select>
             </DocField>
           )}
-          {cfg.planDate && <DocField label="Kutilgan sana"><input type="date" value={v.plan_date || ''} onChange={(e) => set('plan_date', e.target.value)} disabled={!editable} /></DocField>}
+          {cfg.planDate && <DocField label="Kutilgan sana"><DateInput value={v.plan_date || ''} onChange={(e) => set('plan_date', e.target.value)} disabled={!editable} /></DocField>}
         </div>
         <div>
           {doc?.created_by_name && <DocField label="Muallif"><input value={doc.created_by_name} readOnly className="muted-input" /></DocField>}
@@ -351,7 +352,7 @@ export function DocList({ type }) {
                 <button type="button" className="link-btn" onClick={() => period(7)}>{t('hafta')}</button>·
                 <button type="button" className="link-btn" onClick={() => period(30)}>{t('oy')}</button>
               </div>
-              <div className="inline-pick"><input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—<input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} /></div>
+              <div className="inline-pick"><DateInput value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />—<DateInput value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} /></div>
             </label>
             <label>{t('Ombor')}
               <select value={f.warehouse} onChange={(e) => setF({ ...f, warehouse: e.target.value })}>

@@ -8,7 +8,7 @@ import PaymentForm from '../finance/TransactionForm'
 import Estimate from './Estimate'
 import { Positions } from '../../components/DocEditor'
 import OrderForm from './OrderForm'
-import { STATUSES } from './OrderList'
+import { StateBadge, useOrderStates } from './OrderStates'
 import { useRefs } from './OrdersPage'
 import { t as tr } from '../../i18n'
 import Icon from '../../components/Icon'
@@ -24,15 +24,16 @@ export default function OrderDetail() {
   const [edit, setEdit] = useState(false)
   const [pay, setPay] = useState(null)
   const refs = useRefs()
+  const states = useOrderStates()
   const tasks = useFetch('/production/tasks/', { order: id, stamp })
   const txs = useFetch('/finance/transactions/', { order: id, stamp })
 
   if (!o) return <Loading error={error} />
   const refresh = () => { reload(); setStamp((s) => s + 1) }
 
-  const setStatus = async (status) => {
+  const setStatus = async (state) => {
     try {
-      await api.post(`/orders/${id}/set_status/`, { status })
+      await api.post(`/orders/${id}/set_status/`, { state })
       toast('Status yangilandi')
       refresh()
     } catch (e) { toast(errorText(e), true) }
@@ -63,12 +64,12 @@ export default function OrderDetail() {
       <div className="page-head">
         <Link to="/orders" className="muted">{tr("← Buyurtmalar")}</Link>
         <h1>Buyurtma {o.number}</h1>
-        <Badge kind={o.status}>{o.status_display}</Badge>
+        <StateBadge order={o} />
         {o.stage && <span className="stage-chip current">● {tr('Hozir')}: {o.stage}</span>}
         {o.is_overdue && <span className="badge b-low">{o.overdue_days} kun kechikkan</span>}
         <span className="grow" />
-        <select className="chip" value={o.status} onChange={(e) => setStatus(e.target.value)}>
-          {STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        <select className="chip" value={o.state || ''} onChange={(e) => setStatus(e.target.value)}>
+          {states.map((s) => <option key={s.id} value={s.id}>{tr(s.name)}</option>)}
         </select>
         <button className="btn icon-only" onClick={() => setEdit(true)} title={tr("Tahrirlash")}><Icon name="edit" size={16} /></button>
         {['new', 'confirmed'].includes(o.status) && !o.production_orders?.length && <button className="btn primary" onClick={sendToProduction}><Icon name="production" size={16} /> {tr("Ishlab chiqarishga yuborish")}</button>}

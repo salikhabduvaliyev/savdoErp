@@ -32,8 +32,20 @@ def sale_from_order(order, user):
         seller=user, created_by=user, note=f"Buyurtma №{order.number} asosida",
         price_type=order.client.price_type,
     )
-    SaleItem.objects.create(sale=sale, order=order, name=f"Buyurtma №{order.number}", unit="buyurtma",
-                            qty=1, price=order.amount, position=0)
+    items = list(order.items.select_related("product"))
+    if items:
+        # MoySklad: buyurtma pozitsiyalari jo'natishga ko'chadi; tovarlar ombordan chiqim qilinadi
+        for pos, it in enumerate(items):
+            SaleItem.objects.create(sale=sale, order=order, product=it.product, name=it.name, unit=it.unit,
+                                    qty=it.qty, price=it.price, discount_pct=it.discount_pct, position=pos)
+        if not sale.warehouse_id:
+            from apps.warehouse.services import default_warehouse
+
+            sale.warehouse = default_warehouse()
+            sale.save(update_fields=["warehouse"])
+    else:
+        SaleItem.objects.create(sale=sale, order=order, name=f"Buyurtma №{order.number}", unit="buyurtma",
+                                qty=1, price=order.amount, position=0)
     return sale, True
 
 
@@ -62,7 +74,8 @@ def complete_sale(sale):
             ), allow_negative=allow_negative)
             it.cost_amount = convert(move.amount, move.currency, sale.currency, sale.date).quantize(Decimal("0.01"))
             it.save(update_fields=["cost_amount"])
-        elif it.order_id:
+        elif it.order_id and not it.order.items.exists():
+            # eski uslub: butun buyurtma bitta qator — tannarx smetadan
             from apps.orders.services import order_costing
 
             it.cost_amount = Decimal(order_costing(it.order)["cost"])

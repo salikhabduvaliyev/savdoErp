@@ -285,7 +285,7 @@ select.chip { border-radius: 9px; }
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field label { font-size: 12.5px; font-weight: 500; color: var(--text-2); }
 .field input, .field select, .field textarea,
-:is(.doc-field-input, .inline-pick, .price-row, .filter-grid, .side-form .row, .table-toolbar) :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; font: inherit; background: var(--input-bg); color: var(--text); transition: border-color .12s, box-shadow .12s; }
+:is(.doc-field-input, .inline-pick, .price-row, .filter-grid, .pnl-filter, .side-form .row, .table-toolbar) :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; font: inherit; background: var(--input-bg); color: var(--text); transition: border-color .12s, box-shadow .12s; }
 .field input:focus, .field select:focus, .field textarea:focus,
 :is(.doc-field-input, .inline-pick, .price-row, .filter-grid, .side-form .row, .table-toolbar) :is(input, select, textarea):focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
 .field input:disabled, .field select:disabled,
@@ -577,3 +577,16 @@ td.ellipsis { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white
 .price-cur { color: var(--muted); font-size: 13px; }
 .price-sub { font-size: 14px; margin: 18px 0 10px; padding-top: 12px; border-top: 1px solid var(--border); }
 @media (max-width: 700px) { .price-row { grid-template-columns: 1fr 1fr; } .price-row > label { grid-column: 1 / -1; } }
+
+/* ---------------- foyda va zarar (MoySklad) ---------------- */
+.pnl-filter { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-end; }
+.pnl-filter > label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--text-2); }
+.pnl-wrap { display: grid; grid-template-columns: minmax(0, 720px) 260px; gap: 18px; align-items: start; }
+@media (max-width: 1000px) { .pnl-wrap { grid-template-columns: minmax(0, 1fr); } }
+.pnl-t { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.pnl-t td { padding-top: 10px; padding-bottom: 10px; }
+.pnl-t .pnl-sub td { color: var(--text-2); font-size: 13px; }
+.pnl-t .pnl-total td { background: var(--surface-2); }
+.pnl-t .pnl-grand td { background: var(--primary-soft); font-size: 16px; }
+.pnl-toggle { display: inline-flex; align-items: center; gap: 4px; color: inherit; font-weight: inherit; padding: 0; }
+.pnl-side { display: grid; gap: 12px; }

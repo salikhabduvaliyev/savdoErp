@@ -385,3 +385,30 @@ class StockDocTests(TestCase):
         # aylanma
         t = self.api.get("/api/warehouse/turnover/", {"warehouse": self.w1.id}).json()["rows"][0]
         self.assertEqual((D(t["income"]), D(t["outcome"]), D(t["closing"])), (D("10"), D("6"), D("4")))
+
+    def test_order_positions_shipment_and_pnl(self):
+        """Pozitsiyali buyurtma → buyurtmadan sotuv: tovar ombordan chiqadi, tannarx va P&L to'g'ri."""
+        with tenant_context(self.c):
+            prod = Material.objects.create(name="Deraza", type="product", unit="pcs", currency="UZS")
+        set_context(None, None)
+        self.doc("enter", [{"material": prod.id, "qty": "5", "price": "1000000"}])
+        r = self.api.post("/api/orders/", {"client": self.cli.id, "currency": "UZS", "plan_date": str(T), "date": str(T),
+                                           "items": [{"product": prod.id, "qty": "3", "price": "2000000"}]}, format="json")
+        order = r.json()
+        costing = self.api.get(f"/api/orders/{order['id']}/costing/").json()
+        self.assertEqual(D(costing["cost"]), D("3000000"))  # o'rtacha tannarx bo'yicha
+        self.api.post(f"/api/orders/{order['id']}/set_status/", {"status": "ready"}, format="json")
+        sale = self.api.post("/api/sales/from_order/", {"order": order["id"]}, format="json").json()
+        self.assertEqual(sale["items"][0]["product"], prod.id)
+        r = self.api.post(f"/api/sales/{sale['id']}/complete/")
+        self.assertEqual(r.status_code, 200, r.content)
+        from apps.warehouse.models import Stock
+
+        with tenant_context(self.c):
+            self.assertEqual(Stock.objects.get(material=prod).qty, D("2"))
+            from apps.finance.services import pnl_report
+
+            rows = {x["key"]: D(x["amount"]) for x in pnl_report(T, T, "UZS")["rows"]}
+        self.assertEqual(rows["revenue"], D("6000000"))  # ikki marta hisoblanmaydi
+        self.assertEqual(rows["cogs"], D("3000000"))
+        self.assertEqual(rows["gross"], D("3000000"))

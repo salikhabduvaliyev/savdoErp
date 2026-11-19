@@ -82,8 +82,32 @@ def order_costing(order: Order) -> dict:
             "operation": p.task.operation.name, "qty": str(p.qty), "currency": "UZS", "amount": str(q2(p.amount)),
         })
 
-    total_bag = a_bag + b_bag + c_bag + d_bag
-    cost = a_conv + b_conv + c_conv + d_conv
+    # P — pozitsiyalardagi tovar/mahsulot tannarxi: jo'natilgani — sotuvdagi haqiqiy tannarx,
+    # qolgani — ombordagi o'rtacha tannarx (bo'lmasa xarid narxi), buyurtma sanasidagi kurs bo'yicha
+    p_rows, p_bag, p_conv = [], MoneyBag(), ZERO
+    from apps.sales.models import Sale, SaleItem
+
+    for it in order.items.select_related("product"):
+        prod = it.product
+        if not prod or not prod.is_stocked:
+            continue
+        shipped = SaleItem.objects.filter(order=order, product=prod, sale__status=Sale.Status.COMPLETED)
+        sh_qty = sum((s.qty for s in shipped), ZERO)
+        sh_cost = sum((s.cost_amount for s in shipped), ZERO)  # sotuv valyutasi = buyurtma valyutasi
+        rest = max(ZERO, Decimal(it.qty) - sh_qty)
+        stocks = [s for s in prod.stocks.all() if s.qty > 0]
+        sq = sum((s.qty for s in stocks), ZERO)
+        unit = (sum((s.qty * s.avg_cost for s in stocks), ZERO) / sq) if sq else Decimal(prod.purchase_price)
+        rest_cost = conv(rest * unit, prod.currency, order.date)
+        amount = sh_cost + rest_cost
+        p_bag.add(amount, cur)
+        p_conv += amount
+        p_rows.append({"id": it.id, "name": prod.name, "unit": prod.get_unit_display(), "qty": str(it.qty),
+                       "shipped": str(sh_qty), "amount": str(q2(amount)), "currency": cur,
+                       "basis": "sotuv" if sh_qty >= Decimal(it.qty) else ("aralash" if sh_qty else "o'rtacha tannarx")})
+
+    total_bag = a_bag + b_bag + c_bag + d_bag + p_bag
+    cost = a_conv + b_conv + c_conv + d_conv + p_conv
     profit = order.amount - cost
     margin = (profit / order.amount * 100) if order.amount else ZERO
     try:
@@ -102,6 +126,7 @@ def order_costing(order: Order) -> dict:
             "B": {"rows": b_rows, "total": b_bag.as_dict(), "converted": str(q2(b_conv))},
             "C": {"rows": c_rows, "total": c_bag.as_dict(), "converted": str(q2(c_conv))},
             "D": {"rows": d_rows, "total": d_bag.as_dict(), "converted": str(q2(d_conv))},
+            "P": {"rows": p_rows, "total": p_bag.as_dict(), "converted": str(q2(p_conv))},
         },
         "total": total_bag.as_dict(),
         "cost": str(q2(cost)),

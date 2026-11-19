@@ -196,6 +196,21 @@ export default function Estimate({ order, onChanged }) {
         </table>
       </div>
 
+      {data.blocks.P?.rows.length > 0 && (
+        <div className="card">
+          <div className="card-head"><h3>{t("P. Pozitsiyalar tannarxi (tovar va mahsulotlar)")}</h3>{blockTotal(data.blocks.P)}</div>
+          <table className="t">
+            <thead><tr><th>{t('Nomi')}</th><th className="num">{t('Miqdor')}</th><th className="num">{t("Jo'natilgan")}</th><th>{t('Asos')}</th><th className="num">{t('Tannarx')}</th></tr></thead>
+            <tbody>
+              {data.blocks.P.rows.map((r) => (
+                <tr key={r.id}><td>{r.name}</td><td className="num">{qty(r.qty)} {t(r.unit)}</td><td className="num">{qty(r.shipped)}</td>
+                  <td className="small muted">{t(r.basis)}</td><td className="num">{money(r.amount, r.currency)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="card" style={{ borderColor: profit < 0 ? 'var(--red)' : 'var(--border)' }}>
         <h3 style={{ marginBottom: 10 }}>{t("Jami tannarx va foyda")}</h3>
         <div className="stats" style={{ marginBottom: 0 }}>
@@ -207,7 +222,7 @@ export default function Estimate({ order, onChanged }) {
             <div className={'bold ' + (profit < 0 ? 'red' : 'green')}>{money(data.profit, data.currency)} · {data.margin_pct}%</div>
           </div>
         </div>
-        <div className="hint">{t("A, B — buyurtma sanasidagi kurs; C — xarajat sanasidagi kurs; D — ishbay yozuvi sanasidagi kurs. Rentabellik = foyda / buyurtma summasi.")}</div>
+        <div className="hint">{t("A, B — buyurtma sanasidagi kurs; C — xarajat sanasidagi kurs; D — ishbay yozuvi sanasidagi kurs; P — jo'natilgani sotuvdagi haqiqiy tannarx, qolgani ombordagi o'rtacha tannarx. Rentabellik = foyda / buyurtma summasi.")}</div>
       </div>
     </>
   )

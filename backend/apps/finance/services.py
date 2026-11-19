@@ -161,3 +161,99 @@ def cash_flow(date_from, date_to):
         {"month": k, "in": v["in"].as_dict(), "out": v["out"].as_dict(), "net": (v["in"] - v["out"]).as_dict()}
         for k, v in sorted(rows.items())
     ]
+
+
+def pnl_report(date_from, date_to, currency="UZS"):
+    """Foyda va zarar — MoySklad tuzilmasida, bitta hisobot valyutasida.
+
+    Har bir summa o'z sanasidagi kurs bo'yicha `currency` ga aylantiriladi (aniq, kuzatiladigan aylantirish).
+    Qatorlar: Tushum → Tannarx → Yalpi foyda → Operatsion xarajatlar (moddalar bo'yicha, hisobdan chiqarishlar
+    bilan) → Operatsion foyda → Boshqa daromadlar → Sof foyda.
+    """
+    from apps.core.money import RateNotFound, convert
+    from apps.orders.models import Order
+    from apps.orders.services import order_costing
+    from apps.sales.models import Sale
+    from apps.warehouse.documents import doc_cost
+    from apps.warehouse.models import StockDoc, StockMove
+
+    warnings = set()
+
+    def cv(amount, cur, day):
+        try:
+            return convert(Decimal(amount or 0), cur, currency, day)
+        except RateNotFound as e:
+            warnings.add(str(e))
+            return Decimal("0")
+
+    rev = {"orders": Decimal("0"), "sales": Decimal("0"), "returns": Decimal("0")}
+    cost = {"orders": Decimal("0"), "sales": Decimal("0"), "returns": Decimal("0")}
+    for o in Order.objects.filter(date__range=(date_from, date_to)).exclude(status=Order.Status.CANCELLED):
+        c = order_costing(o)
+        rev["orders"] += cv(o.amount, o.currency, o.date)
+        cost["orders"] += cv(c["cost"], o.currency, o.date)
+    for sale in Sale.objects.filter(status=Sale.Status.COMPLETED, date__range=(date_from, date_to)).prefetch_related("items"):
+        lines = [i for i in sale.items.all() if not i.order_id]
+        if not lines:
+            continue
+        rev["sales"] += cv(sum((i.amount for i in lines), Decimal("0")) - (sale.discount or 0), sale.currency, sale.date)
+        cost["sales"] += cv(sum((i.cost_amount for i in lines), Decimal("0")), sale.currency, sale.date)
+    for d in StockDoc.objects.filter(type="sales_return", posted=True, date__range=(date_from, date_to)).prefetch_related("items", "moves"):
+        rev["returns"] -= cv(d.total, d.currency, d.date)
+        cost["returns"] -= cv(doc_cost(d), d.currency, d.date)
+
+    # operatsion xarajatlar: buyurtmaga biriktirilmagan, foydaga ta'sir qiladigan
+    opex = defaultdict(lambda: Decimal("0"))
+    for t in (Transaction.objects.filter(date__range=(date_from, date_to), direction=Transaction.Direction.OUT,
+                                         order__isnull=True, kind__in=[Transaction.Kind.EXPENSE, Transaction.Kind.SALARY])
+              .exclude(category__affects_profit=False).select_related("category")):
+        name = t.category.name if t.category else ("Ish haqi" if t.kind == Transaction.Kind.SALARY else "Boshqa xarajatlar")
+        opex[name] += cv(t.amount, t.currency, t.date)
+    # hisobdan chiqarishlar (Списания) va inventarizatsiya kamomadi — tannarx bo'yicha
+    losses = Decimal("0")
+    for mv in StockMove.objects.filter(date__range=(date_from, date_to), doc__type="loss"):
+        losses += cv(Decimal(mv.qty) * Decimal(mv.price), mv.currency, mv.date)
+    surplus = Decimal("0")
+    for mv in StockMove.objects.filter(date__range=(date_from, date_to), type=StockMove.Type.ADJUST):
+        amount = Decimal(mv.qty) * Decimal(mv.price)
+        if amount < 0:
+            losses += cv(-amount, mv.currency, mv.date)
+        else:
+            surplus += cv(amount, mv.currency, mv.date)
+
+    other = defaultdict(lambda: Decimal("0"))
+    for t in (Transaction.objects.filter(date__range=(date_from, date_to), kind=Transaction.Kind.OTHER_INCOME)
+              .exclude(category__affects_profit=False).select_related("category")):
+        other[t.category.name if t.category else "Boshqa daromadlar"] += cv(t.amount, t.currency, t.date)
+    if surplus:
+        other["Inventarizatsiya ortiqchasi"] += surplus
+
+    q = lambda v: str(Decimal(v).quantize(Decimal("0.01")))  # noqa: E731
+    revenue = sum(rev.values(), Decimal("0"))
+    cogs = sum(cost.values(), Decimal("0"))
+    gross = revenue - cogs
+    opex_rows = sorted(opex.items(), key=lambda kv: -kv[1])
+    opex_total = sum(opex.values(), Decimal("0")) + losses
+    operating = gross - opex_total
+    other_total = sum(other.values(), Decimal("0"))
+    net = operating + other_total
+
+    rows = [
+        {"key": "revenue", "label": "Tushum", "amount": q(revenue), "level": 0, "bold": True},
+        {"key": "rev_orders", "label": "Buyurtmalar", "amount": q(rev["orders"]), "level": 1},
+        {"key": "rev_sales", "label": "Sotuvlar (tovarlar)", "amount": q(rev["sales"]), "level": 1},
+        {"key": "rev_returns", "label": "Mijoz qaytarishlari", "amount": q(rev["returns"]), "level": 1},
+        {"key": "cogs", "label": "Tannarx", "amount": q(cogs), "level": 0},
+        {"key": "gross", "label": "Yalpi foyda", "amount": q(gross), "level": 0, "bold": True, "total": True},
+        {"key": "opex", "label": "Operatsion xarajatlar", "amount": q(opex_total), "level": 0},
+        {"key": "losses", "label": "Hisobdan chiqarishlar", "amount": q(losses), "level": 1},
+        *[{"key": f"opex:{n}", "label": n, "amount": q(v), "level": 1} for n, v in opex_rows],
+        {"key": "operating", "label": "Operatsion foyda", "amount": q(operating), "level": 0, "bold": True, "total": True},
+        {"key": "other", "label": "Boshqa daromadlar", "amount": q(other_total), "level": 0},
+        *[{"key": f"other:{n}", "label": n, "amount": q(v), "level": 1} for n, v in sorted(other.items())],
+        {"key": "net", "label": "Sof foyda", "amount": q(net), "level": 0, "bold": True, "total": True, "grand": True},
+    ]
+    margin = (gross / revenue * 100).quantize(Decimal("0.1")) if revenue else None
+    net_margin = (net / revenue * 100).quantize(Decimal("0.1")) if revenue else None
+    return {"currency": currency, "rows": rows, "gross_margin_pct": str(margin) if margin is not None else None,
+            "net_margin_pct": str(net_margin) if net_margin is not None else None, "warnings": sorted(warnings)}

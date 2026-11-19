@@ -154,6 +154,9 @@ def supplier_debts(request):
 @permission_classes([module_perm("finance")])
 def pnl(request):
     df, dt = _period(request)
+    cur = request.query_params.get("currency")
+    if cur:  # MoySklad uslubi: bitta hisobot valyutasida, moddalar bo'yicha
+        return Response({"date_from": df, "date_to": dt, **services.pnl_report(df, dt, cur.upper())})
     return Response({"date_from": df, "date_to": dt, **services.profit_and_loss(df, dt)})
 
 

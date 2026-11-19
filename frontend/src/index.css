@@ -893,3 +893,24 @@ tr.om-src td { background: var(--surface-2); font-size: 12.5px; color: var(--tex
 .inline-pick > .dinput, .prof-dates .dinput, .stock-date .dinput { flex: 1 1 0; min-width: 0; }
 .inline-pick > .dinput > input { min-width: 0; padding-left: 9px; }
 .filter-grid > label { min-width: 0; }
+
+/* KPI shkalasi qo'shish */
+.kpi-scale-add { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.kpi-scale-add input { width: 80px; border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 8px; font: inherit; background: var(--input-bg); color: var(--text); text-align: right; }
+/* Tablar: gorizontal aylantirish, vertikal "scroll" o'qlari chiqmasin */
+.tabs { overflow-y: hidden; }
+.prof-dates .dinput { flex: none; width: 160px; min-width: 0; }
+.prof-bar .tabs { overflow: visible; }
+
+/* Profil va foydalanuvchi oynasi */
+.avatar-img { object-fit: cover; padding: 0; border-radius: 50%; display: inline-block; }
+.profile-grid { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .profile-grid { grid-template-columns: minmax(0, 1fr); } }
+.profile-card { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.profile-avatar .avatar { font-size: 44px; }
+.profile-actions { display: flex; gap: 8px; margin-top: 6px; }
+.profile-page { max-width: 1100px; }
+.user-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.user-head .grow { flex: 1; }
+.company-logo-box { display: flex; align-items: center; gap: 10px; }
+.company-logo-box img { height: 56px; max-width: 160px; object-fit: contain; border-radius: 8px; border: 1px solid var(--border); background: #fff; padding: 4px; }

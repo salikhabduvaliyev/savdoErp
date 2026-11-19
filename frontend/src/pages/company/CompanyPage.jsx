@@ -32,6 +32,7 @@ const COMPANY_FIELDS = [
 
 function CompanyInfo({ editable }) {
   const { data, error, setData } = useFetch('/core/company/')
+  const { reloadMe } = useAuth()
   const [busy, setBusy] = useState(false)
   if (!data) return <Loading error={error} />
   const set = (k) => (e) => setData({ ...data, [k]: e.target.value })
@@ -54,6 +55,15 @@ function CompanyInfo({ editable }) {
       const { data: saved } = await api.patch('/core/company/', fd)
       setData(saved)
       toast('Logo yuklandi')
+      reloadMe?.()
+    } catch (err) { toast(errorText(err), true) }
+  }
+  const removeLogo = async () => {
+    try {
+      const { data: saved } = await api.patch('/core/company/', { logo: null })
+      setData(saved)
+      toast(t("Logo o'chirildi"))
+      reloadMe?.()
     } catch (err) { toast(errorText(err), true) }
   }
 
@@ -61,14 +71,15 @@ function CompanyInfo({ editable }) {
     <form className="card" onSubmit={save}>
       <div className="card-head">
         <h2 style={{ margin: 0 }}>{t("Rekvizitlar")}</h2>
-        <div className="filters">
-          {data.logo && <img src={data.logo} alt="logo" style={{ height: 40, borderRadius: 6, border: '1px solid var(--border)' }} />}
+        <div className="company-logo-box">
+          {data.logo ? <img src={data.logo} alt="logo" /> : <span className="muted small">{t("Logo yuklanmagan")}</span>}
           {editable && (
             <label className="btn small">
-              Logo yuklash
-              <input type="file" accept="image/*" hidden onChange={(e) => e.target.files[0] && uploadLogo(e.target.files[0])} />
+              {data.logo ? t('Logoni almashtirish') : t('Logo yuklash')}
+              <input type="file" accept="image/*" hidden onChange={(e) => { if (e.target.files[0]) uploadLogo(e.target.files[0]); e.target.value = '' }} />
             </label>
           )}
+          {editable && data.logo && <button type="button" className="btn small danger-ghost" onClick={removeLogo}>{t("O'chirish")}</button>}
         </div>
       </div>
       <div className="form three">

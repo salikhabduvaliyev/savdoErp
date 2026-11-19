@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import date
 
 from django.contrib.auth.password_validation import validate_password
@@ -245,17 +246,38 @@ class AdjustmentViewSet(viewsets.ModelViewSet):
     filterset_fields = ["employee", "month", "kind"]
 
 
+def ensure_kpi_defaults():
+    """Yangi kompaniyada KPI bo'sh bo'lmasin: standart shablonlar va umumiy koeffitsiyent shkalasi."""
+    if not KpiTemplate.objects.exists():
+        for name, unit, direction, cap in [("Sotuv rejasi", "mln so'm", "higher", 150),
+                                           ("Muddatida topshirish", "%", "higher", 100),
+                                           ("Brak (nuqson)", "%", "lower", 150)]:
+            KpiTemplate.objects.create(name=name, unit=unit, direction=direction, cap_pct=cap)
+    if not KpiScale.objects.filter(template__isnull=True).exists():
+        for mn, k in [(110, "1.2"), (100, "1.0"), (90, "0.8"), (0, "0")]:
+            KpiScale.objects.create(min_pct=mn, coefficient=Decimal(k))
+
+
 class KpiTemplateViewSet(viewsets.ModelViewSet):
     module = "hr"
+
     def get_queryset(self):
+        ensure_kpi_defaults()
         return KpiTemplate.objects.prefetch_related("scale")
+
+    def perform_destroy(self, instance):
+        if instance.results.exists():
+            raise serializers.ValidationError({"detail": "Shablon bo'yicha natijalar bor — avval ularni o'chiring"})
+        instance.delete()
 
     serializer_class = KpiTemplateSerializer
 
 
 class KpiScaleViewSet(viewsets.ModelViewSet):
     module = "hr"
+
     def get_queryset(self):
+        ensure_kpi_defaults()
         return KpiScale.objects.all()
 
     serializer_class = KpiScaleSerializer

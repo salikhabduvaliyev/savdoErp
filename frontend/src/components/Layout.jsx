@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import api, { errorText } from '../api'
 import { can, useAuth } from '../auth'
 import { getLang, LANGS, setLang, t } from '../i18n'
@@ -94,6 +94,7 @@ function UserMenu() {
   }
   const [open, setOpen] = useState(false)
   const [pw, setPw] = useState(false)
+  const nav = useNavigate()
   const ref = useRef(null)
   useEffect(() => {
     const h = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false)
@@ -103,7 +104,7 @@ function UserMenu() {
   return (
     <div className="user-menu" ref={ref}>
       <button className="user-btn" onClick={() => setOpen((o) => !o)}>
-        <span className="avatar">{(user.full_name || '?')[0].toUpperCase()}</span>
+        {user.avatar_url ? <img className="avatar avatar-img" src={user.avatar_url} alt="" /> : <span className="avatar">{(user.full_name || '?')[0].toUpperCase()}</span>}
         <span className="meta">
           <b>{user.full_name}</b>
           <small>{t(user.is_platform_admin ? 'Platforma admini' : user.is_owner ? 'Kompaniya egasi' : user.role_name || '—')}</small>
@@ -127,6 +128,7 @@ function UserMenu() {
             </div>
           </div>
           <hr />
+          {user.company && <button onClick={() => { setOpen(false); nav('/profile') }}><Icon name="user" size={16} /> {t('Mening profilim')}</button>}
           <button onClick={() => { setOpen(false); setPw(true) }}><Icon name="key" size={16} /> {t("Parolni o'zgartirish")}</button>
           {user.is_platform_admin && <a href="/admin/" target="_blank" rel="noreferrer"><Icon name="platform" size={16} /> {t("Django admin")}</a>}
           <hr />

@@ -1,7 +1,8 @@
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Count
 from rest_framework import serializers, viewsets
-from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
+from rest_framework.decorators import action, api_view, parser_classes, permission_classes, throttle_classes
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
@@ -46,15 +47,22 @@ class UserSerializer(serializers.ModelSerializer):
     employee = serializers.SerializerMethodField()
     branches = serializers.PrimaryKeyRelatedField(many=True, queryset=Branch.objects, required=False)
     branch_names = serializers.SerializerMethodField()
+    avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id", "username", "first_name", "last_name", "full_name", "role", "role_name", "role_code",
             "department", "department_name", "phone", "email", "is_active", "is_owner", "last_login",
-            "employee", "branches", "branch_names",
+            "employee", "branches", "branch_names", "avatar_url",
         ]
         read_only_fields = ["is_owner", "last_login", "username"]
+
+    def get_avatar_url(self, obj):
+        if not obj.avatar:
+            return None
+        req = self.context.get("request")
+        return req.build_absolute_uri(obj.avatar.url) if req else obj.avatar.url
 
     def get_employee(self, obj):
         emp = getattr(obj, "employee", None)
@@ -96,15 +104,46 @@ class MeSerializer(UserSerializer):
         return [{"id": b.id, "name": b.name, "is_main": b.is_main} for b in qs.order_by("-is_main", "name")]
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
+@parser_classes([JSONParser, MultiPartParser, FormParser])
 def me(request):
+    """GET — joriy foydalanuvchi; PATCH — o'z profili: full_name, phone, email, avatar (fayl), remove_avatar."""
     # Obuna tugagan bo'lsa ham "me" ishlaydi — frontend bloklash ekranini ko'rsatadi
     try:
         activate_tenant(request)
     except SubscriptionExpired:
         set_context(request.user.company_id, None)
-    return Response(MeSerializer(request.user, context={"request": request}).data)
+    user = request.user
+    if request.method == "PATCH":
+        d = request.data
+        if "full_name" in d:
+            name = str(d.get("full_name") or "").strip()
+            if not name:
+                raise serializers.ValidationError({"full_name": "Ismni kiriting"})
+            first, _, last = name.partition(" ")
+            user.first_name, user.last_name = first[:150], last[:150]
+            emp = getattr(user, "employee", None)
+            if emp:  # ism xodim kartochkasidan ko'rsatiladi — u ham yangilanadi
+                emp.full_name = name
+                emp.save(update_fields=["full_name"])
+        for k in ("phone", "email"):
+            if k in d:
+                setattr(user, k, str(d.get(k) or "").strip())
+        f = request.FILES.get("avatar")
+        if f:
+            if f.size > 3 * 1024 * 1024:
+                raise serializers.ValidationError({"avatar": "Rasm 3 MB dan katta bo'lmasin"})
+            if not (f.content_type or "").startswith("image/"):
+                raise serializers.ValidationError({"avatar": "Faqat rasm fayli"})
+            if user.avatar:
+                user.avatar.delete(save=False)
+            user.avatar = f
+        elif str(d.get("remove_avatar", "")).lower() in ("1", "true") and user.avatar:
+            user.avatar.delete(save=False)
+            user.avatar = None
+        user.save()
+    return Response(MeSerializer(user, context={"request": request}).data)
 
 
 @api_view(["GET"])

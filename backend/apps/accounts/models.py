@@ -139,6 +139,7 @@ class User(AbstractUser):
         "production.Department", null=True, blank=True, on_delete=models.SET_NULL, related_name="users"
     )
     phone = models.CharField(max_length=32, blank=True)
+    avatar = models.FileField(upload_to="avatars/", null=True, blank=True, help_text="Profil rasmi")
     preferences = models.JSONField(default=dict, blank=True, help_text="Mavzu, til, jadval ustunlari...")
 
     @property

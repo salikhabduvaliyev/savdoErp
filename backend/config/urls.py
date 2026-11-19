@@ -27,11 +27,14 @@ urlpatterns = [
     path("api/dashboard/", include("apps.dashboard.urls")),
 ]
 
+# Yuklangan fayllar (kompaniya logosi, foydalanuvchi rasmi)
+urlpatterns += [re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT})]
+
 # Frontend build mavjud bo'lsa — Django o'zi beradi (production / PythonAnywhere).
 # PythonAnywhere'da /assets/ ni Web → Static files orqali berish tezroq (DEPLOY.md).
 if settings.FRONTEND_DIST.exists():
     urlpatterns += [
         re_path(r"^assets/(?P<path>.*)$", serve, {"document_root": settings.FRONTEND_DIST / "assets"}),
         re_path(r"^(?P<path>favicon\.svg|vite\.svg|robots\.txt)$", serve, {"document_root": settings.FRONTEND_DIST}),
-        re_path(r"^(?!api/|admin/|static/|assets/).*$", spa_index),
+        re_path(r"^(?!api/|admin/|static/|assets/|media/).*$", spa_index),
     ]

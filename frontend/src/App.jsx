@@ -19,6 +19,7 @@ const ProductionDashboardPage = lazy(() => import('./pages/production/Production
 const WarehousePage = lazy(() => import('./pages/warehouse/WarehousePage'))
 const FinancePage = lazy(() => import('./pages/finance/FinancePage'))
 const HrPage = lazy(() => import('./pages/hr/HrPage'))
+const ProfilePage = lazy(() => import('./pages/settings/ProfilePage'))
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
 const CounterpartiesPage = lazy(() => import('./pages/counterparties/CounterpartiesPage'))
 const CounterpartyPage = lazy(() => import('./pages/counterparties/CounterpartyPage'))
@@ -100,6 +101,7 @@ export default function App() {
         <Route path="/counterparties/:id" element={guard('counterparties', <CounterpartyPage />)} />
         <Route path="/company" element={guard('company', <CompanyPage />)} />
         <Route path="/settings" element={guard('settings', <SettingsPage />)} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/no-access" element={<NoAccess />} />
         <Route path="*" element={<Navigate to={home(user)} replace />} />
       </Route>

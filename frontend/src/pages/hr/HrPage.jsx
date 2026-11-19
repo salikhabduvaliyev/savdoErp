@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import api, { errorText } from '../../api'
 import { Loading, Stat, toast, useFetch } from '../../components/ui'
+import { canCreate, canDelete, canEdit, useAuth } from '../../auth'
+import EntityForm from '../../components/EntityForm'
+import { IconBtn } from '../../components/Icon'
+import { confirmDialog } from '../../components/Confirm'
+import { NumInput } from '../../components/Inputs'
 import { MONTHS, money, monthStartISO, num, qty } from '../../format'
 import { t as tr } from '../../i18n'
 
@@ -19,46 +24,104 @@ function MonthPicker({ value, onChange }) {
 }
 
 function KpiResults({ month }) {
-  const { data, error } = useFetch('/hr/kpi-results/', { month })
+  const { user } = useAuth()
+  const [stamp, setStamp] = useState(0)
+  const [form, setForm] = useState(null)
+  const { data, error } = useFetch('/hr/kpi-results/', { month, stamp })
+  const tpls = useFetch('/hr/kpi-templates/')
+  const emps = useFetch('/hr/employees/', { is_active: true })
+  const deps = useFetch('/production/departments/')
+  const remove = async (r) => {
+    if (!(await confirmDialog(tr("O'chirilsinmi?") + `\n${r.subject} · ${r.template_name}`))) return
+    try { await api.delete(`/hr/kpi-results/${r.id}/`); setStamp((x) => x + 1) } catch (e) { toast(errorText(e), true) }
+  }
   if (!data) return <Loading error={error} />
+  const list = data.results || data
   return (
-    <div className="table-wrap">
-      <table className="t">
-        <thead><tr><th>{tr("Xodim / bo'lim")}</th><th>{tr("Ko'rsatkich")}</th><th className="num">{tr("Reja")}</th><th className="num">{tr("Fakt")}</th><th className="num">{tr("Bajarilish")}</th><th className="num">{tr("Bonus koeff.")}</th></tr></thead>
-        <tbody>
-          {data.map((r) => (
-            <tr key={r.id}>
-              <td>{r.subject}</td>
-              <td>{r.template_name}</td>
-              <td className="num">{qty(r.plan)} {r.unit}</td>
-              <td className="num">{qty(r.fact)} {r.unit}</td>
-              <td className={'num ' + (Number(r.achievement_pct) < 90 ? 'red' : Number(r.achievement_pct) >= 110 ? 'green' : '')}>{num(r.achievement_pct, 1)}%</td>
-              <td className="num bold">×{num(r.coefficient, 1)}</td>
-            </tr>
-          ))}
-          {!data.length && <tr><td colSpan={6} className="empty">{tr("Bu oy uchun KPI kiritilmagan")}</td></tr>}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="table-wrap">
+        {canCreate(user, 'hr') && (
+          <div className="table-toolbar">
+            <button className="btn primary small" onClick={() => setForm({ item: null })}>{tr('+ KPI natija')}</button>
+            <span className="muted small">{tr('Oy')}: {MONTHS[Number(month.slice(5, 7)) - 1]} {month.slice(0, 4)}</span>
+          </div>
+        )}
+        <table className="t">
+          <thead><tr><th>{tr("Xodim / bo'lim")}</th><th>{tr("Ko'rsatkich")}</th><th className="num">{tr("Reja")}</th><th className="num">{tr("Fakt")}</th><th className="num">{tr("Bajarilish")}</th><th className="num">{tr("Bonus koeff.")}</th><th /></tr></thead>
+          <tbody>
+            {list.map((r) => (
+              <tr key={r.id} className={canEdit(user, 'hr') ? 'clickable' : ''} onClick={() => canEdit(user, 'hr') && setForm({ item: r })}>
+                <td>{r.subject}</td>
+                <td>{r.template_name}</td>
+                <td className="num">{qty(r.plan)} {r.unit}</td>
+                <td className="num">{qty(r.fact)} {r.unit}</td>
+                <td className={'num ' + (Number(r.achievement_pct) < 90 ? 'red' : Number(r.achievement_pct) >= 110 ? 'green' : '')}>{num(r.achievement_pct, 1)}%</td>
+                <td className="num bold">×{num(r.coefficient, 1)}</td>
+                <td className="num" onClick={(e) => e.stopPropagation()}>{canDelete(user, 'hr') && <IconBtn icon="delete" danger title="O'chirish" onClick={() => remove(r)} />}</td>
+              </tr>
+            ))}
+            {!list.length && (
+              <tr><td colSpan={7} className="empty">
+                {tr("Bu oy uchun KPI kiritilmagan")}
+                {canCreate(user, 'hr') && <> · <button className="link-btn" onClick={() => setForm({ item: null })}>{tr("KPI natija qo'shish")}</button></>}
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="legend"><span>{tr("Natija: xodim (yoki bo'lim) bo'yicha oy rejasi va fakti. Bajarilish va koeffitsiyent shablon va shkala bo'yicha avtomatik hisoblanadi; oylik vedomostda KPI bonusiga qo'shiladi.")}</span></div>
+      {form && (
+        <EntityForm title={form.item ? tr('KPI natija') : tr('Yangi KPI natija')} url="/hr/kpi-results/" item={form.item}
+          fields={[
+            { name: 'template', label: tr("Ko'rsatkich (shablon)"), type: 'select', required: true, options: (tpls.data || []).map((x) => [x.id, `${x.name}${x.unit ? ` (${x.unit})` : ''}`]) },
+            { name: 'employee', label: tr('Xodim'), type: 'select', options: (emps.data?.results || emps.data || []).map((x) => [x.id, x.full_name]) },
+            { name: 'department', label: tr("yoki bo'lim"), type: 'select', options: (deps.data || []).map((x) => [x.id, x.name]) },
+            { name: 'plan', label: tr('Reja'), type: 'number', required: true },
+            { name: 'fact', label: tr('Fakt'), type: 'number', required: true },
+            { name: 'month', label: tr('Oy (1-kun)'), type: 'date', required: true },
+          ]}
+          defaults={{ month, plan: '', fact: '' }}
+          onClose={() => setForm(null)} onSaved={() => { setForm(null); setStamp((x) => x + 1); toast(tr('Saqlandi')) }} />
+      )}
+    </>
   )
 }
 
 function KpiTemplates() {
-  const { data, error } = useFetch('/hr/kpi-templates/')
-  const scale = useFetch('/hr/kpi-scale/')
+  const { user } = useAuth()
+  const [stamp, setStamp] = useState(0)
+  const [form, setForm] = useState(null)
+  const [row, setRow] = useState({ min_pct: '', coefficient: '' })
+  const { data, error } = useFetch('/hr/kpi-templates/', { stamp })
+  const scale = useFetch('/hr/kpi-scale/', { stamp })
+  const editable = canEdit(user, 'hr')
   if (!data) return <Loading error={error} />
-  const global = (scale.data || []).filter((s) => !s.template)
+  const global = (scale.data || []).filter((x) => !x.template).sort((a, b) => Number(b.min_pct) - Number(a.min_pct))
+  const reload = () => setStamp((x) => x + 1)
+  const removeTpl = async (x) => {
+    if (!(await confirmDialog(tr("O'chirilsinmi?") + `\n${x.name}`))) return
+    try { await api.delete(`/hr/kpi-templates/${x.id}/`); reload() } catch (e) { toast(errorText(e), true) }
+  }
+  const addScale = async () => {
+    if (row.min_pct === '' || row.coefficient === '') return
+    try { await api.post('/hr/kpi-scale/', row); setRow({ min_pct: '', coefficient: '' }); reload() } catch (e) { toast(errorText(e), true) }
+  }
+  const removeScale = async (x) => {
+    try { await api.delete(`/hr/kpi-scale/${x.id}/`); reload() } catch (e) { toast(errorText(e), true) }
+  }
   return (
     <div className="grid-2">
       <div className="table-wrap">
+        {canCreate(user, 'hr') && <div className="table-toolbar"><button className="btn primary small" onClick={() => setForm({ item: null })}>{tr('+ Shablon')}</button></div>}
         <table className="t">
-          <thead><tr><th>{tr("Shablon")}</th><th>{tr("Birlik")}</th><th>{tr("Yo'nalish")}</th><th>{tr("Formula")}</th><th className="num">{tr("Yuqori chegara")}</th></tr></thead>
+          <thead><tr><th>{tr("Shablon")}</th><th>{tr("Birlik")}</th><th>{tr("Yo'nalish")}</th><th>{tr("Formula")}</th><th className="num">{tr("Yuqori chegara")}</th><th /></tr></thead>
           <tbody>
-            {data.map((t) => (
-              <tr key={t.id}>
-                <td>{t.name}</td><td>{tr(t.unit)}</td><td>{tr(t.direction_display)}</td>
-                <td className="small muted">{t.direction === 'higher' ? 'fakt / reja' : 'reja / fakt'}</td>
-                <td className="num">{num(t.cap_pct)}%</td>
+            {data.map((x) => (
+              <tr key={x.id} className={editable ? 'clickable' : ''} onClick={() => editable && setForm({ item: x })}>
+                <td>{x.name}</td><td>{tr(x.unit)}</td><td>{tr(x.direction_display)}</td>
+                <td className="small muted">{x.direction === 'higher' ? tr('fakt / reja') : tr('reja / fakt')}</td>
+                <td className="num">{num(x.cap_pct)}%</td>
+                <td className="num" onClick={(e) => e.stopPropagation()}>{canDelete(user, 'hr') && <IconBtn icon="delete" danger title="O'chirish" onClick={() => removeTpl(x)} />}</td>
               </tr>
             ))}
           </tbody>
@@ -66,11 +129,37 @@ function KpiTemplates() {
       </div>
       <div className="card">
         <h2>{tr("Koeffitsiyentlar shkalasi")}</h2>
-        <ul className="list-plain">
-          {global.map((s) => <li key={s.id}>Bajarilish ≥ {num(s.min_pct)}% → <b>×{num(s.coefficient, 1)}</b></li>)}
-        </ul>
+        <table className="t">
+          <tbody>
+            {global.map((x) => (
+              <tr key={x.id}>
+                <td>{tr('Bajarilish')} ≥ {num(x.min_pct)}%</td>
+                <td className="num bold">×{num(x.coefficient, 1)}</td>
+                <td className="num">{editable && <IconBtn icon="delete" danger title="O'chirish" onClick={() => removeScale(x)} />}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {editable && (
+          <div className="kpi-scale-add">
+            <span>≥</span><NumInput value={row.min_pct} placeholder="%" onChange={(e) => setRow({ ...row, min_pct: e.target.value })} />
+            <span>% → ×</span><NumInput value={row.coefficient} placeholder="1.0" onChange={(e) => setRow({ ...row, coefficient: e.target.value })} />
+            <button className="btn small" onClick={addScale}>{tr("Qo'shish")}</button>
+          </div>
+        )}
         <div className="hint">{tr("KPI bonus = xodimning bonus bazasi × koeffitsiyent. Xodimning shaxsiy KPI'si bo'lmasa — bo'lim KPI'lari o'rtachasi.")}</div>
       </div>
+      {form && (
+        <EntityForm title={form.item ? form.item.name : tr('Yangi KPI shablon')} url="/hr/kpi-templates/" item={form.item}
+          fields={[
+            { name: 'name', label: tr('Nomi'), required: true },
+            { name: 'unit', label: tr('Birlik (mln, %, dona…)') },
+            { name: 'direction', label: tr("Yo'nalish"), type: 'select', noEmpty: true, options: [['higher', tr("Ko'p — yaxshi (fakt / reja)")], ['lower', tr('Kam — yaxshi (reja / fakt)')]] },
+            { name: 'cap_pct', label: tr('Yuqori chegara, %'), type: 'number' },
+          ]}
+          defaults={{ direction: 'higher', cap_pct: 150 }}
+          onClose={() => setForm(null)} onSaved={() => { setForm(null); reload(); toast(tr('Saqlandi')) }} />
+      )}
     </div>
   )
 }

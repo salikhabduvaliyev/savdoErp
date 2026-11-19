@@ -10,8 +10,10 @@ import { t } from '../../i18n'
 import Currencies from './Currencies'
 import { confirmDialog } from '../../components/Confirm'
 import { NumInput } from '../../components/Inputs'
+import { Avatar, MyProfile, UserModal } from './Profile'
 
 const SECTIONS = [
+  { grp: 'Shaxsiy', items: [['profile', t("Mening profilim"), 'user']] },
   { grp: 'Jamoa', items: [['users', t("Foydalanuvchilar"), 'user'], ['roles', t("Rollar va huquqlar"), 'roles']] },
   { grp: 'Tizim', items: [['general', t("Umumiy sozlamalar"), 'sliders'], ['fields', t("Qo'shimcha maydonlar"), 'orders'], ['rates', t("Valyutalar"), 'currency'], ['refs', t("Ma'lumotnomalar"), 'book']] },
 ]
@@ -110,6 +112,7 @@ function Users({ roles, branches, editable }) {
   const [grant, setGrant] = useState(false)
   const [pwFor, setPwFor] = useState(null)
   const [branchFor, setBranchFor] = useState(null)
+  const [open, setOpen] = useState(null)
   const reload = () => setStamp((s) => s + 1)
 
   const patch = async (u, body, msg) => {
@@ -143,10 +146,10 @@ function Users({ roles, branches, editable }) {
             <thead><tr><th>{t("Foydalanuvchi")}</th><th>{t("Rol")}</th><th>{t("Filiallar")}</th><th>{t("Oxirgi kirish")}</th><th>{t("Holat")}</th><th /></tr></thead>
             <tbody>
               {data.map((u) => (
-                <tr key={u.id}>
+                <tr key={u.id} className={editable ? 'clickable' : ''} onClick={() => editable && setOpen(u)}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span className="avatar">{(u.full_name || u.username)[0].toUpperCase()}</span>
+                      <Avatar user={u} />
                       <div>
                         <div className="bold">{u.employee?.full_name || u.full_name}{u.is_owner && <span className="badge b-near_min" style={{ marginLeft: 6 }}>{t("egasi")}</span>}</div>
                         <div className="small muted">{u.username}{u.employee?.position ? ` · ${u.employee.position}` : ''}</div>
@@ -154,20 +157,15 @@ function Users({ roles, branches, editable }) {
                     </div>
                   </td>
                   <td>
-                    {editable && !u.is_owner ? (
-                      <select className="chip" value={u.role || ''} onChange={(e) => patch(u, { role: e.target.value || null }, "Rol o'zgartirildi")}>
-                        <option value="">{t("— rolsiz —")}</option>
-                        {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                      </select>
-                    ) : (u.is_owner ? 'Barcha huquqlar' : u.role_name)}
+                    {u.is_owner ? t('Barcha huquqlar') : (u.role_name || <span className="muted">{t('— rolsiz —')}</span>)}
                   </td>
                   <td className="small">
                     {u.branch_names.length ? u.branch_names.join(', ') : <span className="muted">{t("barchasi")}</span>}
-                    {editable && branches.length > 1 && <> <IconBtn icon="edit" size={14} title="Filiallarni o\'zgartirish" onClick={() => setBranchFor(u)} /></>}
+                    {editable && branches.length > 1 && <span onClick={(e) => e.stopPropagation()}> <IconBtn icon="edit" size={14} title="Filiallarni o\'zgartirish" onClick={() => setBranchFor(u)} /></span>}
                   </td>
                   <td className="small">{u.last_login ? date(u.last_login) : <span className="muted">{t("hech qachon")}</span>}</td>
                   <td><Badge kind={u.is_active ? 'ok' : 'low'}>{u.is_active ? 'Faol' : 'Bloklangan'}</Badge></td>
-                  <td className="num">
+                  <td className="num" onClick={(e) => e.stopPropagation()}>
                     {editable && (
                       <>
                         <IconBtn icon="key" title="Parolni o\'zgartirish" onClick={() => setPwFor(u)} />
@@ -184,6 +182,7 @@ function Users({ roles, branches, editable }) {
         )}
       </div>
       <div className="legend"><span>{t("Foydalanuvchi o'chirilmaydi — tarix saqlanishi uchun bloklanadi.")}</span><span>{t("Kompaniya egasi har doim barcha huquqlarga ega.")}</span></div>
+      {open && <UserModal user={open} roles={roles} branches={branches} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); reload(); toast(t('Saqlandi')) }} />}
       {grant && <GrantAccess roles={roles} branches={branches} onClose={() => setGrant(false)} onSaved={() => { setGrant(false); reload(); toast('Tizimga kirish berildi') }} />}
       {pwFor && (
         <EntityForm dialog title={`${pwFor.username}: yangi parol`} url={`/auth/users/${pwFor.id}/set_password/`} item={null}
@@ -557,6 +556,7 @@ export default function SettingsPage() {
         ))}
       </nav>
       <div>
+        {tab === 'profile' && <MyProfile />}
         {tab === 'users' && <Users roles={roles.data || []} branches={branches.data || []} editable={editable} />}
         {tab === 'roles' && <Roles editable={editable} onChanged={() => setStamp((s) => s + 1)} />}
         {tab === 'general' && <General editable={editable} />}

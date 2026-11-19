@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom'
 import { Badge, Loading, MoneyBag, useFetch } from '../../components/ui'
 import { date, money, qty } from '../../format'
 import { t } from '../../i18n'
+import { usePager } from '../../components/Controls'
 
 function Stocks({ stamp }) {
   const [f, setF] = useState({ warehouse: '', material__group: '', below_min: '' })
@@ -14,6 +15,7 @@ function Stocks({ stamp }) {
   const groups = useFetch('/warehouse/groups/')
   const params = Object.fromEntries(Object.entries({ ...f, stamp }).filter(([, v]) => v !== ''))
   const { data, error } = useFetch('/warehouse/stock/', params)
+  const { rows: pageRows, pager } = usePager(data?.results, 50, JSON.stringify(f))
   return (
     <div className="table-wrap">
       <div className="table-toolbar filters">
@@ -31,7 +33,7 @@ function Stocks({ stamp }) {
         <table className="t">
           <thead><tr><th>{t("Material")}</th><th>{t("Birlik")}</th><th>{t("Ombor")}</th><th className="num">{t("Qoldiq")}</th><th className="num">{t("Rezerv")}</th><th className="num">{t("Mavjud")}</th><th className="num">{t("Minimal")}</th><th className="num">{t("O'rtacha narx")}</th><th className="num">{t("Qiymati")}</th><th>{t("Holat")}</th></tr></thead>
           <tbody>
-            {data.results.map((s) => (
+            {pageRows.map((s) => (
               <tr key={s.id}>
                 <td>{s.material_name}</td>
                 <td>{s.unit}</td>
@@ -51,6 +53,7 @@ function Stocks({ stamp }) {
           </tfoot>
         </table>
       )}
+      {pager}
       <div className="hint" style={{ padding: '0 12px 10px' }}>{t("Holat: mavjud ≤ minimal → \"Kam\"; mavjud ≤ minimal × 1,2 → \"Minimalga yaqin\".")}</div>
     </div>
   )
@@ -58,13 +61,14 @@ function Stocks({ stamp }) {
 
 function Moves({ type, stamp }) {
   const { data, error } = useFetch('/warehouse/moves/', { ...(type ? { type } : {}), stamp })
+  const { rows: pageRows, pager } = usePager(data, 50, type)
   if (!data) return <Loading error={error} />
   return (
     <div className="table-wrap">
       <table className="t">
         <thead><tr><th>{t("Sana")}</th><th>{t("Turi")}</th><th>{t("Material")}</th><th>{t("Ombor")}</th><th className="num">{t("Miqdor")}</th><th className="num">{t("Narx")}</th><th className="num">{t("Summa")}</th><th>{t("Kontragent / buyurtma")}</th><th>{t("Izoh")}</th></tr></thead>
         <tbody>
-          {data.map((m) => (
+          {pageRows.map((m) => (
             <tr key={m.id}>
               <td>{date(m.date)}</td>
               <td>{m.type_display}</td>
@@ -80,6 +84,7 @@ function Moves({ type, stamp }) {
           {!data.length && <tr><td colSpan={9} className="empty">{t("Harakatlar yo'q")}</td></tr>}
         </tbody>
       </table>
+          {pager}
     </div>
   )
 }

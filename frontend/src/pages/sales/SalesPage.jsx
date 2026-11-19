@@ -7,6 +7,9 @@ import { Badge, Field, Loading, Modal, MoneyBag, Stat, toast, useFetch } from '.
 import { date, money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import SaleForm from './SaleForm'
+import Profitability from './Profitability'
+import { PaymentDoc } from '../finance/Payments'
+import { printReceipt, printWaybill } from '../../components/Print'
 import { BulkMenu, SearchSelect, usePager } from '../../components/Controls'
 import { DocList } from '../warehouse/StockDocs'
 import Icon, { IconBtn } from '../../components/Icon'
@@ -53,102 +56,168 @@ function PayForm({ sale, onClose, onSaved }) {
 }
 
 /* ------------------------------------------------------------ karta */
+/* Sotuv kartasi (MoySklad "Отгрузка"): o'tkazish, tahrirlash, o'chirish, yaratish (to'lov, qaytarish), pechat, bog'liq hujjatlar */
+function Drop({ label, icon, items }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="bulk" onMouseLeave={() => setOpen(false)}>
+      <button className="btn" onClick={() => setOpen((o) => !o)}>{icon && <Icon name={icon} size={16} />} {label} <Icon name="chevron-down" size={14} /></button>
+      {open && <div className="bulk-menu">{items.filter(Boolean).map(([l, fn, dis]) => <button key={l} className="bulk-item" disabled={dis} onClick={() => { setOpen(false); fn() }}>{l}</button>)}</div>}
+    </div>
+  )
+}
+
+function RelatedDocs({ s, pays, rets }) {
+  const card = (kind, title, num, d, sum, cur, to, status) => (
+    <Link to={to} className={'rel-card ' + kind}>
+      <div className="rel-title">{status === 'ok' ? '✓ ' : ''}{title}</div>
+      <div>№{num}</div>{d && <div className="muted small">{date(d)}</div>}{sum != null && <b>{money(sum, cur)}</b>}
+    </Link>
+  )
+  return (
+    <div className="rel-flow">
+      {s.order && <>{card('order', tr('Buyurtma'), s.order_number, null, null, s.currency, `/orders/${s.order}`, 'ok')}<span className="rel-arrow">→</span></>}
+      <div className="rel-card current"><div className="rel-title">{s.status === 'completed' ? '✓ ' : ''}{tr('Sotuv')}</div><div>№{s.number}</div>
+        <div className="muted small">{date(s.date)}</div><b>{money(s.total, s.currency)}</b><div className="rel-status">{tr(s.status_display)}</div></div>
+      {(pays.length > 0 || rets.length > 0) && <span className="rel-arrow">→</span>}
+      <div className="rel-col">
+        {pays.map((x) => card('pay', tr(x.doc_type || (x.account_kind === 'bank' ? "Kiruvchi to'lov" : 'Kirim orderi')), String(x.number || '').padStart(5, '0'), x.date, x.amount, x.currency, '/finance', 'ok'))}
+        {rets.map((x) => card('ret', tr('Mijoz qaytarishi'), String(x.number).padStart(5, '0'), x.date, x.total, x.currency, `/sales/returns?open=${x.id}`, x.posted ? 'ok' : ''))}
+      </div>
+      {!s.order && !pays.length && !rets.length && <p className="muted">{tr("Bog'liq hujjatlar yo'q")}</p>}
+    </div>
+  )
+}
+
 function SaleCard({ id, onClose, onChanged }) {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [stamp, setStamp] = useState(0)
+  const { data: s, error } = useFetch(`/sales/${id}/`, { stamp })
+  const pays = useFetch(`/sales/${id}/payments/`, { stamp })
+  const rets = useFetch('/warehouse/docs/', { type: 'sales_return', sale: id, stamp })
+  const [tab, setTab] = useState('main')
+  const [edit, setEdit] = useState(false)
+  const [pay, setPay] = useState(null)
+  if (!s) return <Drawer onClose={onClose}><Loading error={error} /></Drawer>
+  const refresh = () => { setStamp((x) => x + 1); onChanged() }
+  const post = async (on) => {
+    try {
+      await api.post(`/sales/${id}/${on ? 'complete' : 'unpost'}/`)
+      toast(on ? tr("O'tkazildi") : tr("O'tkazish bekor qilindi — qoralama"))
+      refresh()
+    } catch (e) { toast(errorText(e), true) }
+  }
   const makeReturn = async () => {
     try {
       const { data } = await api.post('/warehouse/docs/from_sale/?type=sales_return', { sale: id })
       navigate(`/sales/returns?open=${data.id}`)
     } catch (e) { toast(errorText(e), true) }
   }
-  const [stamp, setStamp] = useState(0)
-  const { data: s, error } = useFetch(`/sales/${id}/`, { stamp })
-  const pays = useFetch(`/sales/${id}/payments/`, { stamp })
-  const [edit, setEdit] = useState(false)
-  const [pay, setPay] = useState(false)
-  if (!s) return <Drawer onClose={onClose}><Loading error={error} /></Drawer>
-  const refresh = () => { setStamp((x) => x + 1); onChanged() }
-  const act = async (action, confirmText) => {
-    if (confirmText && !window.confirm(confirmText)) return
-    try {
-      await api.post(`/sales/${id}/${action}/`)
-      toast(action === 'complete' ? 'Sotuv yakunlandi' : 'Sotuv bekor qilindi')
-      refresh()
-    } catch (e) { toast(errorText(e), true) }
-  }
   const remove = async () => {
-    if (!window.confirm("Qoralama o'chirilsinmi?")) return
-    try { await api.delete(`/sales/${id}/`); onChanged(); onClose() } catch (e) { toast(errorText(e), true) }
+    const msg = tr("Sotuv o'chirilsinmi?") + (s.status === 'completed' ? '\n' + tr('Tovarlar omborga qaytariladi.') : '') + (Number(s.paid) > 0 ? '\n' + tr("To'lovlar o'chirilmaydi — mijozning avansi bo'lib qoladi.") : '')
+    if (!window.confirm(msg)) return
+    try { await api.delete(`/sales/${id}/`); toast(tr("O'chirildi")); onChanged(); onClose() } catch (e) { toast(errorText(e), true) }
   }
-  const editable = canEdit(user, 'sales')
+  const editable = canEdit(user, 'sales') && s.status !== 'cancelled'
+  const posted = s.status === 'completed'
+  const returns = rets.data?.results || []
 
   return (
     <Drawer onClose={onClose}>
-      <div className="page-head">
-        <div>
-          <h1>Sotuv №{s.number}</h1>
-          <div className="page-sub">{date(s.date)} · {s.client_name}{s.branch_name ? ` · ${s.branch_name}` : ''}{s.seller_name ? ` · sotuvchi: ${s.seller_name}` : ''}</div>
-        </div>
-        <Badge kind={s.status}>{s.status_display}</Badge>
+      <div className="doc-toolbar">
+        {editable && <button className="btn primary" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> {tr('Tahrirlash')}</button>}
+        <button className="btn" onClick={onClose}>{tr('Yopish')}</button>
+        <Drop label={tr('Yaratish')} icon="plus" items={[
+          canCreate(user, 'finance') && Number(s.debt) > 0 && [tr('Kirim orderi (kassa)'), () => setPay('cash')],
+          canCreate(user, 'finance') && Number(s.debt) > 0 && [tr("Kiruvchi to'lov (bank)"), () => setPay('bank')],
+          posted && canCreate(user, 'sales_returns') && [tr('Mijoz qaytarishi'), makeReturn],
+          [tr('Nusxa (yangi sotuv)'), async () => {
+            try {
+              const { data } = await api.post('/sales/', { client: s.client, warehouse: s.warehouse, currency: s.currency, price_type: s.price_type,
+                items: s.items.filter((i) => !i.order).map((i) => ({ product: i.product, name: i.name, qty: i.qty, price: i.price, discount_pct: i.discount_pct })) })
+              toast(tr('Nusxa yaratildi: №{n}', { n: data.number })); onChanged(); navigate(`/sales?open=${data.id}`)
+            } catch (e) { toast(errorText(e), true) }
+          }, !canCreate(user, 'sales')],
+        ]} />
+        <Drop label={tr('Pechat')} icon="print" items={[[tr('Yuk xati (nakladnoy)'), () => printWaybill(s)], [tr('Tovar cheki'), () => printReceipt(s)]]} />
         <span className="grow" />
-        {s.status === 'draft' && editable && <button className="btn icon-only" onClick={() => setEdit(true)} title={tr("Tahrirlash")}><Icon name="edit" size={16} /></button>}
-        {s.status === 'draft' && canPost(user, 'sales') && <button className="btn primary" onClick={() => act('complete')}>{tr("Yakunlash")}</button>}
-        {s.status !== 'cancelled' && editable && Number(s.debt) > 0 && <button className="btn success" onClick={() => setPay(true)}>{tr("To'lov qabul qilish")}</button>}
-        <button className="btn" onClick={onClose}><Icon name="back" size={16} /> {tr("Orqaga")}</button>
-      </div>
-      {s.order && <div className="card" style={{ marginBottom: 12 }}>{tr("Buyurtma asosida:")} <Link to={`/orders/${s.order}`}>№{s.order_number}</Link> {tr("— buyurtmaga oldin to'langan avanslar shu sotuv to'loviga hisoblangan.")}</div>}
-      <div className="stats">
-        <Stat label={tr("Summa")} value={money(s.total, s.currency)} />
-        <Stat label={tr("To'langan")} value={money(s.paid, s.currency)} valueClass="green" />
-        <Stat label={s.status === 'completed' ? 'Qarz' : "To'lanishi kerak"} value={money(s.status === 'completed' ? s.debt : Number(s.total) - Number(s.paid), s.currency)}
-          valueClass={Number(s.debt) > 0 ? 'red' : ''} />
-        {s.cost !== null && can(user, 'finance') && <Stat label={tr("Tannarx · foyda")} value={money(s.cost, s.currency)} sub={`Foyda: ${money(Number(s.total) - Number(s.cost), s.currency)}`} />}
-      </div>
-      <div className="table-wrap">
-        <table className="t">
-          <thead><tr><th>{tr("Tovar / xizmat")}</th><th className="num">{tr("Miqdor")}</th><th className="num">{tr("Narx")}</th><th className="num">{tr("Chegirma")}</th><th className="num">{tr("Summa")}</th></tr></thead>
-          <tbody>
-            {s.items.map((i) => (
-              <tr key={i.id}>
-                <td>{i.name}{i.order && <span className="small muted"> {tr("(buyurtma)")}</span>}</td>
-                <td className="num">{qty(i.qty)} {i.unit}</td>
-                <td className="num">{money(i.price, s.currency)}</td>
-                <td className="num">{Number(i.discount_pct) ? `${qty(i.discount_pct)}%` : '—'}</td>
-                <td className="num bold">{money(i.amount, s.currency)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            {Number(s.discount) > 0 && <tr><td colSpan={4}>{tr("Chegirma")}</td><td className="num">− {money(s.discount, s.currency)}</td></tr>}
-            <tr><td colSpan={4}>{tr("Jami")}</td><td className="num">{money(s.total, s.currency)}</td></tr>
-          </tfoot>
-        </table>
-      </div>
-      <h2 style={{ marginTop: 18 }}>{tr("To'lovlar")}</h2>
-      <div className="table-wrap">
-        <table className="t">
-          <thead><tr><th>{tr("Sana")}</th><th>{tr("Hisob")}</th><th>{tr("Izoh")}</th><th className="num">{tr("Summa")}</th></tr></thead>
-          <tbody>
-            {(pays.data || []).map((t) => (
-              <tr key={t.id}><td>{date(t.date)}</td><td>{t.account_name}</td><td>{t.description}</td>
-                <td className="num green">{money(t.amount, t.currency, { sign: true })}</td></tr>
-            ))}
-            {pays.data && !pays.data.length && <tr><td colSpan={4} className="empty">{tr("To'lovlar yo'q")}</td></tr>}
-          </tbody>
-        </table>
-      </div>
-      <div className="form-actions" style={{ justifyContent: 'flex-start' }}>
-        {s.status === 'completed' && canCreate(user, 'sales_returns') && (
-          <button className="btn" onClick={makeReturn}><Icon name="back" size={15} /> {tr('Mijoz qaytarishi')}</button>
+        {s.status !== 'cancelled' && (
+          <label className="check posted-check" title={tr("Belgilansa — tovar ombordan chiqadi")}>
+            <input type="checkbox" checked={posted} disabled={!canPost(user, 'sales')} onChange={(e) => post(e.target.checked)} /> {tr("O'tkazilgan")}
+          </label>
         )}
-        {s.status === 'draft' && canDelete(user, 'sales') && <button className="btn" onClick={remove}>{tr("Qoralamani o'chirish")}</button>}
-        {s.status !== 'cancelled' && canPost(user, 'sales') && (
-          <button className="btn" onClick={() => act('cancel', "Sotuv bekor qilinsinmi? Tovarlar omborga qaytariladi.")}>{tr("Sotuvni bekor qilish")}</button>
-        )}
+        {canDelete(user, 'sales') && <button className="icon-act danger" title={tr("O'chirish")} onClick={remove}><Icon name="delete" size={18} /></button>}
       </div>
-      {edit && <SaleForm sale={s} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); refresh(); toast('Saqlandi') }} />}
-      {pay && <PayForm sale={s} onClose={() => setPay(false)} onSaved={() => { setPay(false); refresh(); toast("To'lov qabul qilindi") }} />}
+
+      <div className="doc-titlebar">
+        <h1>{tr('Sotuv')} №{s.number}</h1><span className="doc-from">{tr('dan')} {date(s.date)}</span>
+        <Badge kind={s.status}>{tr(s.status_display)}</Badge>
+        {Number(s.debt) > 0 ? <Badge kind="low">{tr("To'lanmagan")}: {money(s.debt, s.currency)}</Badge> : posted && <Badge kind="ok">{tr("To'langan")}</Badge>}
+      </div>
+      <div className="doc-grid" style={{ marginBottom: 12 }}>
+        <div><div className="kv-line"><span>{tr('Mijoz')}</span><b>{s.client_name}</b></div><div className="kv-line"><span>{tr('Sotuvchi')}</span><b>{s.seller_name || '—'}</b></div></div>
+        <div><div className="kv-line"><span>{tr('Ombor')}</span><b>{s.warehouse_name || '—'}</b></div><div className="kv-line"><span>{tr('Filial')}</span><b>{s.branch_name || '—'}</b></div></div>
+        <div>
+          <div className="kv-line"><span>{tr('Valyuta')}</span><b>{curLabel(s.currency)}</b></div>
+          {s.order && <div className="kv-line"><span>{tr('Asos')}</span><Link to={`/orders/${s.order}`}>{tr('Buyurtma')} №{s.order_number}</Link></div>}
+        </div>
+      </div>
+
+      <div className="doc-tabs">
+        <span className={tab === 'main' ? 'active' : ''} onClick={() => setTab('main')} style={{ cursor: 'pointer' }}>{tr('Asosiy')}</span>
+        <span className={tab === 'rel' ? 'active' : ''} onClick={() => setTab('rel')} style={{ cursor: 'pointer' }}>{tr("Bog'liq hujjatlar")} ({(pays.data || []).length + returns.length + (s.order ? 1 : 0)})</span>
+      </div>
+
+      {tab === 'main' ? (
+        <>
+          <div className="positions">
+            <div className="table-wrap">
+              <table className="t positions-t">
+                <thead><tr><th style={{ width: 36 }}>№</th><th>{tr('Tovar / xizmat')}</th><th className="num">{tr('Miqdor')}</th><th className="num">{tr('Narx')}</th><th className="num">{tr('Chegirma')}</th><th className="num">{tr('Summa')}</th>
+                  {posted && can(user, 'finance') && <th className="num">{tr('Tannarx')}</th>}</tr></thead>
+                <tbody>
+                  {s.items.map((i, n) => (
+                    <tr key={i.id}>
+                      <td className="muted">{n + 1}</td>
+                      <td>{i.name}{i.order && <span className="small muted"> {tr('(buyurtma)')}</span>}</td>
+                      <td className="num">{qty(i.qty)} {tr(i.unit || '')}</td>
+                      <td className="num">{money(i.price, s.currency)}</td>
+                      <td className="num">{Number(i.discount_pct) ? `${qty(i.discount_pct)}%` : '—'}</td>
+                      <td className="num bold">{money(i.amount, s.currency)}</td>
+                      {posted && can(user, 'finance') && <td className="num muted">{money(i.cost_amount, s.currency)}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="doc-footer">
+            <div>
+              <h3 style={{ margin: '0 0 8px' }}>{tr("To'lovlar")}</h3>
+              <div className="table-wrap">
+                <table className="t compact">
+                  <tbody>
+                    {(pays.data || []).map((x) => (
+                      <tr key={x.id}><td>{date(x.date)}</td><td>{x.account_name}</td><td className="small muted">{x.description}</td><td className="num green">{money(x.amount, x.currency, { sign: true })}</td></tr>
+                    ))}
+                    {pays.data && !pays.data.length && <tr><td className="empty">{tr("To'lovlar yo'q")}</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="doc-totals">
+              {Number(s.discount) > 0 && <div className="row"><span>{tr('Chegirma')}:</span><b>− {money(s.discount, s.currency)}</b></div>}
+              <div className="row"><span>{tr("To'langan")}:</span><b className="green">{money(s.paid, s.currency)}</b></div>
+              {posted && s.cost !== null && can(user, 'finance') && <div className="row"><span>{tr('Foyda')}:</span><b>{money(Number(s.total) - Number(s.cost), s.currency)}</b></div>}
+              <div className="row big"><span>{tr('Jami')}:</span><b>{money(s.total, s.currency)}</b></div>
+            </div>
+          </div>
+        </>
+      ) : <RelatedDocs s={s} pays={pays.data || []} rets={returns} />}
+
+      {edit && <SaleForm sale={s} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); refresh(); toast(tr('Saqlandi')) }} />}
+      {pay && <PaymentDoc direction="in" accountKind={pay} presetSale={s} onClose={() => setPay(null)} onSaved={() => { setPay(null); refresh() }} />}
     </Drawer>
   )
 }
@@ -243,9 +312,9 @@ function SalesList() {
           <b>{tr('Hammasi')} {data?.count ?? ''}</b>
           <BulkMenu count={selected.length} items={[
             { label: tr('Yakunlash (o\'tkazish)'), onClick: () => bulk('complete') },
-            { label: tr('Bekor qilish'), onClick: () => bulk('cancel', tr('Tanlangan sotuvlar bekor qilinsinmi? Tovarlar omborga qaytadi.')) },
+            { label: tr("O'tkazishni bekor qilish"), onClick: () => bulk('unpost', tr('Tanlangan sotuvlar qoralamaga qaytarilsinmi? Tovarlar omborga qaytadi.')) },
             { divider: true },
-            { label: tr("O'chirish (qoralamalar)"), danger: true, onClick: () => bulk('delete', tr("Tanlangan qoralamalar o'chirilsinmi?")) },
+            { label: tr("O'chirish"), danger: true, onClick: () => bulk('delete', tr("Tanlangan sotuvlar o'chirilsinmi? Tovarlar omborga qaytadi, to'lovlar avans bo'lib qoladi.")) },
           ]} />
         </div>
         {!data ? <Loading error={error} /> : (
@@ -286,7 +355,7 @@ function SalesList() {
 }
 
 // MoySklad "Продажи": Sotuvlar (Отгрузки) · Mijoz qaytarishlari. Buyurtmalar — alohida bo'lim.
-const TABS = [['list', tr('Sotuvlar')], ['returns', tr('Mijoz qaytarishlari')]]
+const TABS = [['list', tr('Sotuvlar')], ['returns', tr('Mijoz qaytarishlari')], ['profit', tr('Foydalilik')]]
 
 export default function SalesPage() {
   const { tab: tabParam } = useParams()
@@ -297,7 +366,7 @@ export default function SalesPage() {
       <div className="tabs section-tabs">
         {TABS.map(([k, l]) => <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => nav(k === 'list' ? '/sales' : `/sales/${k}`)}>{l}</button>)}
       </div>
-      {tab === 'list' ? <SalesList /> : <DocList type="sales_return" />}
+      {tab === 'list' ? <SalesList /> : tab === 'profit' ? <Profitability /> : <DocList type="sales_return" />}
     </>
   )
 }

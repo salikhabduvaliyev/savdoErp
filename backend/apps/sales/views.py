@@ -29,9 +29,16 @@ class SaleFilter(filters.FilterSet):
 
 
 def with_totals(qs):
+    from apps.finance.models import Transaction
+
     sub = (SaleItem.objects.filter(sale=OuterRef("pk")).values("sale")
            .annotate(s=Sum("amount")).values("s"))
-    return qs.annotate(_subtotal=Coalesce(Subquery(sub, output_field=DecimalField()), Value(Decimal("0"))))
+    # Sale.payments_qs bilan bir xil qoida: sotuvga to'lov + buyurtmaga oldin to'langan avans
+    paid = (Transaction.objects.filter(Q(sale=OuterRef("pk")) | Q(order=OuterRef("order_id"), sale__isnull=True, order__isnull=False),
+                                       kind=Transaction.Kind.CLIENT_PAYMENT)
+            .order_by().values("kind").annotate(s=Sum("order_amount")).values("s"))
+    return qs.annotate(_subtotal=Coalesce(Subquery(sub, output_field=DecimalField()), Value(Decimal("0"))),
+                       _paid=Coalesce(Subquery(paid, output_field=DecimalField()), Value(Decimal("0"))))
 
 
 class SaleViewSet(viewsets.ModelViewSet):
@@ -39,13 +46,14 @@ class SaleViewSet(viewsets.ModelViewSet):
     filterset_class = SaleFilter
     search_fields = ["=number", "client__name", "note"]
     ordering_fields = ["number", "date"]
-    action_perms = {"from_order": "create", "complete": "post", "cancel": "post", "pay": "edit", "bulk": "view"}
+    action_perms = {"from_order": "create", "complete": "post", "cancel": "post", "unpost": "post", "pay": "edit", "bulk": "view",
+                    "profitability": "view"}
 
     def get_serializer_class(self):
         return SaleListSerializer if self.action == "list" else SaleSerializer
 
     def get_queryset(self):
-        qs = with_totals(Sale.objects.select_related("client", "branch", "warehouse", "seller", "order", "price_type")
+        qs = with_totals(Sale.objects.select_related("client", "branch", "warehouse", "seller__employee", "order", "price_type")
                          .prefetch_related("items__product", "items__order"))
         bid = current_branch_id()
         if bid:
@@ -74,11 +82,12 @@ class SaleViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=user, seller=serializer.validated_data.get("seller") or user, branch_id=branch_id)
 
     def perform_destroy(self, instance):
-        if instance.status != Sale.Status.DRAFT:
-            raise serializers.ValidationError("Faqat qoralamani o'chirish mumkin. Yakunlanganini bekor qiling.")
-        if instance.transactions.exists():
-            raise serializers.ValidationError("Sotuvga to'lov qabul qilingan — o'chirib bo'lmaydi")
-        instance.delete()
+        from django.core.exceptions import ValidationError as DjValidationError
+
+        try:
+            services.delete_sale(instance)
+        except DjValidationError as e:
+            raise serializers.ValidationError({"detail": "; ".join(e.messages)})
 
     def _detail(self, sale):
         return Response(SaleSerializer(self.get_queryset().get(pk=sale.pk), context={"request": self.request}).data)
@@ -98,11 +107,11 @@ class SaleViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"])
     def bulk(self, request):
-        """Ommaviy amal: {ids, action: complete|cancel|delete}"""
+        """Ommaviy amal: {ids, action: complete|unpost|delete}"""
         from django.core.exceptions import ValidationError as DjValidationError
 
         ids, act = request.data.get("ids", []), request.data.get("action")
-        need = {"complete": "post", "cancel": "post", "delete": "delete"}.get(act)
+        need = {"complete": "post", "unpost": "post", "cancel": "post", "delete": "delete"}.get(act)
         if not need:
             return Response({"detail": "Noma'lum amal"}, status=400)
         if not request.user.can("sales", need):
@@ -113,6 +122,8 @@ class SaleViewSet(viewsets.ModelViewSet):
                 with transaction.atomic():
                     if act == "complete":
                         services.complete_sale(sale)
+                    elif act == "unpost":
+                        services.unpost_sale(sale)
                     elif act == "cancel":
                         services.cancel_sale(sale)
                     else:
@@ -126,6 +137,31 @@ class SaleViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
         return self._detail(services.complete_sale(self.get_object()))
+
+    @action(detail=True, methods=["post"])
+    def unpost(self, request, pk=None):
+        """O'tkazishni bekor qilish — qoralamaga qaytaradi."""
+        from django.core.exceptions import ValidationError as DjValidationError
+
+        try:
+            return self._detail(services.unpost_sale(self.get_object()))
+        except DjValidationError as e:
+            raise serializers.ValidationError({"detail": "; ".join(e.messages)})
+
+    @action(detail=False, methods=["get"])
+    def profitability(self, request):
+        """Foydalilik: ?date_from&date_to&by=product|client|seller&currency=UZS&warehouse="""
+        from datetime import date as date_cls
+
+        from django.utils import timezone
+
+        p = request.query_params
+        today = timezone.localdate()
+        d1 = date_cls.fromisoformat(p["date_from"]) if p.get("date_from") else today.replace(day=1)
+        d2 = date_cls.fromisoformat(p["date_to"]) if p.get("date_to") else today
+        data = services.profitability(d1, d2, by=p.get("by", "product"), currency=(p.get("currency") or "UZS").upper(),
+                                      warehouse=p.get("warehouse") or None)
+        return Response({"date_from": d1, "date_to": d2, **data})
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):

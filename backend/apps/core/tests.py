@@ -511,3 +511,38 @@ class StockDocTests(TestCase):
         # eski format: "purchases" → yangi kalitlarga meros, post = edit
         p = normalize_permissions({"purchases": {"view": True, "create": True, "edit": True, "delete": False}})
         self.assertTrue(p["supplies"]["post"] and p["purchase_returns"]["view"])
+
+    def test_sale_unpost_edit_delete_and_profitability(self):
+        """Sotuv: o'tkazilgan sotuvni tahrirlash (qayta o'tkaziladi), qoralamaga qaytarish, o'chirish (to'lov avans bo'lib qoladi),
+        foydalilik hisoboti (tovar bo'yicha, qaytarish bilan)."""
+        with tenant_context(self.c):
+            prod = Material.objects.create(name="Deraza", type="goods", unit="pcs", currency="UZS")
+            uzs = Account.objects.get(currency="UZS")
+        set_context(None, None)
+        self.doc("enter", [{"material": prod.id, "qty": "10", "price": "1000"}])
+        stock = lambda: D(self.api.get("/api/warehouse/stock/", {"material": prod.id}).json()["results"][0]["qty"])  # noqa: E731
+        s = self.api.post("/api/sales/", {"client": self.cli.id, "warehouse": self.w1.id, "currency": "UZS",
+                                          "items": [{"product": prod.id, "qty": "4", "price": "2500"}]}, format="json").json()
+        self.api.post(f"/api/sales/{s['id']}/complete/")
+        self.assertEqual(stock(), D("6"))
+        # o'tkazilgan sotuvni tahrirlash: 4 → 3
+        r = self.api.patch(f"/api/sales/{s['id']}/", {"items": [{"product": prod.id, "qty": "3", "price": "2500"}]}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["status"], "completed")
+        self.assertEqual(stock(), D("7"))
+        # foydalilik: 3 × 2500 = 7500 tushum, tannarx 3000, 1 ta qaytarish (500 tannarx 1000)
+        ret = self.api.post("/api/warehouse/docs/from_sale/?type=sales_return", {"sale": s["id"]}, format="json").json()
+        self.api.patch(f"/api/warehouse/docs/{ret['id']}/?type=sales_return", {"items": [{"material": prod.id, "qty": "1", "price": "2500"}], "posted": True}, format="json")
+        rep = self.api.get("/api/sales/profitability/", {"by": "product", "date_from": str(T), "date_to": str(T)}).json()
+        row = rep["rows"][0]
+        self.assertEqual((D(row["revenue"]), D(row["cost"]), D(row["ret_amount"]), D(row["ret_cost"])), (D("7500"), D("3000"), D("2500"), D("1000")))
+        self.assertEqual(D(row["profit"]), D("3000"))  # (7500-2500) - (3000-1000)
+        # qaytarish bor — o'chirib bo'lmaydi; qaytarishni o'chirgach — o'chadi, to'lov avans bo'lib qoladi
+        self.api.post(f"/api/sales/{s['id']}/pay/", {"account": uzs.id, "amount": "1000"}, format="json")
+        self.assertEqual(self.api.delete(f"/api/sales/{s['id']}/").status_code, 400)
+        self.api.delete(f"/api/warehouse/docs/{ret['id']}/?type=sales_return")
+        self.assertEqual(self.api.delete(f"/api/sales/{s['id']}/").status_code, 204)
+        self.assertEqual(stock(), D("10"))
+        with tenant_context(self.c):
+            t = Transaction.objects.get(kind="client_payment", client=self.cli)
+            self.assertIsNone(t.sale_id)

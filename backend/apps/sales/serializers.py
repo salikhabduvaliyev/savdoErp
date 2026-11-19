@@ -70,8 +70,8 @@ class SaleSerializer(SaleListSerializer):
         return str(q2(obj.cost)) if obj.status == Sale.Status.COMPLETED else None
 
     def validate(self, attrs):
-        if self.instance and self.instance.status != Sale.Status.DRAFT:
-            raise serializers.ValidationError("Yakunlangan yoki bekor qilingan sotuvni o'zgartirib bo'lmaydi")
+        if self.instance and self.instance.status == Sale.Status.CANCELLED:
+            raise serializers.ValidationError("Bekor qilingan sotuvni o'zgartirib bo'lmaydi")
         if self.instance and self.instance.order_id and "currency" in attrs and attrs["currency"] != self.instance.currency:
             raise serializers.ValidationError({"currency": "Buyurtmadan sotuvda valyuta buyurtma valyutasi bilan bir xil"})
         return attrs
@@ -95,8 +95,20 @@ class SaleSerializer(SaleListSerializer):
 
     @transaction.atomic
     def update(self, instance, validated):
+        from django.core.exceptions import ValidationError as DjValidationError
+
+        from . import services
+
         items = validated.pop("items", None)
-        sale = super().update(instance, validated)
-        if items is not None:
-            self._write_items(sale, items)
-        return sale
+        repost = instance.status == Sale.Status.COMPLETED
+        try:
+            if repost:  # o'tkazilgan sotuv: bekor → o'zgartirish → qayta o'tkazish (MoySklad uslubi)
+                instance = services.unpost_sale(instance)
+            sale = super().update(instance, validated)
+            if items is not None:
+                self._write_items(sale, items)
+            if repost:
+                services.complete_sale(sale)
+        except DjValidationError as e:
+            raise serializers.ValidationError({"detail": "; ".join(e.messages)})
+        return Sale.objects.get(pk=sale.pk)

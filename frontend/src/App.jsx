@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { can, useAuth } from './auth'
 import Layout, { NAV } from './components/Layout'
@@ -5,23 +6,25 @@ import { Loading } from './components/ui'
 import { date } from './format'
 import Login from './pages/Login'
 import Register from './pages/Register'
-import OrdersPage from './pages/orders/OrdersPage'
-import OrderDetail from './pages/orders/OrderDetail'
-import SalesPage from './pages/sales/SalesPage'
-import ProductsPage from './pages/products/ProductsPage'
-import ProductionPage from './pages/production/ProductionPage'
-import PurchasesPage from './pages/purchases/PurchasesPage'
-import ProductionDashboardPage from './pages/production/ProductionDashboardPage'
-import WarehousePage from './pages/warehouse/WarehousePage'
-import FinancePage from './pages/finance/FinancePage'
-import HrPage from './pages/hr/HrPage'
-import DashboardPage from './pages/dashboard/DashboardPage'
-import CounterpartiesPage from './pages/counterparties/CounterpartiesPage'
-import CounterpartyPage from './pages/counterparties/CounterpartyPage'
-import CompanyPage from './pages/company/CompanyPage'
-import SettingsPage from './pages/settings/SettingsPage'
-import PlatformPage from './pages/platform/PlatformPage'
 import { t } from './i18n'
+
+// Sahifalar alohida bo'laklarda (code-splitting) — faqat ochilganda yuklanadi
+const OrdersPage = lazy(() => import('./pages/orders/OrdersPage'))
+const OrderDetail = lazy(() => import('./pages/orders/OrderDetail'))
+const SalesPage = lazy(() => import('./pages/sales/SalesPage'))
+const ProductsPage = lazy(() => import('./pages/products/ProductsPage'))
+const ProductionPage = lazy(() => import('./pages/production/ProductionPage'))
+const PurchasesPage = lazy(() => import('./pages/purchases/PurchasesPage'))
+const ProductionDashboardPage = lazy(() => import('./pages/production/ProductionDashboardPage'))
+const WarehousePage = lazy(() => import('./pages/warehouse/WarehousePage'))
+const FinancePage = lazy(() => import('./pages/finance/FinancePage'))
+const HrPage = lazy(() => import('./pages/hr/HrPage'))
+const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
+const CounterpartiesPage = lazy(() => import('./pages/counterparties/CounterpartiesPage'))
+const CounterpartyPage = lazy(() => import('./pages/counterparties/CounterpartyPage'))
+const CompanyPage = lazy(() => import('./pages/company/CompanyPage'))
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'))
+const PlatformPage = lazy(() => import('./pages/platform/PlatformPage'))
 
 /** Foydalanuvchi ko'ra oladigan birinchi bo'lim */
 function home(user) {

@@ -21,12 +21,25 @@ from .models import Estimate, EstimateMaterial, EstimateService, Order
 ZERO = Decimal("0")
 
 
+COSTING_PREFETCH = (
+    "estimates__materials__material", "estimates__services__operation__department",
+    "transactions__category", "transactions__supplier",
+    "tasks__piecework__employee", "tasks__operation", "tasks__job",
+    "items__product__stocks", "sale_items__sale",
+)
+
+
+def with_costing(qs):
+    """Ro'yxatlar uchun: order_costing bazaga qo'shimcha so'rovsiz ishlashi uchun oldindan yuklash."""
+    return qs.prefetch_related(*COSTING_PREFETCH)
+
+
 def order_costing(order: Order) -> dict:
     from apps.finance.models import Transaction
-    from apps.hr.models import PieceworkEntry
 
     cur = order.currency
-    estimate = order.active_estimate
+    actives = [e for e in order.estimates.all() if e.is_active]
+    estimate = max(actives, key=lambda e: e.version) if actives else None
     warnings = []
 
     def conv(amount, from_cur, on_date):
@@ -41,7 +54,7 @@ def order_costing(order: Order) -> dict:
     # B — xizmatlar
     b_rows, b_bag, b_conv = [], MoneyBag(), ZERO
     if estimate:
-        for m in estimate.materials.select_related("material"):
+        for m in estimate.materials.all():
             amt = m.amount
             a_bag.add(amt, m.currency)
             a_conv += conv(amt, m.currency, order.date)
@@ -51,7 +64,7 @@ def order_costing(order: Order) -> dict:
                 "qty_with_waste": str(q2(m.qty_with_waste)), "price": str(q2(m.price)),
                 "currency": m.currency, "amount": str(q2(amt)),
             })
-        for s in estimate.services.select_related("operation__department"):
+        for s in estimate.services.all():
             amt = s.amount
             b_bag.add(amt, s.currency)
             b_conv += conv(amt, s.currency, order.date)
@@ -63,7 +76,9 @@ def order_costing(order: Order) -> dict:
 
     # C — moliyadan biriktirilgan xarajatlar (yagona manba)
     c_rows, c_bag, c_conv = [], MoneyBag(), ZERO
-    for t in order.transactions.filter(direction=Transaction.Direction.OUT).exclude(category__affects_profit=False)             .select_related("category", "supplier"):
+    for t in order.transactions.all():
+        if t.direction != Transaction.Direction.OUT or (t.category_id and not t.category.affects_profit):
+            continue
         c_bag.add(t.amount, t.currency)
         c_conv += t.order_amount or ZERO
         c_rows.append({
@@ -74,7 +89,8 @@ def order_costing(order: Order) -> dict:
 
     # D — ish haqi ulushi (ishbay topshiriqlardan, so'mda)
     d_rows, d_bag, d_conv = [], MoneyBag(), ZERO
-    for p in PieceworkEntry.objects.filter(task__order=order, task__job__techcard__isnull=True).select_related("employee", "task__operation"):
+    pieces = [p for task in order.tasks.all() if not (task.job_id and task.job.techcard_id) for p in task.piecework.all()]
+    for p in pieces:
         d_bag.add(p.amount, "UZS")
         d_conv += conv(p.amount, "UZS", p.date)
         d_rows.append({
@@ -85,13 +101,14 @@ def order_costing(order: Order) -> dict:
     # P — pozitsiyalardagi tovar/mahsulot tannarxi: jo'natilgani — sotuvdagi haqiqiy tannarx,
     # qolgani — ombordagi o'rtacha tannarx (bo'lmasa xarid narxi), buyurtma sanasidagi kurs bo'yicha
     p_rows, p_bag, p_conv = [], MoneyBag(), ZERO
-    from apps.sales.models import Sale, SaleItem
+    from apps.sales.models import Sale
 
-    for it in order.items.select_related("product"):
+    sale_items = list(order.sale_items.all())
+    for it in order.items.all():
         prod = it.product
         if not prod or not prod.is_stocked:
             continue
-        shipped = SaleItem.objects.filter(order=order, product=prod, sale__status=Sale.Status.COMPLETED)
+        shipped = [s for s in sale_items if s.product_id == prod.id and s.sale.status == Sale.Status.COMPLETED]
         sh_qty = sum((s.qty for s in shipped), ZERO)
         sh_cost = sum((s.cost_amount for s in shipped), ZERO)  # sotuv valyutasi = buyurtma valyutasi
         rest = max(ZERO, Decimal(it.qty) - sh_qty)
@@ -134,7 +151,8 @@ def order_costing(order: Order) -> dict:
     return {
         "order": order.id,
         "estimate": {"id": estimate.id, "version": estimate.version, "note": estimate.note} if estimate else None,
-        "versions": list(order.estimates.values("id", "version", "is_active", "created_at")),
+        "versions": [{"id": e.id, "version": e.version, "is_active": e.is_active, "created_at": e.created_at}
+                     for e in sorted(order.estimates.all(), key=lambda e: e.version)],
         "currency": cur,
         "rate": rate,
         "blocks": {

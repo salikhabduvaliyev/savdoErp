@@ -162,3 +162,135 @@ def sales_revenue_cost(date_from, date_to):
         revenue.add(-d.total, d.currency)
         cost.add(-doc_cost(d), d.currency)
     return revenue, cost
+
+
+@transaction.atomic
+def unpost_sale(sale):
+    """O'tkazishni bekor qilish (MoySklad: "Проведено" belgisini olish): ombor harakatlari qaytariladi,
+    sotuv qoralamaga aylanadi. To'lovlar saqlanadi."""
+    from apps.orders.models import Order
+    from apps.warehouse.documents import _reverse
+    from apps.warehouse.models import StockMove
+
+    sale = Sale.objects.select_for_update().get(pk=sale.pk)
+    if sale.status != Sale.Status.COMPLETED:
+        return sale
+    if sale.returns.filter(posted=True).exists():
+        raise ValidationError("Sotuv bo'yicha mijoz qaytarishi bor — avval qaytarishni bekor qiling")
+    allow = SystemSettings.load().allow_negative_stock
+    for mv in StockMove.objects.filter(sale=sale).select_related("material", "warehouse").order_by("-id"):
+        _reverse(mv, allow)
+    sale.items.update(cost_amount=ZERO)
+    sale.status = Sale.Status.DRAFT
+    sale.completed_at = None
+    sale.save(update_fields=["status", "completed_at", "updated_at"])
+    if sale.order_id and sale.order.status == Order.Status.DELIVERED:
+        sale.order.status = Order.Status.READY
+        sale.order.delivered_at = None
+        sale.order.save()
+    return sale
+
+
+@transaction.atomic
+def delete_sale(sale):
+    """O'chirish (MoySklad uslubi — bekor qilish o'rniga): o'tkazilgan bo'lsa avval qaytariladi,
+    to'lovlar o'chirilmaydi — mijozning avansi bo'lib qoladi."""
+    if sale.returns.exists():
+        raise ValidationError("Sotuv bo'yicha mijoz qaytarishi bor — avval qaytarishni o'chiring")
+    unpost_sale(sale)
+    sale.transactions.update(sale=None)
+    sale.delete()
+
+
+def profitability(date_from, date_to, by="product", currency="UZS", warehouse=None):
+    """Foydalilik (MoySklad "Прибыльность"): tovar / mijoz / sotuvchi bo'yicha sotuv va qaytarishlar,
+    tannarx, foyda va rentabellik — bitta hisobot valyutasida (sana bo'yicha kurs)."""
+    from collections import defaultdict
+
+    from apps.core.money import RateNotFound
+    from apps.warehouse.models import StockDoc
+
+    warnings = set()
+
+    def cv(amount, cur, day):
+        try:
+            return convert(Decimal(amount or 0), cur, currency, day)
+        except RateNotFound as e:
+            warnings.add(str(e))
+            return ZERO
+
+    rows = defaultdict(lambda: {"docs": set(), "qty": ZERO, "revenue": ZERO, "cost": ZERO,
+                                "ret_docs": set(), "ret_qty": ZERO, "ret_amount": ZERO, "ret_cost": ZERO})
+    meta = {}
+    sales = Sale.objects.filter(status=Sale.Status.COMPLETED, date__range=(date_from, date_to)) \
+        .select_related("client", "seller").prefetch_related("items__product")
+    if warehouse:
+        sales = sales.filter(warehouse_id=warehouse)
+    for sale in sales:
+        items = list(sale.items.all())
+        gross = sum((i.amount for i in items), ZERO)
+        k = (1 - (sale.discount or ZERO) / gross) if gross else Decimal("1")  # umumiy chegirma qatorlarga bo'linadi
+        for it in items:
+            if by == "product":
+                key = ("p", it.product_id) if it.product_id else ("n", it.name)
+                meta.setdefault(key, {"name": it.name if not it.product_id else it.product.name,
+                                      "code": it.product.code if it.product_id else "", "unit": it.unit or (it.product.get_unit_display() if it.product_id else "")})
+            elif by == "client":
+                key = ("c", sale.client_id)
+                meta.setdefault(key, {"name": sale.client.name, "code": "", "unit": ""})
+            else:
+                key = ("s", sale.seller_id)
+                meta.setdefault(key, {"name": sale.seller.full_name if sale.seller_id else "—", "code": "", "unit": ""})
+            r = rows[key]
+            r["docs"].add(sale.id)
+            r["qty"] += it.qty
+            r["revenue"] += cv(it.amount * k, sale.currency, sale.date)
+            r["cost"] += cv(it.cost_amount, sale.currency, sale.date)
+    rets = StockDoc.objects.filter(type="sales_return", posted=True, date__range=(date_from, date_to)) \
+        .select_related("counterparty", "sale__seller").prefetch_related("items__material", "moves")
+    if warehouse:
+        rets = rets.filter(warehouse_id=warehouse)
+    for d in rets:
+        moves = {m.material_id: m for m in d.moves.all()}
+        for it in d.items.all():
+            if by == "product":
+                key = ("p", it.material_id)
+                meta.setdefault(key, {"name": it.material.name, "code": it.material.code, "unit": it.material.get_unit_display()})
+            elif by == "client":
+                key = ("c", d.counterparty_id)
+                meta.setdefault(key, {"name": d.counterparty.name if d.counterparty_id else "—", "code": "", "unit": ""})
+            else:
+                seller = d.sale.seller if d.sale_id else None
+                key = ("s", seller.id if seller else None)
+                meta.setdefault(key, {"name": seller.full_name if seller else "—", "code": "", "unit": ""})
+            r = rows[key]
+            r["ret_docs"].add(d.id)
+            r["ret_qty"] += it.qty
+            r["ret_amount"] += cv(it.amount, d.currency, d.date)
+            mv = moves.get(it.material_id)
+            if mv is not None:
+                r["ret_cost"] += cv(Decimal(it.qty) * Decimal(mv.price), mv.currency, d.date)
+
+    q = lambda v: str(Decimal(v).quantize(Decimal("0.01")))  # noqa: E731
+    out = []
+    tot = defaultdict(lambda: ZERO)
+    for key, r in rows.items():
+        revenue = r["revenue"] - r["ret_amount"]
+        cost = r["cost"] - r["ret_cost"]
+        profit = revenue - cost
+        row = {**meta[key], "key": f"{key[0]}:{key[1]}", "docs": len(r["docs"]), "qty": str(r["qty"]),
+               "price": q(r["revenue"] / r["qty"]) if r["qty"] else "0", "cost_unit": q(r["cost"] / r["qty"]) if r["qty"] else "0",
+               "revenue": q(r["revenue"]), "cost": q(r["cost"]),
+               "ret_docs": len(r["ret_docs"]), "ret_qty": str(r["ret_qty"]), "ret_amount": q(r["ret_amount"]), "ret_cost": q(r["ret_cost"]),
+               "profit": q(profit), "margin_pct": str((profit / revenue * 100).quantize(Decimal("0.1"))) if revenue else None}
+        out.append(row)
+        for f in ("revenue", "cost", "ret_amount", "ret_cost"):
+            tot[f] += r[f]
+        tot["profit"] += profit
+        tot["docs"] += len(r["docs"])
+    out.sort(key=lambda x: -Decimal(x["profit"]))
+    net_rev = tot["revenue"] - tot["ret_amount"]
+    totals = {k: q(v) for k, v in tot.items() if k != "docs"}
+    totals["docs"] = int(tot["docs"])
+    totals["margin_pct"] = str((tot["profit"] / net_rev * 100).quantize(Decimal("0.1"))) if net_rev else None
+    return {"currency": currency, "by": by, "rows": out, "totals": totals, "warnings": sorted(warnings)}

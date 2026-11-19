@@ -7,10 +7,12 @@ import Payments from './Payments'
 import { t as tr } from '../../i18n'
 import { CurrencyOptions, curLabel } from '../../currency'
 import Icon from '../../components/Icon'
+import { usePager } from '../../components/Controls'
 
 function Transactions({ stamp, direction }) {
   const [f, setF] = useState({ date_from: '', date_to: '', account: '', unassigned: '' })
   const accounts = useFetch('/finance/accounts/')
+  const { rows: pageRows, pager } = usePager(data?.results, 50, JSON.stringify(params))
   const params = Object.fromEntries(Object.entries({ ...f, direction, stamp }).filter(([, v]) => v))
   const { data, error } = useFetch('/finance/transactions/', params)
   return (
@@ -28,7 +30,7 @@ function Transactions({ stamp, direction }) {
         <table className="t">
           <thead><tr><th>{tr("Sana")}</th><th>{tr("Izoh / kontragent")}</th><th>{tr("Turi")}</th><th>{tr("Buyurtma")}</th><th>{tr("Hisob")}</th><th>{tr("Valyuta")}</th><th className="num">{tr("Summa")}</th></tr></thead>
           <tbody>
-            {data.results.map((t) => (
+            {pageRows.map((t) => (
               <tr key={t.id}>
                 <td>{shortDate(t.date)}</td>
                 <td>{[t.counterparty, t.description || t.category_name].filter(Boolean).join(' — ')}</td>
@@ -46,6 +48,7 @@ function Transactions({ stamp, direction }) {
           </tfoot>
         </table>
       )}
+      {pager}
     </div>
   )
 }

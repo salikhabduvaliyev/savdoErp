@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import api, { errorText } from '../api'
 import { can, useAuth } from '../auth'
@@ -226,7 +226,7 @@ export default function Layout({ platform = false }) {
           <UserMenu />
         </header>
         <main className="page" key={branch /* filial almashsa sahifa qayta yuklanadi */}>
-          <Outlet />
+          <Suspense fallback={<div className="empty">{t('Yuklanmoqda…')}</div>}><Outlet /></Suspense>
         </main>
       </div>
     </div>

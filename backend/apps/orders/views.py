@@ -92,7 +92,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     action_perms = {"bulk": "view"}
 
     def get_queryset(self):
-        qs = Order.objects.select_related("client", "manager", "operator", "branch").prefetch_related("tasks__department", "items__product", "production_orders")
+        qs = Order.objects.select_related("client", "manager__employee", "operator__employee", "branch").prefetch_related("tasks__department", "items__product", "production_orders")
         bid = current_branch_id()
         if bid:
             qs = qs.filter(branch_id=bid)
@@ -105,7 +105,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         return with_paid(filter_by_extra(qs, self.request.query_params)).order_by("-date", "-number")
 
     def list(self, request, *args, **kwargs):
-        orders = list(self.filter_queryset(self.get_queryset()))
+        qs = self.filter_queryset(self.get_queryset())
+        if request.query_params.get("negative_profit") in ("1", "true"):
+            from .services import with_costing
+
+            qs = with_costing(qs)
+        orders = list(qs)
         if request.query_params.get("negative_profit") in ("1", "true"):
             orders = [o for o in orders if Decimal(order_costing(o)["profit"]) < 0]
         data = self.get_serializer(orders, many=True).data

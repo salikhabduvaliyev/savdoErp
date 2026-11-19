@@ -126,7 +126,9 @@ def profit_and_loss(date_from, date_to):
     from apps.orders.services import order_costing
 
     revenue, cost = MoneyBag(), MoneyBag()
-    for o in Order.objects.filter(date__range=(date_from, date_to)).exclude(status=Order.Status.CANCELLED):
+    from apps.orders.services import with_costing
+
+    for o in with_costing(Order.objects.filter(date__range=(date_from, date_to)).exclude(status=Order.Status.CANCELLED)):
         c = order_costing(o)
         revenue.add(o.amount, o.currency)
         cost.add(Decimal(c["cost"]), o.currency)
@@ -188,7 +190,9 @@ def pnl_report(date_from, date_to, currency="UZS"):
 
     rev = {"orders": Decimal("0"), "sales": Decimal("0"), "returns": Decimal("0")}
     cost = {"orders": Decimal("0"), "sales": Decimal("0"), "returns": Decimal("0")}
-    for o in Order.objects.filter(date__range=(date_from, date_to)).exclude(status=Order.Status.CANCELLED):
+    from apps.orders.services import with_costing
+
+    for o in with_costing(Order.objects.filter(date__range=(date_from, date_to)).exclude(status=Order.Status.CANCELLED)):
         c = order_costing(o)
         rev["orders"] += cv(o.amount, o.currency, o.date)
         cost["orders"] += cv(c["cost"], o.currency, o.date)

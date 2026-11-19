@@ -72,25 +72,34 @@ export function SearchSelect({ value, onChange, options, placeholder, empty, dis
   )
 }
 
-/** Sahifalash: const { rows, pager } = usePager(data, 50) */
-export function usePager(items, size = 50, resetKey) {
+const PAGE_KEY = 'erp.pageSize'
+const readSize = (d) => { try { return Number(localStorage.getItem(PAGE_KEY)) || d } catch { return d } }
+
+/** Sahifalash (MoySklad: 1–50 / 345, 25 · 50 · 100): const { rows, pager } = usePager(data, 50, resetKey) */
+export function usePager(items, size0 = 50, resetKey) {
   const [page, setPage] = useState(0)
+  const [size, setSizeState] = useState(() => readSize(size0))
+  const setSize = (n) => { setSizeState(n); setPage(0); try { localStorage.setItem(PAGE_KEY, String(n)) } catch { /* ignore */ } }
   const total = items?.length || 0
   const pages = Math.max(1, Math.ceil(total / size))
   const [prevKey, setPrevKey] = useState(resetKey)
   if (prevKey !== resetKey) { setPrevKey(resetKey); setPage(0) }
   const p = Math.min(page, pages - 1)
   const rows = (items || []).slice(p * size, p * size + size)
-  const pager = total > size ? (
+  const pager = total ? (
     <div className="pager">
+      <span className="pager-sizes">
+        {[25, 50, 100].map((n) => <button key={n} className={n === size ? 'active' : ''} onClick={() => setSize(n)}>{n}</button>)}
+      </span>
+      <span className="grow" />
       <button className="icon-act" disabled={p === 0} onClick={() => setPage(0)} title={t('Birinchi')}>«</button>
       <button className="icon-act" disabled={p === 0} onClick={() => setPage(p - 1)} title={t('Oldingi')}><Icon name="chevron" size={15} /></button>
       <span>{p * size + 1}–{Math.min(total, (p + 1) * size)} / {total}</span>
       <button className="icon-act" disabled={p >= pages - 1} onClick={() => setPage(p + 1)} title={t('Keyingi')}><Icon name="chevron-right" size={15} /></button>
       <button className="icon-act" disabled={p >= pages - 1} onClick={() => setPage(pages - 1)} title={t('Oxirgi')}>»</button>
     </div>
-  ) : (total ? <div className="pager muted">{total}</div> : null)
-  return { rows, pager, page: p }
+  ) : null
+  return { rows, pager, page: p, size }
 }
 
 /** "O'zgartirish ▾" — tanlanganlar uchun amallar menyusi. items: [{label, onClick, danger, sub: [{label,onClick}]}] */

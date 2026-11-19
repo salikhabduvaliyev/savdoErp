@@ -48,11 +48,13 @@ def director(request):
     date_to = date.fromisoformat(dt) if dt else today
 
     chart_from = _month_start(today, 5)
-    orders = list(
+    from apps.orders.services import with_costing
+
+    orders = list(with_costing(
         Order.objects.filter(date__gte=min(date_from, chart_from), date__lte=max(date_to, today))
         .exclude(status=Order.Status.CANCELLED)
         .select_related("client")
-    )
+    ))
     revenue, cost = MoneyBag(), MoneyBag()
     monthly = defaultdict(lambda: {"revenue": MoneyBag(), "profit": MoneyBag()})
     order_profits = []

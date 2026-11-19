@@ -395,6 +395,7 @@ export function Turnover() {
   const first = todayISO().slice(0, 8) + '01'
   const [f, setF] = useState({ date_from: first, date_to: todayISO(), warehouse: '' })
   const warehouses = useFetch('/warehouse/warehouses/')
+  const { rows: pageRows, pager } = usePager(data?.rows, 50, JSON.stringify(f))
   const { data, error } = useFetch('/warehouse/turnover/', Object.fromEntries(Object.entries(f).filter(([, x]) => x)))
   return (
     <div className="table-wrap">
@@ -410,7 +411,7 @@ export function Turnover() {
         <table className="t">
           <thead><tr><th>{t('Tovar')}</th><th>{t('Birlik')}</th><th className="num">{t('Davr boshida')}</th><th className="num">{t('Kirim')}</th><th className="num">{t('Chiqim')}</th><th className="num">{t('Davr oxirida')}</th></tr></thead>
           <tbody>
-            {data.rows.map((r) => (
+            {pageRows.map((r) => (
               <tr key={r.material}>
                 <td>{r.code && <b className="pos-code">{r.code}</b>} {r.name}</td><td className="muted">{t(r.unit)}</td>
                 <td className="num">{qty(r.opening)}</td>
@@ -423,6 +424,7 @@ export function Turnover() {
           </tbody>
         </table>
       )}
+      {pager}
     </div>
   )
 }

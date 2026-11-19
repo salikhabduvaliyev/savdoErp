@@ -22,7 +22,7 @@ const DOC = {
 const SPECIAL_OUT = [['__supplier', "Tovar xaridi (yetkazuvchiga to'lov)"], ['__salary', 'Ish haqi']]
 
 /* ------------------------------------------------------------ to'lov hujjati */
-export function PaymentDoc({ direction, accountKind, item, presetOrder, onClose, onSaved }) {
+export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSale, onClose, onSaved }) {
   const { user } = useAuth()
   const accounts = useFetch('/finance/accounts/')
   const cps = useFetch('/crm/counterparties/', { is_active: true })
@@ -32,7 +32,7 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, onClose,
     date: item.date, account: item.account, amount: cleanNum(item.amount), description: item.description || '',
     counterparty: item.client || item.supplier || '', category: item.kind === 'supplier_payment' ? '__supplier' : item.kind === 'salary' ? '__salary' : (item.category || ''),
     order: item.order || '', sale: item.sale || '', stock_doc: item.stock_doc || '', order_amount: cleanNum(item.order_amount), other: item.kind === 'other_income',
-  } : { date: todayISO(), account: '', amount: '', description: '', counterparty: presetOrder?.client || '', category: dir === 'out' ? '' : '', order: presetOrder?.id || '', sale: '', stock_doc: '', order_amount: '', other: false })
+  } : { date: todayISO(), account: '', amount: presetSale ? String(Number(presetSale.debt) || '') : '', description: '', counterparty: presetSale?.client || presetOrder?.client || '', category: '', order: presetOrder?.id || '', sale: presetSale?.id || '', stock_doc: '', order_amount: '', other: false })
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const docs = useFetch(v.counterparty ? '/finance/transactions/open_documents/' : null, { counterparty: v.counterparty, direction: dir })

@@ -404,12 +404,13 @@ class TaskSerializer(serializers.ModelSerializer):
                     for m, q in services.techcard_requirements(obj.job, task=obj, qty=obj.remaining)]
         if not obj.order_id:
             return []
-        est = obj.order.active_estimate
+        actives = [e for e in obj.order.estimates.all() if e.is_active]
+        est = max(actives, key=lambda e: e.version) if actives else None
         if not est:
             return []
         reserved = {r.material_id: r.qty for r in obj.order.reservations.all()}
         return [{"name": m.material.name, "qty": str(m.qty_with_waste.quantize(m.qty)), "unit": m.material.get_unit_display(),
-                 "reserved": str(reserved.get(m.material_id, 0))} for m in est.materials.select_related("material")]
+                 "reserved": str(reserved.get(m.material_id, 0))} for m in est.materials.all()]
 
 
 class JobSerializer(serializers.ModelSerializer):
@@ -516,8 +517,10 @@ class TaskViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "head", "options"]
 
     def get_queryset(self):
-        qs = ProductionTask.objects.select_related("order__client", "operation", "department", "job__techcard__product",
-                                                   "job__order__client")
+        qs = (ProductionTask.objects.select_related("order__client", "operation", "department", "job__techcard__product",
+                                                    "job__order__client")
+              .prefetch_related("job__tasks__department", "job__techcard__materials__material", "job__tasks__operation",
+                                "order__estimates__materials__material", "order__reservations"))
         user = self.request.user
         if user.own_department_only:
             qs = qs.filter(department_id=user.department_id)

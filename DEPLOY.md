@@ -93,7 +93,19 @@ python manage.py migrate
 python manage.py collectstatic --noinput
 ```
 
-So'ng Web tab → **Reload**.
+So'ng Web tab → **Reload**. Muhim: Reload faqat barcha buyruqlar tugagandan keyin bosiladi.
+
+### "No module named 'apps....'" xatosi (konsolda `check` ishlasa ham)
+
+PythonAnywhere'da web server fayllarni tarmoq disk orqali o'qiydi. `git pull` paytida sayt ochilsa,
+yangilangan fayl "yo'q" deb keshda qolishi mumkin: konsol faylni ko'radi, sayt ko'rmaydi. Yechim —
+`.py` fayllarni qayta yozish va `__pycache__` ni tozalash, so'ng Reload:
+
+```bash
+cd ~/savdoErp/backend
+find . -name "__pycache__" -type d -prune -exec rm -rf {} +
+find apps config -name "*.py" -exec sh -c 'cp -p "$1" "$1.tmp" && mv "$1.tmp" "$1"' _ {} \;
+```
 
 ## Eslatmalar
 

@@ -1,57 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Loading, MoneyBag, Stat, toast, useFetch } from '../../components/ui'
-import { money, monthLabel, shortDate } from '../../format'
+import { money, monthLabel } from '../../format'
 import TransactionForm from './TransactionForm'
 import Payments from './Payments'
 import { t as tr } from '../../i18n'
 import { CurrencyOptions, curLabel } from '../../currency'
 import Icon from '../../components/Icon'
-import { usePager } from '../../components/Controls'
-
-function Transactions({ stamp, direction }) {
-  const [f, setF] = useState({ date_from: '', date_to: '', account: '', unassigned: '' })
-  const accounts = useFetch('/finance/accounts/')
-  const { rows: pageRows, pager } = usePager(data?.results, 50, JSON.stringify(params))
-  const params = Object.fromEntries(Object.entries({ ...f, direction, stamp }).filter(([, v]) => v))
-  const { data, error } = useFetch('/finance/transactions/', params)
-  return (
-    <div className="table-wrap">
-      <div className="table-toolbar filters">
-        <input type="date" value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} />
-        <input type="date" value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} />
-        <select value={f.account} onChange={(e) => setF({ ...f, account: e.target.value })}>
-          <option value="">{tr("Hisob: hammasi")}</option>
-          {(accounts.data || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-        <button className={'chip' + (f.unassigned ? ' on' : '')} onClick={() => setF({ ...f, unassigned: f.unassigned ? '' : 'true' })}>{tr("Biriktirilmagan")}</button>
-      </div>
-      {!data ? <Loading error={error} /> : (
-        <table className="t">
-          <thead><tr><th>{tr("Sana")}</th><th>{tr("Izoh / kontragent")}</th><th>{tr("Turi")}</th><th>{tr("Buyurtma")}</th><th>{tr("Hisob")}</th><th>{tr("Valyuta")}</th><th className="num">{tr("Summa")}</th></tr></thead>
-          <tbody>
-            {pageRows.map((t) => (
-              <tr key={t.id}>
-                <td>{shortDate(t.date)}</td>
-                <td>{[t.counterparty, t.description || t.category_name].filter(Boolean).join(' — ')}</td>
-                <td className="small muted">{tr(t.kind_display)}</td>
-                <td>{t.order ? <Link to={`/orders/${t.order}`}>{t.order_number}</Link> : (t.kind === 'expense' ? <span className="badge b-near_min">{tr("Biriktirilmagan")}</span> : '—')}</td>
-                <td>{t.account_name}</td>
-                <td>{curLabel(t.currency)}</td>
-                <td className={'num ' + (t.direction === 'in' ? 'green' : 'red')}>{money(t.direction === 'in' ? t.amount : -t.amount, t.currency, { sign: true })}</td>
-              </tr>
-            ))}
-            {!data.results.length && <tr><td colSpan={7} className="empty">{tr("Harakatlar yo'q")}</td></tr>}
-          </tbody>
-          <tfoot>
-            <tr><td colSpan={5}>{tr("Kirim / chiqim")}</td><td /><td className="num"><span className="green"><MoneyBag bag={data.in} /></span><span className="red"><MoneyBag bag={data.out} /></span></td></tr>
-          </tfoot>
-        </table>
-      )}
-      {pager}
-    </div>
-  )
-}
 
 function Debts({ kind }) {
   const { data, error } = useFetch(kind === 'clients' ? '/finance/client-debts/' : '/finance/supplier-debts/')
@@ -177,9 +132,7 @@ function CashFlow() {
 export default function FinancePage() {
   const [tab, setTab] = useState('tx')
   const [form, setForm] = useState(null)
-  const [stamp, setStamp] = useState(0)
-  const accounts = useFetch('/finance/accounts/', { stamp })
-  const tabs = [['tx', tr("To'lovlar")], ['exp', tr("Xarajatlar")], ['clients', tr("Mijozlar qarzi")], ['suppliers', tr("Yetkazuvchilar qarzi")], ['pnl', tr("Foyda va zarar")], ['cf', tr("Pul oqimi")]]
+  const tabs = [['tx', tr("To'lovlar")], ['clients', tr("Mijozlar qarzi")], ['suppliers', tr("Yetkazuvchilar qarzi")], ['pnl', tr("Foyda va zarar")], ['cf', tr("Pul oqimi")]]
   return (
     <>
       <div className="page-head">
@@ -188,20 +141,12 @@ export default function FinancePage() {
       <div className="tabs">
         {tabs.map(([k, l]) => <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => setTab(k)}>{l}</button>)}
       </div>
-      {tab === 'exp' && accounts.data && (
-        <div className="stats">
-          {accounts.data.filter((a) => a.is_active).map((a) => (
-            <Stat key={a.id} label={a.name} value={money(a.balance, a.currency)} valueClass={a.currency === 'USD' ? 'usd' : ''} />
-          ))}
-        </div>
-      )}
-      {tab === 'tx' && <Payments onChanged={() => setStamp((s) => s + 1)} />}
-      {tab === 'exp' && <Transactions stamp={stamp} direction="out" />}
+      {tab === 'tx' && <Payments />}
       {tab === 'clients' && <Debts kind="clients" />}
       {tab === 'suppliers' && <Debts kind="suppliers" />}
       {tab === 'pnl' && <Pnl />}
       {tab === 'cf' && <CashFlow />}
-      {form && <TransactionForm kind={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); setStamp((s) => s + 1); toast('Saqlandi') }} />}
+      {form && <TransactionForm kind={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); toast('Saqlandi') }} />}
     </>
   )
 }

@@ -724,3 +724,10 @@ td.ellipsis { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white
 .role-chip small { color: var(--muted); font-size: 11px; }
 .role-chip:hover { border-color: var(--primary); }
 .role-chip.active { border-color: var(--primary); background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--primary); }
+
+/* To'liq sahifa (hujjat) ochiq bo'lsa — orqadagi ro'yxat ko'rinmaydi va skrol qilinmaydi.
+   Ro'yxat holati (filtr, sahifa) saqlanadi: faqat CSS orqali yashiriladi. */
+.main:has(> .fullpage) > .page { display: none; }
+.main:has(> .fullpage) .topbar { background: var(--surface); backdrop-filter: none; }
+html:has(.fullpage), body:has(.fullpage) { overflow: hidden; }
+.fullpage { overscroll-behavior: contain; }

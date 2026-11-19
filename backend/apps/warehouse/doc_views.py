@@ -145,12 +145,13 @@ class StockDocViewSet(viewsets.ModelViewSet):
     """?type=supply&warehouse=&counterparty=&posted=&date_from=&date_to=&search="""
 
     serializer_class = StockDocSerializer
+    action_perms = {"post": "post", "unpost": "post", "derive": "view", "from_sale": "view"}
 
     @property
     def module(self):
         t = self.request.query_params.get("type") or (self.request.data.get("type") if hasattr(self.request, "data") else None)
         m = _module_for(t)
-        return m or ("warehouse", "purchases", "sales")
+        return m or tuple(sorted(set(StockDoc.MODULE.values())))
 
     def get_serializer_class(self):
         return StockDocListSerializer if self.action == "list" else StockDocSerializer
@@ -188,7 +189,9 @@ class StockDocViewSet(viewsets.ModelViewSet):
         from apps.accounts.permissions import required_action
 
         act = required_action(request, self)
-        if not request.user.can(_module_for(obj.type), act if act != "view" else "view"):
+        if act == "post":
+            act = "post"
+        if not request.user.can(_module_for(obj.type), act):
             raise PermissionDenied("Bu hujjat turi uchun huquqingiz yo'q")
 
     def list(self, request, *args, **kwargs):
@@ -204,12 +207,17 @@ class StockDocViewSet(viewsets.ModelViewSet):
             raise ValidationError({"type": "Hujjat turi kerak"})
         if not self.request.user.can(_module_for(t), "create"):
             raise PermissionDenied("Bu hujjat turi uchun huquqingiz yo'q")
+        extra = {}
+        if serializer.validated_data.get("posted", True) and not self.request.user.can(_module_for(t), "post"):
+            extra["posted"] = False  # o'tkazish huquqi yo'q — qoralama sifatida saqlanadi
         try:
-            serializer.save(created_by=self.request.user, branch_id=current_branch_id())
+            serializer.save(created_by=self.request.user, branch_id=current_branch_id(), **extra)
         except DjangoValidationError as e:
             raise _err(e)
 
     def perform_update(self, serializer):
+        if "posted" in serializer.validated_data and not self.request.user.can(_module_for(serializer.instance.type), "post"):
+            raise PermissionDenied("Hujjatni o'tkazish huquqi yo'q")
         try:
             serializer.save()
         except DjangoValidationError as e:

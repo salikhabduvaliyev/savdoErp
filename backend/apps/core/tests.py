@@ -461,3 +461,53 @@ class StockDocTests(TestCase):
         self.assertEqual(r["done"], 1)
         with tenant_context(self.c):
             self.assertTrue(AuditLog.objects.filter(entity="order", action="delete").exists())
+
+    def test_payments_transfer_and_open_documents(self):
+        """MoySklad to'lovlar: raqam, hisoblar orasida ko'chirish (kurs bilan), to'lanmagan hujjatlar va qabul qilishga bog'lash."""
+        with tenant_context(self.c):
+            uzs = Account.objects.get(currency="UZS")
+            usd = Account.objects.get(currency="USD")
+        set_context(None, None)
+        r = self.api.post("/api/finance/transactions/", {"kind": "other_income", "account": uzs.id, "amount": "1200000"}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()["number"], 1)
+        r = self.api.post("/api/finance/transactions/transfer/", {"from_account": uzs.id, "to_account": usd.id, "amount": "1200000"}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        bal = {a["currency"]: D(a["balance"]) for a in self.api.get("/api/finance/accounts/").json()}
+        self.assertEqual(bal["UZS"], D("0"))
+        self.assertEqual(bal["USD"], D("100"))  # 1 200 000 / 12 000
+        # ko'chirish o'chirilsa — ikkala yozuv ham o'chadi
+        self.api.delete(f"/api/finance/transactions/{r.json()['id']}/")
+        bal = {a["currency"]: D(a["balance"]) for a in self.api.get("/api/finance/accounts/").json()}
+        self.assertEqual((bal["UZS"], bal["USD"]), (D("1200000"), D("0")))
+        # qabul qilish → yetkazuvchiga to'lov bilan bog'lash
+        sup = self.doc("supply", [{"material": self.m.id, "qty": "10", "price": "50000"}], counterparty=self.sup.id)
+        docs = self.api.get("/api/finance/transactions/open_documents/", {"counterparty": self.sup.id, "direction": "out"}).json()
+        self.assertEqual(D(docs[0]["debt"]), D("500000"))
+        r = self.api.post("/api/finance/transactions/", {"kind": "supplier_payment", "account": uzs.id, "amount": "500000",
+                                                         "supplier": self.sup.id, "stock_doc": sup["id"]}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        docs = self.api.get("/api/finance/transactions/open_documents/", {"counterparty": self.sup.id, "direction": "out"}).json()
+        self.assertEqual(docs, [])
+
+    def test_doc_level_permissions_and_post(self):
+        """MoySklad huquqlari: hujjat turi bo'yicha; "O'tkazish" huquqisiz — qoralama; eski "purchases" kaliti meros."""
+        from apps.accounts.models import normalize_permissions
+
+        with tenant_context(self.c):
+            role = Role.objects.create(code="sklad2", name="Omborchi 2", permissions={
+                "supplies": {"view": True, "create": True, "edit": True, "delete": False, "post": False, "scope": "all"}})
+            u = User.objects.create_user("sk2", password="x", company=self.c, role=role)
+        set_context(None, None)
+        api = APIClient()
+        api.force_authenticate(u)
+        r = api.post("/api/warehouse/docs/?type=supply", {"type": "supply", "warehouse": self.w1.id, "counterparty": self.sup.id,
+                                                          "items": [{"material": self.m.id, "qty": "2", "price": "10"}]}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertFalse(r.json()["posted"])  # o'tkazish huquqi yo'q → qoralama
+        self.assertEqual(api.post(f"/api/warehouse/docs/{r.json()['id']}/post/?type=supply").status_code, 403)
+        # boshqa hujjat turi (hisobdan chiqarish) — umuman ko'rinmaydi
+        self.assertEqual(api.get("/api/warehouse/docs/?type=loss").status_code, 403)
+        # eski format: "purchases" → yangi kalitlarga meros, post = edit
+        p = normalize_permissions({"purchases": {"view": True, "create": True, "edit": True, "delete": False}})
+        self.assertTrue(p["supplies"]["post"] and p["purchase_returns"]["view"])

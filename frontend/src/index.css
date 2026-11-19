@@ -685,3 +685,42 @@ td.ellipsis { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white
 .qty-stepper button { width: 42px; height: 46px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); font-size: 20px; cursor: pointer; color: var(--text); }
 .qty-stepper input { width: 80px; height: 46px; text-align: center; font-size: 18px; font-weight: 600; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--input-bg); color: var(--text); }
 .emp-select { height: 46px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--input-bg); color: var(--text); font: inherit; max-width: 220px; }
+
+/* ---------------- tovar tanlash (MoySklad "Выбор товара") ---------------- */
+.picker { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 14px; }
+@media (max-width: 800px) { .picker { grid-template-columns: minmax(0, 1fr); } .picker-groups { display: none; } }
+.picker-groups { border-right: 1px solid var(--border); padding-right: 10px; max-height: 62vh; overflow-y: auto; }
+.picker-groups .gt-item { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 8px; cursor: pointer; font: inherit; color: var(--text); }
+.picker-groups .gt-item:hover { background: var(--surface-2); }
+.picker-groups .gt-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.picker-table { max-height: 56vh; overflow: auto; }
+.picker-table tr.picked td { background: var(--primary-soft); }
+.mini-stepper { display: inline-flex; align-items: center; gap: 2px; }
+.mini-stepper button { width: 26px; height: 28px; border: 1px solid var(--border-strong); background: var(--surface); border-radius: 7px; cursor: pointer; color: var(--primary); font-size: 16px; line-height: 1; }
+.mini-stepper input { width: 64px; height: 28px; text-align: right; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--input-bg); color: var(--text); font: inherit; }
+
+/* ---------------- rollar (MoySklad "Настройка доступа") ---------------- */
+.access { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; }
+@media (max-width: 900px) { .access { grid-template-columns: minmax(0, 1fr); } }
+.access-nav { display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--border); padding-right: 10px; }
+.access-sec { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 0; background: none; padding: 9px 10px; border-radius: 8px; font: inherit; color: var(--text-2); cursor: pointer; text-align: left; }
+.access-sec:hover { background: var(--surface-2); }
+.access-sec.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.access-sec small { font-size: 11px; color: var(--muted); padding: 1px 6px; border-radius: 999px; background: var(--surface-3); }
+.access-sec small.full { background: var(--green-soft); color: var(--green); }
+.access-sec small.part { background: color-mix(in srgb, #d97706 15%, transparent); color: #b45309; }
+.access-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.access-head h3 { margin: 0; }
+.perm-table th.c, .perm-table td.c { text-align: center; }
+.perm-table th.c div { margin-top: 4px; }
+.perm-select { height: 32px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--input-bg); color: var(--text); font: inherit; min-width: 150px; }
+.pos-code { margin-right: 8px; color: var(--text-2); font-weight: 600; }
+.access-body { min-width: 0; overflow-x: auto; }
+.access .perm-table { min-width: 560px; }
+.access .perm-select { min-width: 120px; }
+@media (min-width: 1100px) { .access { grid-template-columns: 170px minmax(0, 1fr); } }
+.role-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.role-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; font: inherit; color: var(--text); text-align: left; }
+.role-chip small { color: var(--muted); font-size: 11px; }
+.role-chip:hover { border-color: var(--primary); }
+.role-chip.active { border-color: var(--primary); background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--primary); }

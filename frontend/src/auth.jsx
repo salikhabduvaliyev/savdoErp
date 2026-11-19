@@ -78,7 +78,11 @@ export function AuthProvider({ children }) {
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext)
 
-const perm = (user, module) => user?.permissions?.[module] || {}
+const perm1 = (user, module) => user?.permissions?.[module] || {}
+// bir nechta modul berilsa (massiv) — istalganida huquq bo'lsa yetarli
+const perm = (user, module) => (Array.isArray(module)
+  ? module.reduce((acc, m) => { const p = perm1(user, m); Object.keys(p).forEach((k) => { if (p[k] === true) acc[k] = true }); return acc }, {})
+  : perm1(user, module))
 
 /** Modulni ko'rish huquqi */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -90,3 +94,6 @@ export const canCreate = (user, module) => !!perm(user, module).create
 export const canEdit = (user, module) => !!perm(user, module).edit
 // eslint-disable-next-line react-refresh/only-export-components
 export const canDelete = (user, module) => !!perm(user, module).delete
+/** Hujjatni o'tkazish (MoySklad "Проводить") */
+// eslint-disable-next-line react-refresh/only-export-components
+export const canPost = (user, module) => !!perm(user, module).post

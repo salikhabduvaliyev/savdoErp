@@ -9,7 +9,7 @@ from rest_framework.throttling import AnonRateThrottle
 from apps.core.models import Branch
 from apps.core.tenancy import set_context
 
-from .models import ACTIONS, MODULE_GROUPS, SCOPED_MODULES, Role, User, normalize_permissions
+from .models import ACTIONS, MODULE_GROUPS, POSTABLE_MODULES, SCOPED_MODULES, Role, User, normalize_permissions
 from .permissions import SubscriptionExpired, TenantUser, activate_tenant
 from .services import register_company
 
@@ -24,6 +24,11 @@ class RoleSerializer(serializers.ModelSerializer):
 
     def validate_permissions(self, value):
         return normalize_permissions(value)
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        data["permissions"] = normalize_permissions(obj.permissions)  # eski rollar: yangi hujjat turlari meros bilan
+        return data
 
     def validate(self, attrs):
         if self.instance and self.instance.is_system and self.instance.code in ("admin", "director"):
@@ -109,6 +114,7 @@ def modules(request):
         "groups": [{"title": t, "modules": [{"key": k, "label": l} for k, l in items]} for t, items in MODULE_GROUPS],
         "actions": ACTIONS,
         "scoped": SCOPED_MODULES,
+        "postable": POSTABLE_MODULES,
     })
 
 

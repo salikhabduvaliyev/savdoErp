@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Loading, MoneyBag, Stat, toast, useFetch } from '../../components/ui'
 import { money, monthLabel, shortDate } from '../../format'
 import TransactionForm from './TransactionForm'
+import Payments from './Payments'
 import { t as tr } from '../../i18n'
 import { CurrencyOptions, curLabel } from '../../currency'
 import Icon from '../../components/Icon'
@@ -179,22 +180,19 @@ export default function FinancePage() {
   return (
     <>
       <div className="page-head">
-        <h1>{tr("Moliya")}</h1>
-        <button className="btn primary" onClick={() => setForm('client_payment')}>{tr("+ Kirim")}</button>
-        <button className="btn" onClick={() => setForm('supplier_payment')}>{tr("Chiqim")}</button>
-        <button className="btn" onClick={() => setForm('expense')}>{tr("Xarajat")}</button>
+        <h1>{tr("Pul")}</h1>
       </div>
       <div className="tabs">
         {tabs.map(([k, l]) => <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => setTab(k)}>{l}</button>)}
       </div>
-      {['tx', 'exp'].includes(tab) && accounts.data && (
+      {tab === 'exp' && accounts.data && (
         <div className="stats">
           {accounts.data.filter((a) => a.is_active).map((a) => (
             <Stat key={a.id} label={a.name} value={money(a.balance, a.currency)} valueClass={a.currency === 'USD' ? 'usd' : ''} />
           ))}
         </div>
       )}
-      {tab === 'tx' && <Transactions stamp={stamp} />}
+      {tab === 'tx' && <Payments onChanged={() => setStamp((s) => s + 1)} />}
       {tab === 'exp' && <Transactions stamp={stamp} direction="out" />}
       {tab === 'clients' && <Debts kind="clients" />}
       {tab === 'suppliers' && <Debts kind="suppliers" />}

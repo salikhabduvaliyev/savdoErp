@@ -86,11 +86,11 @@ export default function App() {
         <Route path="/orders" element={guard('orders', <OrdersPage />)} />
         <Route path="/orders/:id" element={guard('orders', <OrderDetail />)} />
         <Route path="/sales/:tab?" element={guard('sales', <SalesPage />)} />
-        <Route path="/purchases/:tab?" element={guard('purchases', <PurchasesPage />)} />
+        <Route path="/purchases/:tab?" element={guard(['purchase_orders', 'supplies', 'purchase_returns'], <PurchasesPage />)} />
         <Route path="/products" element={guard('products', <ProductsPage />)} />
         <Route path="/production-dashboard" element={guard('production', <ProductionDashboardPage />)} />
         <Route path="/production" element={guard('production', <ProductionPage />)} />
-        <Route path="/warehouse/:tab?" element={guard('warehouse', <WarehousePage />)} />
+        <Route path="/warehouse/:tab?" element={guard(['warehouse', 'stock_enter', 'stock_loss', 'stock_move', 'stock_inventory'], <WarehousePage />)} />
         <Route path="/finance" element={guard('finance', <FinancePage />)} />
         <Route path="/hr" element={guard('hr', <HrPage />)} />
         <Route path="/counterparties" element={guard('counterparties', <CounterpartiesPage />)} />

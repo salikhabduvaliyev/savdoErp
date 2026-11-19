@@ -39,7 +39,7 @@ class SaleViewSet(viewsets.ModelViewSet):
     filterset_class = SaleFilter
     search_fields = ["=number", "client__name", "note"]
     ordering_fields = ["number", "date"]
-    action_perms = {"from_order": "create", "complete": "edit", "cancel": "edit", "pay": "edit", "bulk": "view"}
+    action_perms = {"from_order": "create", "complete": "post", "cancel": "post", "pay": "edit", "bulk": "view"}
 
     def get_serializer_class(self):
         return SaleListSerializer if self.action == "list" else SaleSerializer
@@ -102,7 +102,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         from django.core.exceptions import ValidationError as DjValidationError
 
         ids, act = request.data.get("ids", []), request.data.get("action")
-        need = {"complete": "edit", "cancel": "edit", "delete": "delete"}.get(act)
+        need = {"complete": "post", "cancel": "post", "delete": "delete"}.get(act)
         if not need:
             return Response({"detail": "Noma'lum amal"}, status=400)
         if not request.user.can("sales", need):

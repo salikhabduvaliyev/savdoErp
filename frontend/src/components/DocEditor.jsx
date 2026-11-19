@@ -114,37 +114,97 @@ export function ProductSearch({ onPick, onFree, params, disabled }) {
   )
 }
 
-/** Ma'lumotnomadan tanlash oynasi */
+/** Ma'lumotnomadan tanlash (MoySklad "Выбор товара"): chapda guruhlar, har qatorda miqdor (−/+), pastda "Tanlash" */
 function ProductPicker({ onPick, onClose, params }) {
   const [q, setQ] = useState('')
+  const [group, setGroup] = useState('')
   const [rows, setRows] = useState(null)
+  const [qty, setQty] = useState({})
+  const [groups, setGroups] = useState([])
+  const [pts, setPts] = useState([])
+  useEffect(() => {
+    api.get('/warehouse/groups/').then(({ data }) => setGroups(data)).catch(() => {})
+    api.get('/warehouse/price-types/').then(({ data }) => setPts(data)).catch(() => {})
+  }, [])
   useEffect(() => {
     let alive = true
+    setRows(null)
     const h = setTimeout(async () => {
-      const { data } = await api.get('/warehouse/products/', { params: { search: q || undefined, is_active: true, ...params } })
+      const { data } = await api.get('/warehouse/products/', { params: { search: q || undefined, group: group || undefined, is_active: true, ...params } })
       if (alive) setRows(data.results || data)
     }, 200)
     return () => { alive = false; clearTimeout(h) }
-  }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [q, group]) // eslint-disable-line react-hooks/exhaustive-deps
+  const defPt = pts.find((x) => x.is_default) || pts[0]
+  const tree = useMemo(() => {
+    const by = {}
+    for (const g of groups) (by[g.parent || 0] ||= []).push(g)
+    const out = []
+    const walk = (pid, d) => (by[pid] || []).sort((x, y) => x.name.localeCompare(y.name)).forEach((g) => { out.push({ ...g, d }); walk(g.id, d + 1) })
+    walk(0, 0)
+    return out
+  }, [groups])
+  const setQ1 = (id, v) => setQty((s) => ({ ...s, [id]: v }))
+  const chosen = Object.entries(qty).filter(([, v]) => Number(v) > 0)
+  const byId = useMemo(() => Object.fromEntries((rows || []).map((r) => [r.id, r])), [rows])
+  const [cache, setCache] = useState({})
+  useEffect(() => { if (rows) setCache((c) => ({ ...c, ...Object.fromEntries(rows.map((r) => [r.id, r])) })) }, [rows])
+  const submit = () => {
+    chosen.forEach(([id, v]) => { const pr = byId[id] || cache[id]; if (pr) onPick(pr, Number(v)) })
+    onClose()
+  }
   return (
-    <Modal title="Ma'lumotnomadan tanlash" onClose={onClose} wide dialog>
-      <input autoFocus className="input" placeholder={t('Qidirish…')} value={q} onChange={(e) => setQ(e.target.value)} style={{ width: '100%', marginBottom: 10 }} />
-      <div className="table-wrap" style={{ maxHeight: '55vh', overflow: 'auto' }}>
-        <table className="t compact">
-          <thead><tr><th>{t('Kod')}</th><th>{t('Nomi')}</th><th>{t('Turi')}</th><th className="num">{t('Qoldiq')}</th><th /></tr></thead>
-          <tbody>
-            {(rows || []).map((p) => (
-              <tr key={p.id} className="clickable" onClick={() => onPick(p)}>
-                <td className="muted">{p.sku || '—'}</td><td className="bold">{p.name}</td><td className="small">{t(p.type_display)}</td>
-                <td className="num">{p.stock_qty !== null ? `${fmtQty(p.stock_qty)} ${t(p.unit_display)}` : '—'}</td>
-                <td className="num"><Icon name="plus" size={16} /></td>
-              </tr>
-            ))}
-            {rows && !rows.length && <tr><td colSpan={5} className="empty">{t('Topilmadi')}</td></tr>}
-          </tbody>
-        </table>
+    <Modal title="Tovar tanlash" onClose={onClose} wide dialog>
+      <div className="picker">
+        <div className="picker-groups">
+          <button className={'gt-item' + (!group ? ' active' : '')} onClick={() => setGroup('')}>{t('Tovarlar va xizmatlar')}</button>
+          {tree.map((g) => (
+            <button key={g.id} className={'gt-item' + (String(group) === String(g.id) ? ' active' : '')} style={{ paddingLeft: 10 + g.d * 14 }} onClick={() => setGroup(g.id)}>{g.name}</button>
+          ))}
+        </div>
+        <div className="picker-main">
+          <div className="psearch" style={{ maxWidth: 'none', marginBottom: 10 }}>
+            <Icon name="search" size={16} className="psearch-ic" />
+            <input autoFocus placeholder={t('Nomi, kod yoki artikul')} value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <div className="table-wrap picker-table">
+            <table className="t compact">
+              <thead><tr><th>{t('Nomi')}</th><th className="num" style={{ width: 150 }}>{t('Miqdor')}</th><th className="num">{t('Qoldiq')}</th><th className="num">{t('Xarid narxi')}</th><th className="num">{t('Sotuv narxi')}</th></tr></thead>
+              <tbody>
+                {!rows && <tr><td colSpan={5} className="empty">{t('Yuklanmoqda…')}</td></tr>}
+                {(rows || []).map((p) => {
+                  const v = qty[p.id] ?? ''
+                  const sale = defPt ? p.prices?.[defPt.id] : null
+                  return (
+                    <tr key={p.id} className={Number(v) > 0 ? 'picked' : ''}>
+                      <td>{p.code && <span className="pos-code">{p.code}</span>}<b>{p.name}</b> <span className="muted small">{t(p.unit_display)}</span></td>
+                      <td className="num">
+                        <div className="mini-stepper">
+                          <button type="button" onClick={() => setQ1(p.id, String(Math.max(0, Number(v || 0) - 1)))}>−</button>
+                          <input inputMode="decimal" value={v} placeholder="0" onChange={(e) => setQ1(p.id, e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && submit()} />
+                          <button type="button" onClick={() => setQ1(p.id, String(Number(v || 0) + 1))}>+</button>
+                        </div>
+                      </td>
+                      <td className={'num ' + (p.stock_qty !== null && Number(p.stock_qty) < 0 ? 'red' : '')}>{p.stock_qty !== null ? fmtQty(p.stock_qty) : '—'}</td>
+                      <td className="num small">{money(p.purchase_price, p.currency)}</td>
+                      <td className="num small">{sale ? money(sale, defPt.currency) : '—'}</td>
+                    </tr>
+                  )
+                })}
+                {rows && !rows.length && <tr><td colSpan={5} className="empty">{t('Topilmadi')}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      <p className="hint">{t("Qatorni bosing — pozitsiya qo'shiladi. Oynani yopmasdan bir nechtasini tanlash mumkin.")}</p>
+      <div className="form-actions" style={{ justifyContent: 'space-between' }}>
+        <span className="muted">{chosen.length ? t('Tanlandi: {n} ta tovar', { n: chosen.length }) : t('Miqdorni kiriting yoki + bosing')}</span>
+        <span style={{ display: 'flex', gap: 8 }}>
+          <button className="btn ghost" onClick={onClose}>{t('Bekor')}</button>
+          <button className="btn primary" disabled={!chosen.length} onClick={submit}><Icon name="check" size={16} /> {t('Tanlash')}</button>
+        </span>
+      </div>
     </Modal>
   )
 }
@@ -157,12 +217,12 @@ export function Positions({ lines, setLines, currency, priceOf, readOnly, showSt
   showPrice = true, showDiscount = true, qtyLabel = 'Miqdor', stockLabel = 'Qoldiq', stockOf, warnShort = true, extraCols }) {
   const [picker, setPicker] = useState(false)
   const set = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)))
-  const add = (p) => {
+  const add = (p, n = 1) => {
     setLines((ls) => {
       const same = ls.find((l) => l.product && String(l.product) === String(p.id))
-      if (same) return ls.map((l) => (l === same ? { ...l, qty: String(Number(l.qty || 0) + 1) } : l))
+      if (same) return ls.map((l) => (l === same ? { ...l, qty: String(Number(l.qty || 0) + n) } : l))
       return [...ls, {
-        key: newKey(), product: p.id, name: p.name, code: p.sku || '', unit: p.unit_display || '', qty: '1',
+        key: newKey(), product: p.id, name: p.name, code: p.code || p.sku || '', unit: p.unit_display || '', qty: String(n),
         price: cleanNum(priceOf ? priceOf(p) : ''), discount_pct: '0', stock: stockOf ? stockOf(p) : p.stock_qty,
       }]
     })

@@ -227,9 +227,9 @@ class StockDoc(TenantModel, TimeStamped):
 
     # qaysi modul huquqi bilan ishlanadi
     MODULE = {
-        "purchase_order": "purchases", "supply": "purchases", "purchase_return": "purchases",
-        "enter": "warehouse", "loss": "warehouse", "move": "warehouse", "inventory": "warehouse",
-        "sales_return": "sales",
+        "purchase_order": "purchase_orders", "supply": "supplies", "purchase_return": "purchase_returns",
+        "enter": "stock_enter", "loss": "stock_loss", "move": "stock_move", "inventory": "stock_inventory",
+        "sales_return": "sales_returns",
     }
 
     type = models.CharField(max_length=20, choices=Type.choices)

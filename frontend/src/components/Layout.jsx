@@ -22,8 +22,8 @@ export const NAV = [
   {
     group: t("Xaridlar va ombor"),
     items: [
-      { to: '/purchases', label: t("Xaridlar"), module: 'purchases', icon: 'purchases' },
-      { to: '/warehouse', label: t("Ombor"), module: 'warehouse' },
+      { to: '/purchases', label: t("Xaridlar"), module: ['purchase_orders', 'supplies', 'purchase_returns'], icon: 'purchases' },
+      { to: '/warehouse', label: t("Ombor"), module: ['warehouse', 'stock_enter', 'stock_loss', 'stock_move', 'stock_inventory'], icon: 'warehouse' },
       { to: '/products', label: t("Tovarlar"), module: 'products' },
     ],
   },

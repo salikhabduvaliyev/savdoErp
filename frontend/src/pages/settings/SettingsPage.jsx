@@ -216,9 +216,10 @@ function BranchPicker({ user, branches, onClose, onSave }) {
 }
 
 /* ---------------- Rollar va huquqlar ---------------- */
-const FULL = { view: true, create: true, edit: true, delete: true }
-const VIEW = { view: true, create: false, edit: false, delete: false }
-const NONE = { view: false, create: false, edit: false, delete: false }
+const FULL = { view: true, create: true, edit: true, delete: true, post: true }
+const VIEW = { view: true, create: false, edit: false, delete: false, post: false }
+const NONE = { view: false, create: false, edit: false, delete: false, post: false }
+const PERM_COLS = [['create', t('Yaratish')], ['edit', t('Tahrirlash')], ['delete', t("O'chirish")], ['post', t("O'tkazish")]]
 
 function Roles({ editable, onChanged }) {
   const { reloadMe } = useAuth()
@@ -228,6 +229,7 @@ function Roles({ editable, onChanged }) {
   const [selId, setSelId] = useState(null)
   const [draft, setDraft] = useState(null)
   const [newRole, setNewRole] = useState(false)
+  const [section, setSection] = useState(0)
 
   const sel = (roles.data || []).find((r) => r.id === selId) || roles.data?.[0]
   useEffect(() => { if (sel) setDraft(JSON.parse(JSON.stringify(sel))) }, [sel?.id, stamp]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -239,7 +241,7 @@ function Roles({ editable, onChanged }) {
 
   const setCell = (m, action, value) => {
     const cur = { ...P[m], [action]: value }
-    if (action === 'view' && !value) Object.assign(cur, { create: false, edit: false, delete: false })
+    if (action === 'view' && !value) Object.assign(cur, { create: false, edit: false, delete: false, post: false })
     if (action !== 'view' && value) cur.view = true
     setDraft({ ...draft, permissions: { ...P, [m]: cur } })
   }
@@ -254,7 +256,7 @@ function Roles({ editable, onChanged }) {
     const next = { ...P }
     mods.forEach((m) => {
       const cur = { ...next[m], [action]: value }
-      if (action === 'view' && !value) Object.assign(cur, { create: false, edit: false, delete: false })
+      if (action === 'view' && !value) Object.assign(cur, { create: false, edit: false, delete: false, post: false })
       if (action !== 'view' && value) cur.view = true
       next[m] = cur
     })
@@ -289,22 +291,14 @@ function Roles({ editable, onChanged }) {
         <span className="grow" />
         {editable && <button className="btn primary" onClick={() => setNewRole(true)}>{t("+ Rol")}</button>}
       </div>
-      <div className="grid-2" style={{ gridTemplateColumns: '260px minmax(0, 1fr)' }}>
-        <div className="table-wrap">
-          <table className="t">
-            <tbody>
-              {roles.data.map((r) => (
-                <tr key={r.id} className="clickable" onClick={() => setSelId(r.id)} style={r.id === draft.id ? { boxShadow: 'inset 3px 0 0 var(--primary)' } : undefined}>
-                  <td style={r.id === draft.id ? { background: 'var(--primary-soft)' } : undefined}>
-                    <div className="bold">{r.name}</div>
-                    <div className="small muted">{r.users_count} foydalanuvchi{r.is_system && ' · tizim'}</div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
+      <div className="role-chips">
+        {roles.data.map((r) => (
+          <button key={r.id} className={'role-chip' + (r.id === draft.id ? ' active' : '')} onClick={() => setSelId(r.id)}>
+            <b>{r.name}</b><small>{t('{n} foydalanuvchi', { n: r.users_count })}{r.is_system ? ` · ${t('tizim')}` : ''}</small>
+          </button>
+        ))}
+      </div>
+      <div>
         <div className="card">
           <div className="form" style={{ marginBottom: 14 }}>
             <Field label={t("Rol nomi")}><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} disabled={!editable} /></Field>
@@ -312,49 +306,89 @@ function Roles({ editable, onChanged }) {
           </div>
           {editable && (
             <div className="filters" style={{ marginBottom: 12 }}>
-              <span className="small muted">{t("Tezkor:")}</span>
+              <span className="small muted">{t("Butun rol:")}</span>
               <button className="chip" onClick={() => setModules(allModules, FULL)}>{t("Hammasi")}</button>
               <button className="chip" onClick={() => setModules(allModules, VIEW)}>{t("Faqat ko'rish")}</button>
               <button className="chip" onClick={() => setModules(allModules, NONE)}>{t("Hech narsa")}</button>
             </div>
           )}
-          <div className="table-wrap" style={{ boxShadow: 'none' }}>
-            <table className="t perm-table">
-              <thead>
-                <tr><th>{t("Bo'lim")}</th>{ACTIONS.map(([k, l]) => <th key={k}>{l}</th>)}<th>{t("Ko'radi")}</th></tr>
-              </thead>
-              <tbody>
-                {meta.data.groups.map((g) => {
-                  const mods = g.modules.map((m) => m.key)
-                  return [
-                    <tr key={g.title} className="grp">
-                      <td>{g.title}</td>
-                      {ACTIONS.map(([a]) => (
-                        <td key={a}><input type="checkbox" disabled={!editable} checked={columnAll(mods, a)} onChange={() => toggleColumn(mods, a)} title={t("Guruh bo'yicha hammasi")} /></td>
-                      ))}
-                      <td />
-                    </tr>,
-                    ...g.modules.map((m) => (
-                      <tr key={m.key}>
-                        <td style={{ paddingLeft: 22 }}>{m.label}</td>
-                        {ACTIONS.map(([a]) => (
-                          <td key={a}><input type="checkbox" disabled={!editable} checked={!!P[m.key]?.[a]} onChange={(e) => setCell(m.key, a, e.target.checked)} /></td>
+          <div className="access">
+            <div className="access-nav">
+              {meta.data.groups.map((g, i) => {
+                const on = g.modules.filter((m) => P[m.key]?.view).length
+                return (
+                  <button key={g.title} className={'access-sec' + (i === section ? ' active' : '')} onClick={() => setSection(i)}>
+                    <span>{t(g.title)}</span>
+                    <small className={on ? (on === g.modules.length ? 'full' : 'part') : ''}>{on}/{g.modules.length}</small>
+                  </button>
+                )
+              })}
+            </div>
+            {(() => {
+              const g = meta.data.groups[section] || meta.data.groups[0]
+              const mods = g.modules.map((m) => m.key)
+              const postable = meta.data.postable || []
+              return (
+                <div className="access-body">
+                  <div className="access-head">
+                    <h3>{t(g.title)}</h3>
+                    {editable && (
+                      <div className="filters">
+                        <button className="chip" onClick={() => setModules(mods, FULL)}>{t("Hammasi")}</button>
+                        <button className="chip" onClick={() => setModules(mods, VIEW)}>{t("Faqat ko'rish")}</button>
+                        <button className="chip" onClick={() => setModules(mods, NONE)}>{t("Hech narsa")}</button>
+                      </div>
+                    )}
+                  </div>
+                  <table className="t perm-table">
+                    <thead>
+                      <tr>
+                        <th />
+                        <th>{t("Ko'rish")}</th>
+                        {PERM_COLS.map(([k, l]) => (
+                          <th key={k} className="c">
+                            {l}
+                            {editable && <div><input type="checkbox" checked={columnAll(mods.filter((m) => k !== 'post' || postable.includes(m)), k) && mods.some((m) => k !== 'post' || postable.includes(m))}
+                              onChange={() => toggleColumn(mods.filter((m) => k !== 'post' || postable.includes(m)), k)} title={t("Ustun bo'yicha hammasi")} /></div>}
+                          </th>
                         ))}
-                        <td>
-                          {meta.data.scoped.includes(m.key) ? (
-                            <select value={P[m.key]?.scope || 'all'} disabled={!editable || !P[m.key]?.view}
-                              onChange={(e) => setDraft({ ...draft, permissions: { ...P, [m.key]: { ...P[m.key], scope: e.target.value } } })}>
-                              <option value="all">{t("hammasini")}</option>
-                              <option value="own">{t("o'zinikini")}</option>
-                            </select>
-                          ) : <span className="muted">—</span>}
-                        </td>
                       </tr>
-                    )),
-                  ]
-                })}
-              </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                      {g.modules.map((m) => {
+                        const p = P[m.key] || {}
+                        const scoped = meta.data.scoped.includes(m.key)
+                        const viewVal = !p.view ? 'none' : (scoped && p.scope === 'own' ? 'own' : 'all')
+                        return (
+                          <tr key={m.key}>
+                            <td className="bold">{t(m.label)}</td>
+                            <td>
+                              <select className="perm-select" value={viewVal} disabled={!editable}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                  if (val === 'none') return setCell(m.key, 'view', false)
+                                  setDraft({ ...draft, permissions: { ...P, [m.key]: { ...p, view: true, scope: val === 'own' ? 'own' : 'all' } } })
+                                }}>
+                                <option value="none">{t("Yo'q")}</option>
+                                <option value="all">{t('Hammasi')}</option>
+                                {scoped && <option value="own">{t("Faqat o'zinikini")}</option>}
+                              </select>
+                            </td>
+                            {PERM_COLS.map(([a]) => (
+                              <td key={a} className="c">
+                                {a === 'post' && !postable.includes(m.key) ? <span className="muted">—</span>
+                                  : <input type="checkbox" disabled={!editable} checked={!!p[a]} onChange={(e) => setCell(m.key, a, e.target.checked)} />}
+                              </td>
+                            ))}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="hint">{t("\"Faqat o'zinikini\" — foydalanuvchi o'zi mas'ul yoki yaratgan hujjatlarni ko'radi. \"O'tkazish\" — hujjatni qoldiqqa o'tkazish / bekor qilish (MoySklad: Проводить).")}</div>
+                </div>
+              )
+            })()}
           </div>
           <label className="check" style={{ marginTop: 14 }}>
             <input type="checkbox" checked={draft.own_department_only} disabled={!editable}
@@ -368,7 +402,6 @@ function Roles({ editable, onChanged }) {
               <button className="btn primary" disabled={!dirty} onClick={save}>{t("Saqlash")}</button>
             </div>
           )}
-          <div className="hint">{t("\"Ko'radi: o'zinikini\" — foydalanuvchi faqat o'zi mas'ul yoki yaratgan buyurtma/sotuvlarni ko'radi.")}</div>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import api, { errorText } from '../../api'
-import { can, canCreate, canDelete, canEdit, useAuth } from '../../auth'
+import { can, canCreate, canDelete, canEdit, canPost, useAuth } from '../../auth'
 import { Drawer } from '../../components/EntityForm'
 import { Badge, Field, Loading, Modal, MoneyBag, Stat, toast, useFetch } from '../../components/ui'
 import { date, money, qty, todayISO } from '../../format'
@@ -93,7 +93,7 @@ function SaleCard({ id, onClose, onChanged }) {
         <Badge kind={s.status}>{s.status_display}</Badge>
         <span className="grow" />
         {s.status === 'draft' && editable && <button className="btn icon-only" onClick={() => setEdit(true)} title={tr("Tahrirlash")}><Icon name="edit" size={16} /></button>}
-        {s.status === 'draft' && editable && <button className="btn primary" onClick={() => act('complete')}>{tr("Yakunlash")}</button>}
+        {s.status === 'draft' && canPost(user, 'sales') && <button className="btn primary" onClick={() => act('complete')}>{tr("Yakunlash")}</button>}
         {s.status !== 'cancelled' && editable && Number(s.debt) > 0 && <button className="btn success" onClick={() => setPay(true)}>{tr("To'lov qabul qilish")}</button>}
         <button className="btn" onClick={onClose}><Icon name="back" size={16} /> {tr("Orqaga")}</button>
       </div>
@@ -139,11 +139,11 @@ function SaleCard({ id, onClose, onChanged }) {
         </table>
       </div>
       <div className="form-actions" style={{ justifyContent: 'flex-start' }}>
-        {s.status === 'completed' && canCreate(user, 'sales') && (
+        {s.status === 'completed' && canCreate(user, 'sales_returns') && (
           <button className="btn" onClick={makeReturn}><Icon name="back" size={15} /> {tr('Mijoz qaytarishi')}</button>
         )}
         {s.status === 'draft' && canDelete(user, 'sales') && <button className="btn" onClick={remove}>{tr("Qoralamani o'chirish")}</button>}
-        {s.status !== 'cancelled' && editable && (
+        {s.status !== 'cancelled' && canPost(user, 'sales') && (
           <button className="btn" onClick={() => act('cancel', "Sotuv bekor qilinsinmi? Tovarlar omborga qaytariladi.")}>{tr("Sotuvni bekor qilish")}</button>
         )}
       </div>

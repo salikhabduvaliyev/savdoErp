@@ -4,23 +4,41 @@ from django.db import models
 from apps.core.tenancy import TenantModel
 
 # Tizim bo'limlari (modullar) — guruhlar bo'yicha (rol sozlamalari jadvali shu tartibda).
+# Huquqlar MoySklad uslubida: bo'lim (chapdagi ro'yxat) → hujjat turlari (jadval qatorlari).
 MODULE_GROUPS = [
     ("Asosiy", [("dashboard", "Dashboard")]),
-    ("Savdo", [("orders", "Buyurtmalar"), ("sales", "Sotuvlar"), ("counterparties", "Kontragentlar")]),
-    ("Xaridlar va ombor", [("purchases", "Xaridlar"), ("warehouse", "Ombor"), ("products", "Tovarlar")]),
+    ("Savdo", [("orders", "Buyurtmalar"), ("sales", "Sotuvlar"), ("sales_returns", "Mijoz qaytarishlari")]),
+    ("Xaridlar", [("purchase_orders", "Yetkazuvchiga buyurtmalar"), ("supplies", "Qabul qilish"),
+                  ("purchase_returns", "Yetkazuvchiga qaytarish")]),
+    ("Ombor", [("stock_enter", "Kirimlar"), ("stock_loss", "Hisobdan chiqarish"), ("stock_move", "Ko'chirish"),
+               ("stock_inventory", "Inventarizatsiya"), ("warehouse", "Qoldiqlar, aylanma, omborlar")]),
+    ("Tovarlar", [("products", "Tovarlar va xizmatlar")]),
+    ("CRM", [("counterparties", "Kontragentlar")]),
     ("Ishlab chiqarish", [("production", "Ishlab chiqarish")]),
-    ("Moliya va xodimlar", [("finance", "Moliya"), ("hr", "KPI va oylik")]),
-    ("Tizim", [("company", "Kompaniya"), ("settings", "Sozlamalar")]),
+    ("Pul", [("finance", "To'lovlar va moliya hisobotlari")]),
+    ("Xodimlar", [("hr", "KPI va oylik")]),
+    ("Kompaniya", [("company", "Kompaniya ma'lumotlari")]),
+    ("Sozlamalar", [("settings", "Sozlamalar")]),
 ]
 MODULES = [m for _, items in MODULE_GROUPS for m in items]
 MODULE_KEYS = [k for k, _ in MODULES]
-ACTIONS = ["view", "create", "edit", "delete"]
+ACTIONS = ["view", "create", "edit", "delete", "post"]
 # "Ko'radi: o'zinikini" qo'llanadigan modullar (hujjatda mas'ul/yaratuvchi bor)
 SCOPED_MODULES = ["orders", "sales"]
+# "O'tkazish" (Проводить) amali bor hujjatlar
+POSTABLE_MODULES = ["sales", "sales_returns", "purchase_orders", "supplies", "purchase_returns",
+                    "stock_enter", "stock_loss", "stock_move", "stock_inventory"]
+# eski modul → yangi hujjat turlari (eski rollar va boshlang'ich rollar uchun)
+ALIASES = {
+    "purchases": ["purchase_orders", "supplies", "purchase_returns"],
+    "warehouse": ["warehouse", "stock_enter", "stock_loss", "stock_move", "stock_inventory"],
+    "sales": ["sales", "sales_returns"],
+}
 
 
-def perm(view=False, create=False, edit=False, delete=False, scope="all"):
-    return {"view": view, "create": create, "edit": edit, "delete": delete, "scope": scope}
+def perm(view=False, create=False, edit=False, delete=False, scope="all", post=None):
+    return {"view": view, "create": create, "edit": edit, "delete": delete, "scope": scope,
+            "post": edit if post is None else post}
 
 
 FULL = perm(True, True, True, True)
@@ -30,6 +48,10 @@ WORK = perm(True, True, True, False)  # o'chirmasdan ishlash
 
 
 def _perms(**kw):
+    for old, new in ALIASES.items():
+        if old in kw:
+            for k in new:
+                kw.setdefault(k, kw[old])
     return {m: dict(kw.get(m, NONE)) for m in MODULE_KEYS}
 
 
@@ -63,9 +85,17 @@ def normalize_permissions(value):
         v = value.get(m)
         if isinstance(v, str):  # eski format: none/view/edit
             v = {"none": NONE, "view": VIEW, "edit": WORK}.get(v, NONE)
+        if v is None:  # yangi kalit (masalan stock_loss) — eski moduldan meros
+            for old, new in ALIASES.items():
+                if m in new and old != m and isinstance(value.get(old), dict):
+                    v = value[old]
+                    break
+        had_post = isinstance(v, dict) and "post" in v
         v = dict(NONE, **(v or {}))
+        if not had_post:
+            v["post"] = bool(v.get("edit"))
         if not v["view"]:  # ko'rmasa, boshqa amal ham yo'q
-            v.update(create=False, edit=False, delete=False)
+            v.update(create=False, edit=False, delete=False, post=False)
         if v.get("scope") not in ("all", "own"):
             v["scope"] = "all"
         out[m] = {k: (bool(v[k]) if k != "scope" else v[k]) for k in ACTIONS + ["scope"]}

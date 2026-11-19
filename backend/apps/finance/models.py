@@ -65,6 +65,8 @@ class Transaction(TenantModel, TimeStamped):
         EXPENSE = "expense", "Xarajat"
         SALARY = "salary", "Ish haqi"
         OTHER_INCOME = "other_income", "Boshqa kirim"
+        TRANSFER_OUT = "transfer_out", "Ko'chirish (chiqim)"
+        TRANSFER_IN = "transfer_in", "Ko'chirish (kirim)"
 
     KIND_DIRECTION = {
         Kind.CLIENT_PAYMENT: Direction.IN,
@@ -72,8 +74,11 @@ class Transaction(TenantModel, TimeStamped):
         Kind.SUPPLIER_PAYMENT: Direction.OUT,
         Kind.EXPENSE: Direction.OUT,
         Kind.SALARY: Direction.OUT,
+        Kind.TRANSFER_OUT: Direction.OUT,
+        Kind.TRANSFER_IN: Direction.IN,
     }
 
+    number = models.PositiveIntegerField(null=True, blank=True, editable=False, help_text="Kirim/chiqim bo'yicha alohida raqam")
     date = models.DateField(default=timezone.localdate)
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="transactions")
     kind = models.CharField(max_length=20, choices=Kind.choices)
@@ -86,6 +91,10 @@ class Transaction(TenantModel, TimeStamped):
     client = models.ForeignKey("crm.Counterparty", null=True, blank=True, on_delete=models.PROTECT, related_name="client_transactions")
     supplier = models.ForeignKey("crm.Counterparty", null=True, blank=True, on_delete=models.PROTECT, related_name="supplier_transactions")
     category = models.ForeignKey(ExpenseCategory, null=True, blank=True, on_delete=models.PROTECT)
+    stock_doc = models.ForeignKey("warehouse.StockDoc", null=True, blank=True, on_delete=models.SET_NULL, related_name="payments",
+                                  help_text="Yetkazuvchiga to'lov — qaysi qabul qilish uchun")
+    pair = models.OneToOneField("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+                                help_text="Hisoblar orasida ko'chirish — juft yozuv")
     description = models.CharField(max_length=300, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 
@@ -114,6 +123,10 @@ class Transaction(TenantModel, TimeStamped):
 
         self.direction = self.KIND_DIRECTION[self.kind]
         self.currency = self.account.currency
+        if not self.number:
+            from django.db.models import Max
+
+            self.number = (Transaction.objects.filter(direction=self.direction).aggregate(m=Max("number"))["m"] or 0) + 1
         if self.sale_id:
             self.client_id = self.client_id or self.sale.client_id
             self.order_id = self.order_id or self.sale.order_id

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api, { errorText } from '../../api'
-import { canCreate, canDelete, canEdit, useAuth } from '../../auth'
+import { canCreate, canDelete, canEdit, canPost, useAuth } from '../../auth'
 import { cleanNum, DocField, DocFooter, DocPage, DocTitle, newKey, Positions, useLinesTotal } from '../../components/DocEditor'
 import Icon from '../../components/Icon'
 import { Badge, Loading, MoneyBag, toast, useFetch } from '../../components/ui'
@@ -14,19 +14,19 @@ import { SearchSelect, usePager } from '../../components/Controls'
 /* Hujjat turlari sozlamasi */
 export const DOC_TYPES = {
   purchase_order: { title: 'Yetkazuvchiga buyurtmalar', one: 'Yetkazuvchiga buyurtma', party: 'Yetkazuvchi', wh: 'Ombor', price: true, planDate: true,
-    derive: [['supply', 'Qabul qilish']], module: 'purchases', postedLabel: 'Tasdiqlangan', search: {} },
+    derive: [['supply', 'Qabul qilish']], module: 'purchase_orders', postedLabel: 'Tasdiqlangan', search: {} },
   supply: { title: 'Qabul qilishlar', one: 'Qabul qilish', party: 'Yetkazuvchi', wh: 'Ombor', price: true,
-    derive: [['purchase_return', 'Yetkazuvchiga qaytarish']], module: 'purchases', search: {} },
+    derive: [['purchase_return', 'Yetkazuvchiga qaytarish']], module: 'supplies', search: {} },
   purchase_return: { title: 'Yetkazuvchiga qaytarishlar', one: 'Yetkazuvchiga qaytarish', party: 'Yetkazuvchi', wh: 'Qaysi ombordan', price: true,
-    module: 'purchases', short: true, search: {} },
-  enter: { title: 'Kirimlar', one: 'Kirim', wh: 'Ombor', price: true, discount: false, module: 'warehouse', search: {},
+    module: 'purchase_returns', short: true, search: {} },
+  enter: { title: 'Kirimlar', one: 'Kirim', wh: 'Ombor', price: true, discount: false, module: 'stock_enter', search: {},
     hint: "Kirim (MoySklad: Оприходование) — yetkazuvchisiz kirim: ortiqcha chiqqan tovar, boshlang'ich qoldiq." },
-  loss: { title: 'Hisobdan chiqarishlar', one: 'Hisobdan chiqarish', wh: 'Qaysi ombordan', price: false, module: 'warehouse', short: true, search: {},
+  loss: { title: 'Hisobdan chiqarishlar', one: 'Hisobdan chiqarish', wh: 'Qaysi ombordan', price: false, module: 'stock_loss', short: true, search: {},
     hint: "Hisobdan chiqarish (Списание) — brak, yo'qotish, ichki ehtiyoj. Tannarx bo'yicha chiqim." },
-  move: { title: "Ko'chirishlar", one: "Ko'chirish", wh: 'Qaysi ombordan', toWh: true, price: false, module: 'warehouse', short: true, search: {} },
-  inventory: { title: 'Inventarizatsiyalar', one: 'Inventarizatsiya', wh: 'Ombor', price: false, inventory: true, module: 'warehouse', search: {},
+  move: { title: "Ko'chirishlar", one: "Ko'chirish", wh: 'Qaysi ombordan', toWh: true, price: false, module: 'stock_move', short: true, search: {} },
+  inventory: { title: 'Inventarizatsiyalar', one: 'Inventarizatsiya', wh: 'Ombor', price: false, inventory: true, module: 'stock_inventory', search: {},
     hint: "Haqiqiy (sanalgan) miqdorni kiriting — o'tkazilganda farq qoldiqqa yoziladi." },
-  sales_return: { title: 'Mijoz qaytarishlari', one: 'Mijoz qaytarishi', party: 'Mijoz', wh: 'Qaysi omborga', price: true, module: 'sales', search: { for_sale: 1 } },
+  sales_return: { title: 'Mijoz qaytarishlari', one: 'Mijoz qaytarishi', party: 'Mijoz', wh: 'Qaysi omborga', price: true, module: 'sales_returns', search: { for_sale: 1 } },
 }
 
 const pad = (n) => String(n ?? '').padStart(5, '0')
@@ -174,7 +174,7 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
         <span className="grow" />
         {dirty && <span className="small muted">{t("Saqlanmagan o'zgarishlar")}</span>}
         <label className="check posted-check" title={t('Belgilansa — qoldiqqa ta\'sir qiladi')}>
-          <input type="checkbox" checked={!!v.posted} onChange={togglePosted} disabled={!editable || busy} /> {t(postedLabel)}
+          <input type="checkbox" checked={!!v.posted} onChange={togglePosted} disabled={!editable || busy || !canPost(user, cfg.module)} /> {t(postedLabel)}
         </label>
         {docId && canDelete(user, cfg.module) && <button type="button" className="icon-act danger" title={t("O'chirish")} onClick={remove}><Icon name="delete" size={18} /></button>}
       </>}

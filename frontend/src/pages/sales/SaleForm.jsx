@@ -8,8 +8,10 @@ import { money, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import { convertPrice, curLabel, CurrencyOptions, baseCurrency } from '../../currency'
 import { SearchSelect } from '../../components/Controls'
-import { confirmDialog, promptDialog } from '../../components/Confirm'
+import { confirmDialog } from '../../components/Confirm'
 import { NumInput } from '../../components/Inputs'
+import { newCounterpartyDialog } from '../../components/NewCounterparty'
+import PartyBalance from '../../components/PartyBalance'
 
 const cur = curLabel
 
@@ -111,10 +113,11 @@ export default function SaleForm({ sale, onClose, onSaved }) {
             <SearchSelect value={v.client} onChange={(id) => pickClient(id)} disabled={fromOrder} placeholder={tr('Mijozni tanlang…')}
               options={(clients.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.phone }))}
               onCreate={async (name) => {
-                const n = name || await promptDialog(tr('Yangi mijoz nomi'))
-                if (!n) return
-                try { const { data } = await api.post('/crm/counterparties/', { name: n }); clients.reload(); pickClient(data.id) } catch (e) { setError(errorText(e)) }
+                const cp = await newCounterpartyDialog({ name, group: 'Mijozlar' })
+                if (!cp) return
+                await clients.reload(); pickClient(cp.id)
               }} createLabel={tr('Yangi mijoz')} />
+            {v.client && <PartyBalance counterparty={v.client} currency={v.currency} />}
           </DocField>
           {client && (
             <div className="party-card">

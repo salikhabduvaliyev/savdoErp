@@ -7,7 +7,6 @@ import { SearchSelect } from '../../components/Controls'
 import Icon from '../../components/Icon'
 import { IconBtn } from '../../components/Icon'
 import { curLabel } from '../../currency'
-import { promptDialog } from '../../components/Confirm'
 
 function AddMaterialRow({ estimateId, materials, onAdded }) {
   const [v, setV] = useState({ material: '', qty: '', waste_pct: '0', price: '' })
@@ -67,7 +66,7 @@ function AddServiceRow({ estimateId, operations, onAdded }) {
 
 const cur = curLabel
 
-export default function Estimate({ order, onChanged }) {
+export default function Estimate({ order }) {
   const { data, error, reload } = useFetch(`/orders/${order.id}/costing/`)
   const materials = useFetch('/warehouse/materials/')
   const operations = useFetch('/production/operations/')
@@ -84,42 +83,20 @@ export default function Estimate({ order, onChanged }) {
       reload()
     } catch (e) { toast(errorText(e), true) }
   }
-  const newVersion = async () => {
-    const note = await promptDialog("Yangi versiya izohi (nima o'zgardi?)")
-    if (note === null) return
-    try {
-      await api.post(`/orders/${order.id}/new_estimate/`, { note })
-      toast('Yangi smeta versiyasi yaratildi')
-      setEditing(true)
-      reload()
-      onChanged?.()
-    } catch (e) { toast(errorText(e), true) }
-  }
-  const activate = async (id) => {
-    await api.post(`/orders/estimates/${id}/activate/`)
-    reload()
-  }
-
   const blockTotal = (blk) => (
     <span className="small muted"> {t("Jami:")} <MoneyBag bag={blk.total} inline /> {Object.values(blk.total).some((x) => Number(x)) && `≈ ${money(blk.converted, data.currency)}`}</span>
   )
 
   return (
     <>
-      <div className="card-head" style={{ marginBottom: 12 }}>
+      <div className="est-head">
+        <button className={'btn' + (editing ? ' primary' : '')} onClick={() => setEditing((e) => !e)}>
+          <Icon name={editing ? 'check' : 'edit'} size={15} /> {editing ? t('Tayyor') : t('Tahrirlash')}
+        </button>
         <div>
-          <h2 style={{ display: 'inline', marginRight: 8 }}>Smeta {est ? `v${est.version}` : ''}</h2>
+          <h2 style={{ display: 'inline', marginRight: 8 }}>{t('Smeta')}</h2>
           <span className="muted small">{t('Buyurtma valyutasi')}: {cur(data.currency)} · {t('Kurs')}: {data.rate ? `1 USD = ${qty(data.rate)} ${t("so'm")} (${date(order.date)})` : t('kiritilmagan')}</span>
-          {est?.note && <div className="small muted">Izoh: {est.note}</div>}
-        </div>
-        <div className="filters">
-          {data.versions.length > 1 && (
-            <select className="chip" value={est?.id || ''} onChange={(e) => activate(e.target.value)}>
-              {data.versions.map((v) => <option key={v.id} value={v.id}>v{v.version}{v.is_active ? ' (faol)' : ''}</option>)}
-            </select>
-          )}
-          <button className={'btn small' + (editing ? ' active' : '')} onClick={() => setEditing((e) => !e)} title={t(editing ? 'Tahrirni yopish' : 'Tahrirlash')}><Icon name={editing ? 'check' : 'edit'} size={15} />{editing ? ' ' + t('Tayyor') : ''}</button>
-          <button className="btn small" onClick={newVersion}>{t("+ Yangi versiya")}</button>
+          {est?.note && <div className="small muted">{t('Izoh')}: {est.note}</div>}
         </div>
       </div>
       {data.warnings.map((w) => <div key={w} className="error">{w}</div>)}

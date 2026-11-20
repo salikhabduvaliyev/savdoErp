@@ -1339,5 +1339,13 @@
   "Parol foydalanuvchi keyingi kirishida yoki tiklanganda saqlanadi": "Пароль сохранится при следующем входе пользователя или после сброса",
   "hali ma'lum emas": "пока неизвестен",
   "Parollar bazada shifrlangan holda saqlanadi va faqat platforma adminiga ko'rinadi. Eski foydalanuvchining paroli u keyingi marta tizimga kirganda yoki parol tiklanganda paydo bo'ladi. Har bir ko'rish tarixga yoziladi.": "Пароли хранятся в базе в зашифрованном виде и видны только администратору платформы. Пароль старого пользователя появится после его следующего входа или сброса. Каждый просмотр записывается в историю.",
-  "Parol foydalanuvchilar ro'yxatida ham saqlanadi — nusxalab, mijozga yuboring.": "Пароль сохранится и в списке пользователей — скопируйте и отправьте клиенту."
+  "Parol foydalanuvchilar ro'yxatida ham saqlanadi — nusxalab, mijozga yuboring.": "Пароль сохранится и в списке пользователей — скопируйте и отправьте клиенту.",
+  "Yangi tovar": "Новый товар",
+  "— guruhsiz —": "— без группы —",
+  "Xarid narxi (tannarx)": "Закупочная цена (себестоимость)",
+  "Kod avtomatik beriladi. Qolgan ma'lumotlarni keyin Tovarlar bo'limida to'ldirasiz.": "Код присвоится автоматически. Остальное заполните позже в разделе «Товары».",
+  "Yaratish va qo'shish": "Создать и добавить",
+  "«{q}» — yangi tovar yaratish": "«{q}» — создать новый товар",
+  "Manfiy — kontragent bizga qarzdor, musbat — biz unga qarzdormiz": "Отрицательный — контрагент должен нам, положительный — мы должны ему",
+  "Smeta": "Смета"
 }

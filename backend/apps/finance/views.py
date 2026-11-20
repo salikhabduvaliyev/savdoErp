@@ -291,15 +291,31 @@ def settlements_view(request):
 
 
 @api_view(["GET"])
-@permission_classes([module_perm("finance")])
+@permission_classes([module_perm(("finance", "sales", "orders", "supplies", "purchase_orders", "warehouse"))])
 def settlement_balance(request):
     """Kontragent balansi (to'lov oynasi uchun): ?counterparty=ID"""
     from .settlements import balance
 
+    from decimal import Decimal
+
+    from apps.core.currency import company_base_currency
+    from apps.core.money import RateNotFound, convert, q2
+
     cp = request.query_params.get("counterparty")
     if not cp:
         raise serializers.ValidationError({"counterparty": "Kontragentni tanlang"})
-    return Response({"counterparty": int(cp), "balance": balance(cp)})
+    bal = balance(cp)
+    base = company_base_currency()
+    want = (request.query_params.get("currency") or "").upper() or base
+    # jami: barcha valyutalardagi qoldiq bugungi kurs bo'yicha bitta valyutaga (asosiy va hujjat/kassa valyutasi)
+    try:
+        total_base = sum((convert(Decimal(v), c, base) for c, v in bal.items()), Decimal("0"))
+        totals = {base: str(q2(total_base))}
+        if want != base:
+            totals[want] = str(q2(convert(total_base, base, want)))
+    except RateNotFound:
+        totals = None
+    return Response({"counterparty": int(cp), "balance": bal, "totals": totals, "base": base, "currency": want})
 
 
 @api_view(["GET"])

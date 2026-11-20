@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { can, canCreate, canEdit, useAuth } from '../../auth'
 import { CustomFieldsManager, useCustomFields } from '../../components/CustomFields'
 import PageSettings, { usePageSettings } from '../../components/PageSettings'
@@ -28,6 +29,7 @@ export function useRefs() {
 }
 
 export default function OrdersPage() {
+  const nav = useNavigate()
   const [mode, setMode] = useState(() => localStorage.getItem('orders.view') || 'list')
   const [showForm, setShowForm] = useState(false)
   const [fieldsMgr, setFieldsMgr] = useState(false)
@@ -85,6 +87,7 @@ export default function OrdersPage() {
           fields={fields}
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); refresh() }}
+          onCreated={(d) => { setShowForm(false); nav(`/orders/${d.id}`) }}
         />
       )}
       {statesMgr && <OrderStatesManager onClose={() => { setStatesMgr(false); refresh() }} />}

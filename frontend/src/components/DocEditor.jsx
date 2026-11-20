@@ -6,6 +6,7 @@ import { t } from '../i18n'
 import Icon, { IconBtn } from './Icon'
 import { FullPage, Modal } from './ui'
 import { DateInput, NumInput } from './Inputs'
+import { newProductDialog } from './NewProduct'
 
 let keySeq = 0
 export const newKey = () => `k${++keySeq}`
@@ -78,6 +79,14 @@ export function ProductSearch({ onPick, onFree, params, disabled }) {
 
   const pick = (p) => { onPick(p); setQ(''); setItems([]); setOpen(false) }
   const free = () => { if (q.trim() && onFree) { onFree(q.trim()); setQ(''); setOpen(false) } }
+  // yangi tovar oynasi (qidiruvda topilmasa): yaratilgach darhol pozitsiyaga qo'shiladi
+  const create = async () => {
+    const name = q.trim()
+    setOpen(false)
+    const types = String(params?.type || '').split(',').filter(Boolean)
+    const p = await newProductDialog({ name, type: types.length === 1 ? types[0] : undefined })
+    if (p) { onPick(p); setQ(''); setItems([]) }
+  }
   const onKey = (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, items.length - (onFree ? 0 : 1))) }
     if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)) }
@@ -104,6 +113,9 @@ export function ProductSearch({ onPick, onFree, params, disabled }) {
             </button>
           ))}
           {!items.length && <div className="psearch-empty">{t('Topilmadi')}</div>}
+          <button type="button" className="psearch-item free create" onClick={create}>
+            <Icon name="plus" size={15} /> {t('«{q}» — yangi tovar yaratish', { q: q.trim() })}
+          </button>
           {onFree && (
             <button type="button" className={'psearch-item free' + (active === items.length ? ' active' : '')} onClick={free}>
               <Icon name="plus" size={15} /> {t('«{q}» nomli qator qo\'shish', { q: q.trim() })}

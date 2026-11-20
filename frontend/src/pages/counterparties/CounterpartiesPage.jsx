@@ -127,9 +127,9 @@ export default function CounterpartiesPage() {
           <h1>{t('Kontragentlar')}</h1>
           <div className="page-sub">{t('Mijozlar, yetkazuvchilar, dilerlar — guruhlar bo\'yicha')}</div>
         </div>
-        <span className="grow" />
-        {canEdit(user, 'counterparties') && <button className="btn" onClick={() => setManage(true)}>{t('Guruhlar va holatlar')}</button>}
         {canCreate(user, 'counterparties') && <button className="btn primary" onClick={() => nav('/counterparties/new')}>+ {t('Kontragent')}</button>}
+        {canEdit(user, 'counterparties') && <button className="btn" onClick={() => setManage(true)}>{t('Guruhlar va holatlar')}</button>}
+        <span className="grow" />
         <PageSettings view={view} extra={canEdit(user, 'settings') && (
           <button className="link-btn small" onClick={() => setFieldsMgr(true)}>{t("Qo'shimcha maydonlar…")}</button>
         )} />

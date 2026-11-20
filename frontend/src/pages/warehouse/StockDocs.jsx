@@ -11,8 +11,10 @@ import { convertPrice, CurrencyOptions, curLabel, baseCurrency } from '../../cur
 import { date, money, qty, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { DropMenu, SearchSelect, usePager } from '../../components/Controls'
-import { confirmDialog, promptDialog } from '../../components/Confirm'
+import { confirmDialog } from '../../components/Confirm'
 import { DateInput } from '../../components/Inputs'
+import { newCounterpartyDialog } from '../../components/NewCounterparty'
+import PartyBalance from '../../components/PartyBalance'
 
 /* Hujjat turlari sozlamasi */
 export const DOC_TYPES = {
@@ -228,10 +230,11 @@ export function StockDocForm({ type: type0, id: id0, onClose, onSaved, onOpen })
               <SearchSelect value={v.counterparty || ''} onChange={(id) => set('counterparty', id)} disabled={!editable}
                 options={(parties.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.phone }))}
                 onCreate={async (name) => {
-                  const n = name || await promptDialog(t('Yangi kontragent nomi'))
-                  if (!n) return
-                  try { const { data } = await api.post('/crm/counterparties/', { name: n }); parties.reload(); set('counterparty', data.id) } catch (e) { setError(errorText(e)) }
+                  const cp = await newCounterpartyDialog({ name, group: ['supply', 'purchase_order', 'purchase_return'].includes(type) ? 'Yetkazuvchilar' : 'Mijozlar' })
+                  if (!cp) return
+                  await parties.reload(); set('counterparty', cp.id)
                 }} createLabel={t('Yangi kontragent')} />
+              {v.counterparty && <PartyBalance counterparty={v.counterparty} currency={v.currency} />}
             </DocField>
           )}
           <DocField label={cfg.wh} required={!cfg.planDate}>

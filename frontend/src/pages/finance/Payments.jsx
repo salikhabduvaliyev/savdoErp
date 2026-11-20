@@ -7,12 +7,14 @@ import { BulkMenu, SearchSelect, usePager } from '../../components/Controls'
 import { cleanNum, DocField, DocPage, DocTitle } from '../../components/DocEditor'
 import Icon from '../../components/Icon'
 import { Badge, Loading, Modal, MoneyBag, Stat, toast, useFetch } from '../../components/ui'
-import { baseCurrency, curLabel } from '../../currency'
+import { curLabel } from '../../currency'
+import PartyBalance from '../../components/PartyBalance'
 import PartyPicker from '../../components/PartyPicker'
 import { date, money, todayISO } from '../../format'
 import { t } from '../../i18n'
-import { confirmDialog, promptDialog } from '../../components/Confirm'
+import { confirmDialog } from '../../components/Confirm'
 import { DateInput, NumInput } from '../../components/Inputs'
+import { newCounterpartyDialog } from '../../components/NewCounterparty'
 
 /* Hujjat turlari: yo'nalish + hisob turi (kassa/bank) */
 const DOC = {
@@ -23,26 +25,6 @@ const DOC = {
 }
 // Chiqim moddasi: maxsus turlar + xarajat moddalari (MoySklad "Статья расходов")
 const SPECIAL_OUT = [['__supplier', "Tovar xaridi (yetkazuvchiga to'lov)"], ['__salary', 'Ish haqi']]
-
-/* Kontragent balansi: asosiy valyutada (0 bo'lsa ham) va hisob valyutasi boshqacha bo'lsa — unda ham */
-function PartyBalance({ bal, accCur }) {
-  if (!bal) return <div className="party-bal muted small">{t('Balans')}: …</div>
-  const base = baseCurrency()
-  const curs = [...new Set([base, ...(accCur && accCur !== base ? [accCur] : []), ...Object.keys(bal)])]
-  return (
-    <div className="party-bal small">
-      <span className="muted">{t('Balans')}:</span>
-      {curs.map((c) => {
-        const n = Number(bal[c] || 0)
-        return (
-          <span key={c} className={n < 0 ? 'red' : n > 0 ? 'green' : 'muted'} title={n < 0 ? t('Kontragent bizga qarzdor') : n > 0 ? t('Biz kontragentga qarzdormiz') : ''}>
-            {money(n, c)}{n < 0 ? ` (${t('qarzi')})` : n > 0 ? ` (${t('bizning qarz')})` : ''}
-          </span>
-        )
-      })}
-    </div>
-  )
-}
 
 /* ------------------------------------------------------------ to'lov hujjati */
 export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSale, onClose, onSaved }) {
@@ -63,7 +45,6 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
   const isEmp = String(v.counterparty || '').startsWith('e:')
   const cpId = v.counterparty && !isEmp ? v.counterparty : null
   const docs = useFetch(cpId ? '/finance/transactions/open_documents/' : null, { counterparty: cpId, direction: dir })
-  const bal = useFetch(cpId ? '/finance/settlements/balance/' : null, { counterparty: cpId, _: item?.id || 0 })
   const accs = (accounts.data || []).filter((a) => a.is_active)
   const kindOf = item?.account_kind || accountKind || 'cash'
   const acc = accs.find((a) => String(a.id) === String(v.account)) || null
@@ -137,11 +118,11 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
               counterparties={cps.data?.results || cps.data || []} groups={groups.data?.results || groups.data || []}
               employees={dir === 'out' ? (emps.data?.results || emps.data || null) : null}
               onCreate={async (name) => {
-                const n = name || await promptDialog(t('Yangi kontragent nomi'))
-                if (!n) return
-                try { const { data } = await api.post('/crm/counterparties/', { name: n }); cps.reload(); set('counterparty', data.id) } catch (e) { setError(errorText(e)) }
+                const cp = await newCounterpartyDialog({ name })
+                if (!cp) return
+                await cps.reload(); set('counterparty', String(cp.id))
               }} />
-            {cpId && <PartyBalance bal={bal.data?.balance} accCur={acc?.currency} />}
+            {cpId && <PartyBalance counterparty={cpId} currency={acc?.currency} stamp={item?.id} />}
             {isEmp && <div className="party-bal muted small">{t("Ish haqi to'lovi — oylik vedomostda «To'langan» ustuniga tushadi")}</div>}
           </DocField>
         </div>

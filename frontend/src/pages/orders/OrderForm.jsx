@@ -12,13 +12,15 @@ import { convertPrice, baseCurrency } from '../../currency'
 import { CurrencyOptions } from '../../currency'
 import { confirmDialog } from '../../components/Confirm'
 import { DateInput, NumInput } from '../../components/Inputs'
+import { newCounterpartyDialog } from '../../components/NewCounterparty'
+import PartyBalance from '../../components/PartyBalance'
 
 const toLines = (items) => (items || []).map((i) => ({
   key: newKey(), product: i.product, name: i.name, code: i.product_code || '', unit: i.unit, qty: cleanNum(i.qty),
   price: cleanNum(i.price), discount_pct: cleanNum(i.discount_pct), stock: null,
 }))
 
-export default function OrderForm({ refs, order: initial, fields: fieldsProp, onClose, onSaved }) {
+export default function OrderForm({ refs, order: initial, fields: fieldsProp, onClose, onSaved, onCreated }) {
   const loaded = useCustomFields(fieldsProp ? null : 'order')
   const fields = fieldsProp || loaded
   const priceTypes = useFetch('/warehouse/price-types/')
@@ -75,6 +77,7 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
         manager: v.manager || null, amount: items.length ? undefined : (v.amount || 0),
       }
       delete payload.items_count
+      const isNew = !order
       const { data } = order ? await api.patch(`/orders/${order.id}/`, payload) : await api.post('/orders/', payload)
       setOrder(data)
       setV((s) => ({ ...s, ...data, client: data.client }))
@@ -83,6 +86,8 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
       setSaved(true)
       toast(t('Saqlandi'))
       if (close) onSaved(data)
+      // yangi buyurtma "Saqlash"dan keyin darhol kartochkasi ochiladi (Smeta, Ishlab chiqarish, To'lovlar, Material)
+      else if (isNew && onCreated) onCreated(data)
     } catch (err) {
       setError(errorText(err))
     } finally {
@@ -118,7 +123,12 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
             {newClient === null ? (
               <SearchSelect value={v.client || ''} onChange={(id) => { setV((x) => ({ ...x, client: id })); setDirty(true) }}
                 placeholder={t('Mijozni tanlang…')} options={refs.clients.map((c) => ({ value: c.id, label: c.name, sub: c.phone }))}
-                onCreate={(name) => { setV((x) => ({ ...x, client: '' })); setNewClient(name || ''); setDirty(true) }} createLabel={t('Yangi mijoz')} />
+                onCreate={async (name) => {
+                  const cp = await newCounterpartyDialog({ name, group: 'Mijozlar' })
+                  if (!cp) return
+                  await refs.reloadClients?.()
+                  setV((x) => ({ ...x, client: cp.id })); setDirty(true)
+                }} createLabel={t('Yangi mijoz')} />
             ) : (
               <div className="inline-pick">
                 <input autoFocus placeholder={t('Yangi mijoz nomi')} value={newClient} onChange={(e) => { setNewClient(e.target.value); setDirty(true) }} />
@@ -126,6 +136,7 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
               </div>
             )}
           </DocField>
+          {v.client && <PartyBalance counterparty={v.client} currency={v.currency} />}
           <DocField label="Menejer">
             <SearchSelect value={v.manager || ''} onChange={(id) => { setV((x) => ({ ...x, manager: id })); setDirty(true) }} empty={t('— men —')}
               options={refs.users.map((u) => ({ value: u.id, label: u.full_name }))} />

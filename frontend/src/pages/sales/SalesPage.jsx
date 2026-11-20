@@ -252,9 +252,9 @@ function SalesList() {
           <h1>{tr("Sotuvlar")}</h1>
           <div className="page-sub">{tr("Tovar sotish va tayyor buyurtmalarni realizatsiya qilish")}</div>
         </div>
-        <span className="grow" />
         {canCreate(user, 'sales') && <button className="btn primary" onClick={() => setForm(true)}><Icon name="plus" size={16} /> {tr("Sotuv")}</button>}
         <button className={'btn' + (showFilter ? ' active' : '')} onClick={() => setShowFilter((x) => !x)}><Icon name="filter" size={15} /> {tr('Filtr')}</button>
+        <span className="grow" />
         <div className="psearch" style={{ maxWidth: 320, minWidth: 220 }}>
           <Icon name="search" size={16} className="psearch-ic" />
           <input placeholder={tr("Raqam, mijoz yoki izoh")} value={f.search} onChange={(e) => setF({ ...f, search: e.target.value })} />

@@ -290,17 +290,16 @@ class ProductionTask(TenantModel, TimeStamped):
     def start(self):
         if self.status not in (self.Status.WAITING, self.Status.PAUSED, self.Status.BLOCKED):
             raise ValidationError("Topshiriqni bu holatdan boshlab bo'lmaydi")
-        if self.order_id:
-            from apps.warehouse.services import order_shortages
+        from .services import task_shortages
 
-            shortages = [s for s in order_shortages(self.order) if s["shortage"] > 0]
-            if shortages:
-                self.status = self.Status.BLOCKED
-                self.blocked_reason = "; ".join(
-                    f"{s['material']}: yetishmaydi {s['shortage']} {s['unit']}" for s in shortages
-                )
-                self.save()
-                return False
+        shortages = task_shortages(self)
+        if shortages:
+            self.status = self.Status.BLOCKED
+            self.blocked_reason = f"Shu ish uchun ({self.remaining.normalize():f} {self.operation.get_unit_display()}) material yetarli emas: " + "; ".join(
+                f"{s['material']} — kerak {s['need']}, omborda {s['available']}, yetishmaydi {s['shortage']} {s['unit']}" for s in shortages
+            )
+            self.save()
+            return False
         self.status = self.Status.IN_PROGRESS
         self.blocked_reason = ""
         self.started_at = self.started_at or timezone.now()

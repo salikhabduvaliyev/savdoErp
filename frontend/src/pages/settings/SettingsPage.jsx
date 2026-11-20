@@ -431,6 +431,7 @@ const GENERAL = [
   { name: 'working_days', label: t("Oydagi ish kunlari normasi"), type: 'number' },
   { name: 'kanban_delivered_days', label: t("Kanban: topshirilganlar necha kun ko'rinadi"), type: 'number' },
   { name: 'allow_negative_stock', label: t("Sotuvda qoldiqdan ko'p sotishga ruxsat (manfiy qoldiq)"), type: 'checkbox' },
+  { name: 'production_without_stock', label: t("Material omborda yetishmasa ham ishlab chiqarishga ruxsat"), type: 'checkbox' },
 ]
 
 function General({ editable }) {

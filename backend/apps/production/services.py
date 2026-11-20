@@ -111,6 +111,47 @@ def techcard_requirements(job, task=None, qty=None):
     return rows
 
 
+def task_materials_plan(task, qty=None):
+    """Shu bosqichning (qolgan) hajmi uchun sarflanadigan materiallar: [(material, miqdor)]."""
+    qty = task.remaining if qty is None else Decimal(qty)
+    job = task.job
+    if job and job.techcard_id:
+        return techcard_requirements(job, task=task, qty=qty)
+    if task.order_id and task.plan_qty:
+        first = ProductionTask.objects.filter(order=task.order).order_by("position", "id").first()
+        est = task.order.active_estimate
+        if first and first.pk == task.pk and est:
+            k = qty / task.plan_qty
+            return [(m.material, _q(m.qty_with_waste * k)) for m in est.materials.select_related("material")]
+    return []
+
+
+def task_shortages(task):
+    """Bosqichni boshlashdan oldin: faqat shu ish uchun yetishmaydigan materiallar.
+    Sozlamada "material yetishmasa ham ishlab chiqarish" yoqilgan bo'lsa — tekshirilmaydi."""
+    from apps.core.models import SystemSettings
+    from apps.warehouse.models import Stock
+
+    job = task.job
+    if (job and job.allow_negative) or SystemSettings.load().production_without_stock:
+        return []
+    need = {}
+    for mat, q in task_materials_plan(task):
+        if q > 0 and mat.is_stocked:
+            need.setdefault(mat.id, [mat, ZERO])[1] += q
+    rows = []
+    for mat, q in need.values():
+        st = Stock.objects.filter(material=mat)
+        if job and job.materials_warehouse_id:
+            st = st.filter(warehouse_id=job.materials_warehouse_id)
+        avail = sum((s.qty for s in st), ZERO)
+        if avail < q:
+            rows.append({"material_id": mat.id, "material": mat.name, "unit": mat.get_unit_display(),
+                         "need": f"{_q(q).normalize():f}", "available": f"{_q(max(ZERO, avail)).normalize():f}",
+                         "shortage": f"{_q(q - max(ZERO, avail)).normalize():f}"})
+    return rows
+
+
 def job_materials(job):
     """Topshiriq materiallari: reja (me'yor), sarflangan, ombordagi mavjud."""
     from apps.warehouse.models import Stock, StockMove
@@ -154,14 +195,20 @@ def _issue(material, qty, *, job, order=None, warehouse=None, date=None, user=No
     if wh is None and order is not None:
         res = Reservation.objects.filter(order=order, material=material, qty__gt=0).select_related("warehouse").first()
         wh = res.warehouse if res else None
+    from apps.core.models import SystemSettings
+
+    cfg = SystemSettings.load()
+    allow = bool(job and job.allow_negative) or cfg.allow_negative_stock or cfg.production_without_stock
     if wh is None:
         st = Stock.objects.filter(material=material, qty__gt=0).select_related("warehouse").order_by("-qty").first()
         wh = st.warehouse if st else None
+    if wh is None and allow:
+        from apps.warehouse.services import default_warehouse
+
+        st = Stock.objects.filter(material=material).select_related("warehouse").order_by("-qty").first()
+        wh = st.warehouse if st else default_warehouse()
     if wh is None:
         raise ValidationError(f"{material.name}: omborda qoldiq yo'q")
-    from apps.core.models import SystemSettings
-
-    allow = bool(job and job.allow_negative) or SystemSettings.load().allow_negative_stock
     return post_move(StockMove(date=date or timezone.localdate(), type=StockMove.Type.OUT, material=material,
                                warehouse=wh, qty=qty, order=order, job=job, created_by=user, note=note), allow_negative=allow)
 

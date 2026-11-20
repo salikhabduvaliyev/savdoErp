@@ -218,6 +218,8 @@ class SystemSettings(TenantModel):
     working_days = models.PositiveSmallIntegerField(default=22, help_text="Oydagi ish kunlari normasi (tabel)")
     kanban_delivered_days = models.PositiveSmallIntegerField(default=14, help_text="Kanbanda topshirilganlar necha kun ko'rinadi")
     allow_negative_stock = models.BooleanField(default=False, help_text="Sotuvda qoldiqdan ko'p sotishga ruxsat")
+    production_without_stock = models.BooleanField(
+        default=False, help_text="Material omborda yetishmasa ham ishlab chiqarishga ruxsat (sarf manfiy qoldiqqa yoziladi)")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["company"], name="uniq_settings_company")]

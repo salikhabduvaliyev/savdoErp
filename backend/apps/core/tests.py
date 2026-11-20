@@ -221,6 +221,15 @@ class WarehouseRules(Base):
         task = ProductionTask.objects.create(order=self.order, operation=self.op_cut, plan_qty=10)
         self.assertFalse(task.start())
         self.assertEqual(task.status, "blocked")
+        self.assertIn("kerak 10", task.blocked_reason)
+        # sozlamada ruxsat berilsa — material yetishmasa ham ish boshlanadi
+        from apps.core.models import SystemSettings
+
+        cfg = SystemSettings.load()
+        cfg.production_without_stock = True
+        cfg.save()
+        self.assertTrue(task.start())
+        self.assertEqual(task.status, "in_progress")
 
 
 class SalesRules(Base):

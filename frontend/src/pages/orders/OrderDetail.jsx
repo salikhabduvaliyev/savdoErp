@@ -81,8 +81,8 @@ export default function OrderDetail() {
         {(() => {
           const active = (jobs.data?.results || jobs.data || []).filter((j) => !['cancelled'].includes(j.status))
           return <>
-            {active.map((j) => <Link key={'j' + j.id} className="btn" to={`/production?tab=jobs&job=${j.id}`}><Icon name="production" size={16} /> {tr('Topshiriq')} №{j.number}</Link>)}
-            {!['delivered', 'cancelled'].includes(o.status) && !o.production_orders?.length && !active.some((j) => j.status !== 'done') && canEdit(user, 'orders') && (
+            {active.filter((j) => !j.production_order).map((j) => <Link key={'j' + j.id} className="btn" to={`/production?tab=jobs&job=${j.id}`}><Icon name="production" size={16} /> {tr('Topshiriq')} №{j.number}</Link>)}
+            {!['delivered', 'cancelled'].includes(o.status) && !o.production_orders?.length && !active.length && canEdit(user, 'orders') && (
               <button className={'btn' + (o.has_techcard ? '' : ' primary')} onClick={() => setProcJob(true)} title={tr("Mahsulotsiz: texjarayon bosqichlari va kv bo'yicha")}>
                 <Icon name="production" size={16} /> {tr('Ishlab chiqarishga (texjarayon)')}
               </button>

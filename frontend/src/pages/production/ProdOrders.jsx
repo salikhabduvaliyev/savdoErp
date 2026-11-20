@@ -115,19 +115,36 @@ function StartModal({ po, onClose, onStarted }) {
   const [w, setW] = useState({ materials_warehouse: '', products_warehouse: '' })
   const mw = w.materials_warehouse || def
   const pw = w.products_warehouse || def
-  const req = useFetch(mw ? `/production/orders/${po.id}/requirements/` : null, { warehouse: mw })
+  const byStages = !po.items.length && (po.stages || []).length > 0
+  const req = useFetch(mw && !byStages ? `/production/orders/${po.id}/requirements/` : null, { warehouse: mw })
   const short = (req.data || []).filter((r) => Number(r.shortage) > 0)
   const [busy, setBusy] = useState(false)
   const start = async () => {
     if (short.length && !await confirmDialog(tr("Material yetarli emas. Shunda ham boshlansinmi? Ombordagi qoldiq minusga ketadi."))) return
     setBusy(true)
     try {
-      const { data } = await api.post(`/production/orders/${po.id}/create_jobs/`, { materials_warehouse: mw, products_warehouse: pw, allow_negative: short.length > 0 })
+      const { data } = await api.post(`/production/orders/${po.id}/create_jobs/`, byStages ? {} : { materials_warehouse: mw, products_warehouse: pw, allow_negative: short.length > 0 })
       toast(tr('Ish boshlandi: {n} ta topshiriq', { n: data.created }))
       onStarted()
     } catch (e) { toast(errorText(e), true) } finally { setBusy(false) }
   }
   const whOpts = (whs.data || []).map((x) => ({ value: x.id, label: x.name }))
+  if (byStages) {
+    return (
+      <Modal title={tr('Ishni boshlash — buyurtma №{n}', { n: po.number })} onClose={onClose} wide dialog>
+        <div className="muted small" style={{ marginBottom: 8 }}>
+          {po.process_name && <>{tr('Texjarayon')}: <b>{po.process_name}</b> · </>}
+          {po.client_order_number && <>{tr('Mijoz buyurtmasi')}: №{po.client_order_number}</>}
+        </div>
+        <StagesTable stages={po.stages} />
+        <div className="hint" style={{ marginTop: 8 }}>{tr("Boshlansa, bosqichlar buyurtma raqami bilan bo'limlarga (Bo'lim ekrani) tushadi.")}</div>
+        <div className="form-actions">
+          <button className="btn ghost" onClick={onClose}>{tr('Bekor')}</button>
+          <button className="btn success" disabled={busy} onClick={start}><Icon name="check" size={16} /> {tr('Ishni boshlash')}</button>
+        </div>
+      </Modal>
+    )
+  }
   return (
     <Modal title={tr('Ishni boshlash — buyurtma №{n}', { n: po.number })} onClose={onClose} wide dialog>
       <div className="start-grid">
@@ -166,6 +183,29 @@ function StartModal({ po, onClose, onStarted }) {
         </button>
       </div>
     </Modal>
+  )
+}
+
+function StagesTable({ stages, job }) {
+  return (
+    <div className="table-wrap">
+      <table className="t compact">
+        <thead><tr><th>№</th><th>{tr('Bosqich')}</th><th>{tr("Bo'lim")}</th><th>{tr('Xodim')}</th><th className="num">{tr('Reja')}</th>{job && <th className="num">{tr('Bajarildi')}</th>}</tr></thead>
+        <tbody>
+          {stages.map((s, i) => {
+            const t = job?.stages?.[i]
+            return (
+              <tr key={s.id}>
+                <td className="muted">{i + 1}</td><td className="bold">{s.operation_name}</td><td className="small">{s.department || '—'}</td>
+                <td className="small">{s.employee || <span className="red">{tr('biriktirilmagan')}</span>}</td>
+                <td className="num">{qty(s.qty)} {tr(s.unit)}</td>
+                {job && <td className={'num' + (t?.status === 'done' ? ' green' : '')}>{t ? `${qty(t.done_qty)} ${tr(s.unit)}` : '—'}</td>}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -214,7 +254,7 @@ function ProdOrderCard({ id, onClose, onChanged }) {
       {editable && !['done', 'cancelled'].includes(po.status) && !started && (
         <button className="btn success" onClick={() => setStart(true)}><Icon name="check" size={16} /> {tr('Ishni boshlash')}</button>
       )}
-      {editable && !['done', 'cancelled'].includes(po.status) && (
+      {editable && !['done', 'cancelled'].includes(po.status) && po.items.length > 0 && (
         <button className="btn" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> {tr('Tahrirlash')}</button>
       )}
       <button className="btn" onClick={onClose}>{tr('Yopish')}</button>
@@ -228,6 +268,19 @@ function ProdOrderCard({ id, onClose, onChanged }) {
         {po.plan_date && <span className="muted small">{tr('Tayyor bo\'lishi')}: {date(po.plan_date)}</span>}
       </DocTitle>
 
+      {(po.stages || []).length > 0 && (() => {
+        const job = (jobs.data || []).find((j) => j.status !== 'cancelled')
+        return (
+          <div className="card po-item" style={{ marginBottom: 12 }}>
+            <div className="po-item-head">
+              <div><div className="bold">{po.process_name || tr('Bosqichlar')}</div><div className="muted small">{tr("Mahsulotsiz buyurtma — texjarayon bo'yicha")}</div></div>
+              {job && <button className="link-btn small" onClick={() => setOpenJob(job.id)}>{tr('Topshiriq')} №{job.number}</button>}
+            </div>
+            <StagesTable stages={po.stages} job={job} />
+            {job ? <div className="po-item-foot"><Progress value={job.progress} /></div> : <div className="muted small" style={{ marginTop: 6 }}>{tr("Ish hali boshlanmagan")}</div>}
+          </div>
+        )
+      })()}
       <div className="po-items">
         {po.items.map((i) => {
           const job = (jobs.data || []).find((j) => j.techcard === i.techcard && j.status !== 'cancelled')
@@ -283,7 +336,7 @@ export function ProdOrdersTab() {
   const { data, error } = useFetch('/production/orders/', { status: status || undefined, stamp })
   const rows = useMemo(() => {
     const n = search.trim().toLowerCase()
-    return (data || []).filter((po) => !n || String(po.number).includes(n) || po.items.some((i) => i.product_name.toLowerCase().includes(n)))
+    return (data || []).filter((po) => !n || String(po.number).includes(n) || po.items.some((i) => i.product_name.toLowerCase().includes(n)) || (po.process_name || '').toLowerCase().includes(n))
   }, [data, search])
   const { rows: pageRows, pager } = usePager(rows, 50, status + search)
   const open = params.get('po')
@@ -311,7 +364,7 @@ export function ProdOrdersTab() {
               {pageRows.map((po) => (
                 <tr key={po.id} className="clickable" onClick={() => setOpen(String(po.id))}>
                   <td><span className="link-like">{po.number}</span></td><td>{date(po.date)}</td>
-                  <td>{po.items.map((i) => `${i.product_name} × ${qty(i.qty)}`).join(', ')}</td>
+                  <td>{po.items.length ? po.items.map((i) => `${i.product_name} × ${qty(i.qty)}`).join(', ') : <>{po.process_name || tr('Texjarayon')} <span className="small muted">({(po.stages || []).length} {tr('bosqich')})</span></>}</td>
                   <td>{po.client_order_number ? `№${po.client_order_number}` : '—'}</td>
                   <td>{date(po.plan_date)}</td><td className="num">{po.jobs_count}</td>
                   <td><Badge kind={BADGE[po.status]}>{tr(po.status_display)}</Badge></td>

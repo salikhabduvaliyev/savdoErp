@@ -235,7 +235,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         from django.core.exceptions import ValidationError as DjValidationError
 
         from apps.production.models import Operation, TechProcess
-        from apps.production.services import create_job_from_process
+        from apps.production.services import production_request_from_process
 
         order = self.get_object()
         d = request.data
@@ -251,11 +251,12 @@ class OrderViewSet(viewsets.ModelViewSet):
                 raise serializers.ValidationError({"stages": f"{op.name}: miqdor noto'g'ri"})
             stages.append((op, q))
         try:
-            job = create_job_from_process(order, process, stages, plan_start=d.get("plan_start") or None,
-                                          plan_end=d.get("plan_end") or None, note=d.get("note", ""), user=request.user)
+            po = production_request_from_process(order, process, stages, plan_date=d.get("plan_end") or None,
+                                                 note=d.get("note", ""), user=request.user)
         except DjValidationError as e:
             raise serializers.ValidationError({"detail": "; ".join(e.messages)})
-        return Response({"job": job.id, "job_number": job.number, "tasks": job.tasks.count()}, status=201)
+        return Response({"production_order": po.id, "production_order_number": po.number, "stages": po.stages.count()},
+                        status=201)
 
     @action(detail=True, methods=["get", "post"], url_path="files")
     def files(self, request, pk=None):

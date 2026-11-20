@@ -583,7 +583,15 @@ class StockDocTests(TestCase):
         r = self.api.post(f"/api/orders/{order['id']}/to_job/", {"process": proc.id, "stages": [
             {"operation": op1.id, "qty": "7.5"}, {"operation": op2.id, "qty": "6"}]}, format="json")
         self.assertEqual(r.status_code, 201, r.content)
-        tasks = self.api.get("/api/production/tasks/", {"job": r.json()["job"]}).json()
+        po = self.api.get(f"/api/production/orders/{r.json()['production_order']}/").json()
+        self.assertEqual((po["status"], len(po["stages"]), po["client_order"]), ("new", 2, order["id"]))
+        # zayavka turganda ham qayta berib bo'lmaydi
+        r = self.api.post(f"/api/orders/{order['id']}/to_job/", {"stages": [{"operation": op1.id, "qty": "1"}]}, format="json")
+        self.assertEqual(r.status_code, 400)
+        # ishlab chiqarish buyurtmalarida ish boshlanadi (ombor kerak emas)
+        r = self.api.post(f"/api/production/orders/{po['id']}/create_jobs/", {}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        tasks = self.api.get("/api/production/tasks/", {"job": r.json()["jobs"][0]}).json()
         tasks = tasks.get("results", tasks) if isinstance(tasks, dict) else tasks
         self.assertEqual([(t["operation_name"], D(t["plan_qty"]), t["order_number"]) for t in tasks],
                          [("Kesish-T", D("7.5"), order["number"]), ("Yig'ish-T", D("6"), order["number"])])

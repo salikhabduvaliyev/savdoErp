@@ -279,7 +279,9 @@ class ProductionOrderItemSerializer(serializers.ModelSerializer):
 
 
 class ProductionOrderSerializer(serializers.ModelSerializer):
-    items = ProductionOrderItemSerializer(many=True)
+    items = ProductionOrderItemSerializer(many=True, required=False)
+    process_name = serializers.CharField(source="process.name", read_only=True, default=None)
+    stages = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     client_order_number = serializers.IntegerField(source="client_order.number", read_only=True, default=None)
     jobs_count = serializers.SerializerMethodField()
@@ -287,16 +289,25 @@ class ProductionOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionOrder
         fields = ["id", "number", "date", "branch", "client_order", "client_order_number", "plan_date", "status",
-                  "status_display", "note", "items", "jobs_count"]
+                  "status_display", "note", "items", "jobs_count", "process", "process_name", "stages"]
         read_only_fields = ["status"]
 
     def get_jobs_count(self, obj):
         return obj.jobs.exclude(status=ProductionJob.Status.CANCELLED).count()
 
-    def validate_items(self, v):
-        if not v:
-            raise serializers.ValidationError("Kamida bitta mahsulot qo'shing")
-        return v
+    def get_stages(self, obj):
+        return [{"id": s.id, "operation": s.operation_id, "operation_name": s.operation.name,
+                 "department": s.operation.department.name if s.operation.department_id else None,
+                 "employee": s.operation.employee.full_name if s.operation.employee_id else None,
+                 "unit": s.operation.get_unit_display(), "qty": str(s.qty)}
+                for s in obj.stages.select_related("operation__department", "operation__employee")]
+
+    def validate(self, attrs):
+        items = attrs.get("items")
+        has_stages = bool(self.instance and self.instance.stages.exists())
+        if not has_stages and (items is not None or not self.instance) and not items:
+            raise serializers.ValidationError({"items": "Kamida bitta mahsulot qo'shing"})
+        return attrs
 
     @transaction.atomic
     def _write(self, obj, items):
@@ -369,7 +380,7 @@ class ProductionOrderViewSet(viewsets.ModelViewSet):
         po = self.get_object()
         mw = Warehouse.objects.filter(pk=request.data.get("materials_warehouse")).first()
         pw = Warehouse.objects.filter(pk=request.data.get("products_warehouse")).first()
-        if not pw:
+        if not pw and po.items.exists():
             raise serializers.ValidationError({"products_warehouse": "Mahsulot qaysi omborga tushishini tanlang"})
         from apps.core.models import SystemSettings
 

@@ -107,7 +107,7 @@ export function ProcessJobModal({ order, onClose, onSaved }) {
         process: v.process || null, plan_start: v.plan_start || null, plan_end: v.plan_end || null, note: v.note,
         stages: rows.map((r) => ({ operation: r.operation, qty: r.qty || 0 })),
       })
-      toast(tr('Topshiriq №{n} yaratildi — {k} ta bosqich ishlab chiqarishga tushdi', { n: data.job_number, k: data.tasks }))
+      toast(tr('Ishlab chiqarish buyurtmasi №{n} yaratildi — ish "Ishlab chiqarish buyurtmalari"da boshlanadi', { n: data.production_order_number }))
       onSaved(data)
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
@@ -117,7 +117,7 @@ export function ProcessJobModal({ order, onClose, onSaved }) {
     <Modal title={tr('Buyurtma №{n} — ishlab chiqarishga berish (texjarayon)', { n: order.number })} onClose={onClose} dialog wide>
       {error && <div className="error">{error}</div>}
       <div className="hint" style={{ marginBottom: 10 }}>
-        {tr("Mahsulot (texkarta) kerak emas: texjarayonni tanlang, har bosqichga kv (m²) yoki miqdor kiriting. Topshiriq buyurtma raqami bilan bo'limlarga tushadi; ishbay haq bosqichga biriktirilgan xodimga yoziladi.")}
+        {tr("Mahsulot (texkarta) kerak emas: texjarayonni tanlang, har bosqichga kv (m²) yoki miqdor kiriting. Zayavka \"Ishlab chiqarish buyurtmalari\"ga tushadi; ish boshlanganda bosqichlar buyurtma raqami bilan bo'limlarga chiqadi, ishbay haq bosqichga biriktirilgan xodimga yoziladi.")}
       </div>
       <div className="form">
         <Field label={tr('Texjarayon')}>

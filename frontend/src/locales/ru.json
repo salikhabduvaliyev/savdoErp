@@ -1453,5 +1453,9 @@
   "ta buyurtma": "заказов",
   "kun kechikkan": "дн. просрочки",
   "qarz": "долг",
-  "standart · ixtiyoriy": "стандартное · необязательное"
+  "standart · ixtiyoriy": "стандартное · необязательное",
+  "Ishlab chiqarish buyurtmasi №{n} yaratildi — ish \"Ishlab chiqarish buyurtmalari\"da boshlanadi": "Создан заказ на производство №{n} — работа запускается в разделе «Заказы на производство»",
+  "Boshlansa, bosqichlar buyurtma raqami bilan bo'limlarga (Bo'lim ekrani) tushadi.": "После запуска этапы поступят в отделы (экран отдела) с номером заказа.",
+  "Mahsulotsiz buyurtma — texjarayon bo'yicha": "Заказ без товара — по техпроцессу",
+  "bosqich": "этап."
 }

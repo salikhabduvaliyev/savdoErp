@@ -138,6 +138,8 @@ class ProductionOrder(TenantModel, TimeStamped):
     date = models.DateField(default=timezone.localdate)
     branch = models.ForeignKey("core.Branch", null=True, blank=True, on_delete=models.PROTECT, related_name="+")
     client_order = models.ForeignKey("orders.Order", null=True, blank=True, on_delete=models.SET_NULL, related_name="production_orders")
+    process = models.ForeignKey(TechProcess, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+                                help_text="Mahsulotsiz buyurtma — texjarayon bosqichlari bo'yicha (stages)")
     plan_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.NEW)
     note = models.CharField(max_length=500, blank=True)
@@ -151,6 +153,18 @@ class ProductionOrder(TenantModel, TimeStamped):
         if not self.number:
             self.number = _next_number(ProductionOrder)
         super().save(*args, **kwargs)
+
+
+class ProductionOrderStage(TenantModel):
+    """Mahsulotsiz ishlab chiqarish buyurtmasi: bosqich va uning hajmi (kv / miqdor)."""
+
+    production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name="stages")
+    operation = models.ForeignKey(Operation, on_delete=models.PROTECT, related_name="+")
+    qty = qty_field()
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "id"]
 
 
 class ProductionOrderItem(TenantModel):
@@ -387,6 +401,6 @@ class PurchaseRequest(TenantModel, TimeStamped):
 
 __all__ = [
     "Unit", "Department", "Operation", "TechProcess", "TechProcessStage", "TechCard", "TechCardMaterial",
-    "ProductionOrder", "ProductionOrderItem", "ProductionJob", "ProductionTask", "StageCompletion",
+    "ProductionOrder", "ProductionOrderItem", "ProductionOrderStage", "ProductionJob", "ProductionTask", "StageCompletion",
     "PurchaseRequest", "Currency",
 ]

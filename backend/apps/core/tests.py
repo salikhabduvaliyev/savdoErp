@@ -734,7 +734,7 @@ class PlatformUsersTests(TestCase):
         api.force_authenticate(admin)
         rows = api.get(f"/api/auth/platform/companies/{c1.id}/users/").json()
         self.assertEqual([r["username"] for r in rows], ["p1"])
-        self.assertNotIn("password", rows[0])
+        self.assertEqual(rows[0]["password"], "Parol12345!")  # shifrlangan saqlanadi, faqat platforma admini ko'radi
         r = api.post(f"/api/auth/platform/companies/{c1.id}/reset_password/", {"user": o1.id}, format="json")
         self.assertEqual(r.status_code, 200, r.content)
         o1.refresh_from_db()
@@ -745,3 +745,69 @@ class PlatformUsersTests(TestCase):
         # oddiy foydalanuvchi platforma API'siga kira olmaydi
         api.force_authenticate(o2)
         self.assertEqual(api.get(f"/api/auth/platform/companies/{c1.id}/users/").status_code, 403)
+
+
+class SettlementsKpiVaultTests(Base):
+    """O'zaro hisob-kitob, korrektirovka, ish haqi to'lovi, avtomatik KPI, parol saqlash, kalendar rejimi."""
+
+    def test_settlements_adjustment_and_salary(self):
+        from apps.finance.models import Adjustment
+        from apps.finance.services import account_balance
+        from apps.finance.settlements import balance, settlements
+        from apps.hr.models import Employee
+        from apps.hr.services import payroll
+
+        acc = Account.objects.create(name="Kassa", currency="USD", opening_balance=0)
+        # buyurtma (USD 4200) — mijoz qarzdor; to'lov 1000
+        Transaction.objects.create(account=acc, kind="client_payment", amount=1000, order=self.order, date=T)
+        self.assertEqual(D(balance(self.client_obj.id)["USD"]), D("-3200"))
+        # korrektirovka: kontragent foydasiga +200
+        Adjustment.objects.create(kind="counterparty", counterparty=self.client_obj, amount=200, currency="USD", date=T)
+        rows = settlements(T - timedelta(days=30), T)["rows"]
+        r = [x for x in rows if x["counterparty"] == self.client_obj.id][0]
+        self.assertEqual((D(r["income"]), D(r["outcome"]), D(r["closing"])), (D("1200"), D("4200"), D("-3000")))
+        # hisob korrektirovkasi qoldiqni o'zgartiradi
+        Adjustment.objects.create(kind="account", account=acc, amount=-50, date=T)
+        self.assertEqual(account_balance(acc), D("950"))
+        # ish haqi kassadan → vedomostda "to'langan"
+        emp = Employee.objects.create(full_name="Usta", pay_system="salary", base_salary=1000000)
+        uzs = Account.objects.create(name="Kassa so'm", currency="UZS", opening_balance=0)
+        Transaction.objects.create(account=uzs, kind="salary", amount=300000, employee=emp, date=T)
+        row = [x for x in payroll(T.replace(day=1))["rows"] if x["employee"] == emp.id][0]
+        self.assertEqual(D(row["paid"]), D("300000"))
+        with self.assertRaises(ValidationError):
+            Transaction(account=uzs, kind="expense", amount=1, employee=emp, category=ExpenseCategory.objects.create(name="X")).clean()
+
+    def test_kpi_auto_fact_from_piecework(self):
+        from apps.hr.kpi_auto import refresh_month
+        from apps.hr.models import Employee, PieceworkEntry
+        from apps.production.models import ProductionTask
+
+        emp = Employee.objects.create(full_name="Ishchi", pay_system="piece")
+        task = ProductionTask.objects.create(order=self.order, operation=self.op_cut, department=self.dep, plan_qty=10)
+        PieceworkEntry.objects.create(employee=emp, task=task, qty=4, rate=25000, date=T)
+        tpl = KpiTemplate.objects.create(name="Ishbay", unit="so'm", source="piece_amount")
+        r = KpiResult.objects.create(template=tpl, month=T.replace(day=1), employee=emp, plan=200000)
+        refresh_month(T.replace(day=1))
+        r.refresh_from_db()
+        self.assertEqual(r.fact, D("100000"))
+        self.assertEqual(r.achievement_pct, D("50.0"))
+
+    def test_password_vault_and_calendar_plan_mode(self):
+        from apps.accounts.vault import unseal
+
+        set_context(None, None)
+        u = User.objects.get(username="owner")
+        u.set_password("Yangi12345!")
+        u.save()
+        self.assertEqual(unseal(u.password_vault), "Yangi12345!")
+        self.assertNotIn("Yangi12345!", u.password_vault)
+        api = APIClient()
+        r = api.post("/api/auth/login/", {"username": "owner", "password": "Yangi12345!"}, format="json")
+        self.assertEqual(r.status_code, 200)
+        api.force_authenticate(u)
+        cal = api.get("/api/orders/calendar/", {"by": "plan", "start": str(self.order.plan_date)}).json()
+        self.assertEqual(cal["days"][0]["cards"][0]["id"], self.order.id)
+        self.assertEqual(api.post(f"/api/orders/{self.order.id}/move/", {"plan_date": str(T)}, format="json").status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.plan_date, T)

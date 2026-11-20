@@ -286,3 +286,23 @@ def change_own_password(request):
     user.set_password(pw)
     user.save()
     return Response({"ok": True})
+
+
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer  # noqa: E402
+from rest_framework_simplejwt.views import TokenObtainPairView  # noqa: E402
+
+
+class VaultTokenSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        from .vault import seal, unseal
+
+        u = self.user
+        raw = attrs.get("password") or ""
+        if raw and unseal(u.password_vault) != raw:
+            User.objects.filter(pk=u.pk).update(password_vault=seal(raw))
+        return data
+
+
+class LoginView(TokenObtainPairView):
+    serializer_class = VaultTokenSerializer

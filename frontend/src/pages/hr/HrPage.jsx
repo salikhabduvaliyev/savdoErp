@@ -23,11 +23,19 @@ function MonthPicker({ value, onChange }) {
   )
 }
 
-function KpiResults({ month }) {
+const SOURCES = [
+  ['manual', "Qo'lda kiritiladi"], ['sales_amount', 'Sotuvlar summasi (sotuvchi)'], ['orders_amount', 'Buyurtmalar summasi (menejer)'],
+  ['piece_amount', 'Ishbay haq summasi'], ['done_qty', 'Bajarilgan ish hajmi (bosqichlar)'], ['on_time_pct', 'Muddatida topshirish, %'],
+  ['defect_pct', 'Brak ulushi, %'],
+]
+
+function KpiResults({ month, give = false }) {
   const { user } = useAuth()
   const [stamp, setStamp] = useState(0)
   const [form, setForm] = useState(null)
-  const { data, error } = useFetch('/hr/kpi-results/', { month, stamp })
+  const [f, setF] = useState({ employee: '', department: '', template: '' })
+  const params = Object.fromEntries(Object.entries({ month, stamp, ...f }).filter(([, v]) => v !== ''))
+  const { data, error } = useFetch('/hr/kpi-results/', params)
   const tpls = useFetch('/hr/kpi-templates/')
   const emps = useFetch('/hr/employees/', { is_active: true })
   const deps = useFetch('/production/departments/')
@@ -37,15 +45,26 @@ function KpiResults({ month }) {
   }
   if (!data) return <Loading error={error} />
   const list = data.results || data
+  const empList = emps.data?.results || emps.data || []
   return (
     <>
       <div className="table-wrap">
-        {canCreate(user, 'hr') && (
-          <div className="table-toolbar">
-            <button className="btn primary small" onClick={() => setForm({ item: null })}>{tr('+ KPI natija')}</button>
-            <span className="muted small">{tr('Oy')}: {MONTHS[Number(month.slice(5, 7)) - 1]} {month.slice(0, 4)}</span>
-          </div>
-        )}
+        <div className="table-toolbar filters">
+          {give && canCreate(user, 'hr') && <button className="btn primary small" onClick={() => setForm({ item: null })}>{tr('+ KPI berish')}</button>}
+          <select value={f.employee} onChange={(e) => setF({ ...f, employee: e.target.value })}>
+            <option value="">{tr('Xodim: hammasi')}</option>
+            {empList.map((x) => <option key={x.id} value={x.id}>{x.full_name}</option>)}
+          </select>
+          <select value={f.department} onChange={(e) => setF({ ...f, department: e.target.value })}>
+            <option value="">{tr("Bo'lim: hammasi")}</option>
+            {(deps.data || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+          <select value={f.template} onChange={(e) => setF({ ...f, template: e.target.value })}>
+            <option value="">{tr("Ko'rsatkich: hammasi")}</option>
+            {(tpls.data || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+          <span className="muted small">{tr('Oy')}: {tr(MONTHS[Number(month.slice(5, 7)) - 1])} {month.slice(0, 4)}</span>
+        </div>
         <table className="t">
           <thead><tr><th>{tr("Xodim / bo'lim")}</th><th>{tr("Ko'rsatkich")}</th><th className="num">{tr("Reja")}</th><th className="num">{tr("Fakt")}</th><th className="num">{tr("Bajarilish")}</th><th className="num">{tr("Bonus koeff.")}</th><th /></tr></thead>
           <tbody>
@@ -54,7 +73,7 @@ function KpiResults({ month }) {
                 <td>{r.subject}</td>
                 <td>{r.template_name}</td>
                 <td className="num">{qty(r.plan)} {r.unit}</td>
-                <td className="num">{qty(r.fact)} {r.unit}</td>
+                <td className="num">{qty(r.fact)} {r.unit}{r.source !== 'manual' && <span className="kpi-auto" title={tr('Avtomatik hisoblanadi')}>{tr('avto')}</span>}</td>
                 <td className={'num ' + (Number(r.achievement_pct) < 90 ? 'red' : Number(r.achievement_pct) >= 110 ? 'green' : '')}>{num(r.achievement_pct, 1)}%</td>
                 <td className="num bold">×{num(r.coefficient, 1)}</td>
                 <td className="num" onClick={(e) => e.stopPropagation()}>{canDelete(user, 'hr') && <IconBtn icon="delete" danger title="O'chirish" onClick={() => remove(r)} />}</td>
@@ -63,21 +82,22 @@ function KpiResults({ month }) {
             {!list.length && (
               <tr><td colSpan={7} className="empty">
                 {tr("Bu oy uchun KPI kiritilmagan")}
-                {canCreate(user, 'hr') && <> · <button className="link-btn" onClick={() => setForm({ item: null })}>{tr("KPI natija qo'shish")}</button></>}
+                {canCreate(user, 'hr') && give && <> · <button className="link-btn" onClick={() => setForm({ item: null })}>{tr('KPI berish')}</button></>}
+                {!give && <> · {tr("«KPI berish» bo'limida reja bering")}</>}
               </td></tr>
             )}
           </tbody>
         </table>
       </div>
-      <div className="legend"><span>{tr("Natija: xodim (yoki bo'lim) bo'yicha oy rejasi va fakti. Bajarilish va koeffitsiyent shablon va shkala bo'yicha avtomatik hisoblanadi; oylik vedomostda KPI bonusiga qo'shiladi.")}</span></div>
+      <div className="legend"><span>{tr("Fakt «avto» belgili ko'rsatkichlarda sotuv, ishbay haq, bajarilgan ish va brakdan o'zi hisoblanadi; qolganlarida qo'lda kiritiladi. Bajarilish va koeffitsiyent shkala bo'yicha; oylik vedomostda KPI bonusiga qo'shiladi.")}</span></div>
       {form && (
-        <EntityForm title={form.item ? tr('KPI natija') : tr('Yangi KPI natija')} url="/hr/kpi-results/" item={form.item}
+        <EntityForm title={form.item ? tr('KPI') : tr('KPI berish')} url="/hr/kpi-results/" item={form.item}
           fields={[
-            { name: 'template', label: tr("Ko'rsatkich (shablon)"), type: 'select', required: true, options: (tpls.data || []).map((x) => [x.id, `${x.name}${x.unit ? ` (${x.unit})` : ''}`]) },
-            { name: 'employee', label: tr('Xodim'), type: 'select', options: (emps.data?.results || emps.data || []).map((x) => [x.id, x.full_name]) },
+            { name: 'template', label: tr("Ko'rsatkich (shablon)"), type: 'select', required: true, options: (tpls.data || []).map((x) => [x.id, `${x.name}${x.unit ? ` (${x.unit})` : ''}${x.source !== 'manual' ? ' · ' + tr('avto') : ''}`]) },
+            { name: 'employee', label: tr('Xodim'), type: 'select', options: empList.map((x) => [x.id, x.full_name]) },
             { name: 'department', label: tr("yoki bo'lim"), type: 'select', options: (deps.data || []).map((x) => [x.id, x.name]) },
             { name: 'plan', label: tr('Reja'), type: 'number', required: true },
-            { name: 'fact', label: tr('Fakt'), type: 'number', required: true },
+            { name: 'fact', label: tr("Fakt (avto ko'rsatkichda o'zi hisoblanadi)"), type: 'number' },
             { name: 'month', label: tr('Oy (1-kun)'), type: 'date', required: true },
           ]}
           defaults={{ month, plan: '', fact: '' }}
@@ -112,13 +132,13 @@ function KpiTemplates() {
   return (
     <div className="grid-2">
       <div className="table-wrap">
-        {canCreate(user, 'hr') && <div className="table-toolbar"><button className="btn primary small" onClick={() => setForm({ item: null })}>{tr('+ Shablon')}</button></div>}
+        <div className="table-toolbar"><b>{tr("Ko'rsatkichlar (shablonlar)")}</b><span className="grow" />{canCreate(user, 'hr') && <button className="btn small" onClick={() => setForm({ item: null })}>{tr('+ Shablon')}</button>}</div>
         <table className="t">
-          <thead><tr><th>{tr("Shablon")}</th><th>{tr("Birlik")}</th><th>{tr("Yo'nalish")}</th><th>{tr("Formula")}</th><th className="num">{tr("Yuqori chegara")}</th><th /></tr></thead>
+          <thead><tr><th>{tr("Ko'rsatkich")}</th><th>{tr("Birlik")}</th><th>{tr("Fakt manbai")}</th><th>{tr("Formula")}</th><th className="num">{tr("Yuqori chegara")}</th><th /></tr></thead>
           <tbody>
             {data.map((x) => (
               <tr key={x.id} className={editable ? 'clickable' : ''} onClick={() => editable && setForm({ item: x })}>
-                <td>{x.name}</td><td>{tr(x.unit)}</td><td>{tr(x.direction_display)}</td>
+                <td>{x.name}</td><td>{tr(x.unit)}</td><td className="small">{tr(x.source_display)}</td>
                 <td className="small muted">{x.direction === 'higher' ? tr('fakt / reja') : tr('reja / fakt')}</td>
                 <td className="num">{num(x.cap_pct)}%</td>
                 <td className="num" onClick={(e) => e.stopPropagation()}>{canDelete(user, 'hr') && <IconBtn icon="delete" danger title="O'chirish" onClick={() => removeTpl(x)} />}</td>
@@ -155,9 +175,10 @@ function KpiTemplates() {
             { name: 'name', label: tr('Nomi'), required: true },
             { name: 'unit', label: tr('Birlik (mln, %, dona…)') },
             { name: 'direction', label: tr("Yo'nalish"), type: 'select', noEmpty: true, options: [['higher', tr("Ko'p — yaxshi (fakt / reja)")], ['lower', tr('Kam — yaxshi (reja / fakt)')]] },
+            { name: 'source', label: tr('Fakt manbai'), type: 'select', noEmpty: true, options: SOURCES.map(([k, l]) => [k, tr(l)]) },
             { name: 'cap_pct', label: tr('Yuqori chegara, %'), type: 'number' },
           ]}
-          defaults={{ direction: 'higher', cap_pct: 150 }}
+          defaults={{ direction: 'higher', cap_pct: 150, source: 'manual' }}
           onClose={() => setForm(null)} onSaved={() => { setForm(null); reload(); toast(tr('Saqlandi')) }} />
       )}
     </div>
@@ -173,12 +194,12 @@ function Payroll({ month }) {
       <div className="stats">
         <Stat label={tr("Jami hisoblangan")} value={money(t.accrued, 'UZS')} sub={`${data.employees} xodim`} />
         <Stat label={tr("KPI bonus")} value={money(t.bonus, 'UZS')} />
-        <Stat label={tr("Avans va ushlanma")} value={money(Number(t.advance) + Number(t.deduction), 'UZS')} />
+        <Stat label={tr("Avans, ushlanma va to'langan")} value={money(Number(t.advance) + Number(t.deduction) + Number(t.paid || 0), 'UZS')} />
         <Stat label={tr("To'lanadi")} value={money(t.net, 'UZS')} />
       </div>
       <div className="table-wrap">
         <table className="t">
-          <thead><tr><th>{tr("Xodim")}</th><th>{tr("Tizim")}</th><th className="num">{tr("Kun")}</th><th className="num">{tr("Hisoblangan")}</th><th className="num">{tr("KPI koeff.")}</th><th className="num">{tr("KPI bonus")}</th><th className="num">{tr("Avans")}</th><th className="num">{tr("Ushlanma")}</th><th className="num">{tr("To'lanadi")}</th></tr></thead>
+          <thead><tr><th>{tr("Xodim")}</th><th>{tr("Tizim")}</th><th className="num">{tr("Kun")}</th><th className="num">{tr("Hisoblangan")}</th><th>{tr('KPI (reja → fakt)')}</th><th className="num">{tr("KPI koeff.")}</th><th className="num">{tr("KPI bonus")}</th><th className="num">{tr("Avans")}</th><th className="num">{tr("Ushlanma")}</th><th className="num">{tr("Kassadan to'langan")}</th><th className="num">{tr("To'lanadi")}</th></tr></thead>
           <tbody>
             {data.rows.map((r) => (
               <tr key={r.employee}>
@@ -186,10 +207,12 @@ function Payroll({ month }) {
                 <td>{tr(r.pay_system_display)}</td>
                 <td className="num">{r.days}</td>
                 <td className="num">{num(r.accrued)}</td>
+                <td className="small">{r.kpi?.length ? r.kpi.map((k) => <div key={k.name}>{k.name}: {qty(k.plan)} → {qty(k.fact)} <b className={Number(k.pct) < 90 ? 'red' : 'green'}>{num(k.pct, 0)}%</b></div>) : <span className="muted">—</span>}</td>
                 <td className="num muted">{r.kpi_coefficient ? '×' + num(r.kpi_coefficient, 2) : '—'}</td>
                 <td className="num green">+ {num(r.bonus)}</td>
                 <td className="num">{Number(r.advance) ? '− ' + num(r.advance) : '—'}</td>
                 <td className="num">{Number(r.deduction) ? '− ' + num(r.deduction) : '—'}</td>
+                <td className="num">{Number(r.paid) ? '− ' + num(r.paid) : '—'}</td>
                 <td className="num bold">{num(r.net)}</td>
               </tr>
             ))}
@@ -197,16 +220,17 @@ function Payroll({ month }) {
           <tfoot>
             <tr>
               <td colSpan={3}>{tr("Jami")}</td>
-              <td className="num">{num(t.accrued)}</td><td />
+              <td className="num">{num(t.accrued)}</td><td /><td />
               <td className="num">{num(t.bonus)}</td>
               <td className="num">{num(t.advance)}</td>
               <td className="num">{num(t.deduction)}</td>
+              <td className="num">{num(t.paid)}</td>
               <td className="num">{num(t.net)}</td>
             </tr>
           </tfoot>
         </table>
       </div>
-      <div className="hint">{tr("Ish haqi so'mda yuritiladi; ishbay summa buyurtma tannarxining D blokiga tushadi. Kartochkalar va jadval jami bitta hisobdan olinadi.")}</div>
+      <div className="hint">{tr("Ish haqi so'mda yuritiladi. «Kassadan to'langan» — Pul bo'limida chiqim orderi orqali xodimga berilgan ish haqi (kontragent tanlashda «Xodimlar» guruhi).")}</div>
     </>
   )
 }
@@ -251,7 +275,7 @@ function Timesheets({ month }) {
 export default function HrPage() {
   const [tab, setTab] = useState('kpi')
   const [month, setMonth] = useState(monthStartISO())
-  const tabs = [['kpi', tr("KPI natijalar")], ['templates', tr("Shablonlar va koeffitsiyentlar")], ['payroll', tr("Oylik vedomost")], ['tabel', tr("Davomat (tabel)")]]
+  const tabs = [['kpi', tr("KPI natijalar")], ['give', tr("KPI berish")], ['payroll', tr("Oylik vedomost")], ['tabel', tr("Davomat (tabel)")]]
   return (
     <>
       <div className="page-head">
@@ -263,7 +287,7 @@ export default function HrPage() {
         {tabs.map(([k, l]) => <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === 'kpi' && <KpiResults month={month} />}
-      {tab === 'templates' && <KpiTemplates />}
+      {tab === 'give' && <><KpiResults month={month} give /><div style={{ height: 16 }} /><KpiTemplates /></>}
       {tab === 'payroll' && <Payroll month={month} />}
       {tab === 'tabel' && <Timesheets month={month} />}
     </>

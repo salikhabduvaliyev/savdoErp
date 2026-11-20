@@ -109,23 +109,38 @@ class KpiScaleSerializer(serializers.ModelSerializer):
 class KpiTemplateSerializer(serializers.ModelSerializer):
     scale = KpiScaleSerializer(many=True, read_only=True)
     direction_display = serializers.CharField(source="get_direction_display", read_only=True)
+    source_display = serializers.SerializerMethodField()
 
     class Meta:
         model = KpiTemplate
-        fields = ["id", "name", "unit", "direction", "direction_display", "cap_pct", "scale"]
+        fields = ["id", "name", "unit", "direction", "direction_display", "source", "source_display", "cap_pct", "scale"]
+
+    def get_source_display(self, obj):
+        from .kpi_auto import SOURCES
+
+        return dict(SOURCES).get(obj.source, obj.source)
+
+    def validate_source(self, v):
+        from .kpi_auto import SOURCES
+
+        if v not in dict(SOURCES):
+            raise serializers.ValidationError("Noto'g'ri manba")
+        return v
 
 
 class KpiResultSerializer(serializers.ModelSerializer):
     template_name = serializers.CharField(source="template.name", read_only=True)
     unit = serializers.CharField(source="template.unit", read_only=True)
+    source = serializers.CharField(source="template.source", read_only=True)
     subject = serializers.SerializerMethodField()
     achievement_pct = serializers.DecimalField(max_digits=6, decimal_places=1, read_only=True)
     coefficient = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
 
     class Meta:
         model = KpiResult
-        fields = ["id", "template", "template_name", "unit", "month", "employee", "department", "subject",
+        fields = ["id", "template", "template_name", "unit", "source", "month", "employee", "department", "subject",
                   "plan", "fact", "achievement_pct", "coefficient"]
+        extra_kwargs = {"fact": {"required": False}}
 
     def get_subject(self, obj):
         return obj.employee.full_name if obj.employee_id else (obj.department.name if obj.department_id else "—")
@@ -249,10 +264,11 @@ class AdjustmentViewSet(viewsets.ModelViewSet):
 def ensure_kpi_defaults():
     """Yangi kompaniyada KPI bo'sh bo'lmasin: standart shablonlar va umumiy koeffitsiyent shkalasi."""
     if not KpiTemplate.objects.exists():
-        for name, unit, direction, cap in [("Sotuv rejasi", "mln so'm", "higher", 150),
-                                           ("Muddatida topshirish", "%", "higher", 100),
-                                           ("Brak (nuqson)", "%", "lower", 150)]:
-            KpiTemplate.objects.create(name=name, unit=unit, direction=direction, cap_pct=cap)
+        for name, unit, direction, cap, src in [("Sotuv rejasi", "mln so'm", "higher", 150, "sales_amount"),
+                                                ("Muddatida topshirish", "%", "higher", 100, "on_time_pct"),
+                                                ("Ishlab chiqarish hajmi", "birlik", "higher", 150, "done_qty"),
+                                                ("Brak (nuqson)", "%", "lower", 150, "defect_pct")]:
+            KpiTemplate.objects.create(name=name, unit=unit, direction=direction, cap_pct=cap, source=src)
     if not KpiScale.objects.filter(template__isnull=True).exists():
         for mn, k in [(110, "1.2"), (100, "1.0"), (90, "0.8"), (0, "0")]:
             KpiScale.objects.create(min_pct=mn, coefficient=Decimal(k))
@@ -288,6 +304,30 @@ class KpiResultViewSet(viewsets.ModelViewSet):
     module = "hr"
     def get_queryset(self):
         return KpiResult.objects.select_related("template", "employee", "department").prefetch_related("template__scale")
+
+    def list(self, request, *args, **kwargs):
+        # avtomatik faktlar (sotuv, ishbay, bajarilgan ish...) har ochilganda yangilanadi
+        m = request.query_params.get("month")
+        if m:
+            from .kpi_auto import refresh_month
+
+            refresh_month(date.fromisoformat(m))
+        return super().list(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        self._fill(serializer.save())
+
+    def perform_update(self, serializer):
+        self._fill(serializer.save())
+
+    @staticmethod
+    def _fill(r):
+        from .kpi_auto import compute_fact
+
+        fact = compute_fact(r.template, r.month, employee=r.employee, department=r.department_id if not r.employee_id else None)
+        if fact is not None:
+            r.fact = fact
+            r.save(update_fields=["fact", "updated_at"])
 
     serializer_class = KpiResultSerializer
     filterset_fields = ["month", "employee", "department", "template"]

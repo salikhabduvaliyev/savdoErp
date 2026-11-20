@@ -1,5 +1,6 @@
 import axios from 'axios'
-import { t } from './i18n'
+import { localizeError } from './errors'
+import { getLang } from './i18n'
 
 const api = axios.create({ baseURL: '/api' })
 
@@ -36,6 +37,8 @@ api.interceptors.request.use((config) => {
   if (t) config.headers.Authorization = `Bearer ${t}`
   const b = branchStore.get()
   if (b) config.headers['X-Branch'] = b
+  config.headers['Accept-Language'] = getLang() === 'ru' ? 'ru' : 'uz' // server xabarlari tanlangan tilda
+
   return config
 })
 
@@ -65,19 +68,9 @@ api.interceptors.response.use(
   },
 )
 
-/** DRF xatosidan o'qiladigan matn */
+/** DRF xatosidan o'qiladigan matn — tanlangan tilda, maydon yorlig'i bilan (errors.js) */
 export function errorText(err) {
-  return t(rawErrorText(err))
-}
-
-function rawErrorText(err) {
-  const data = err?.response?.data
-  if (!data) return err?.message || 'Xatolik'
-  if (typeof data === 'string') return data.slice(0, 200)
-  if (data.detail) return Array.isArray(data.detail) ? data.detail.join(' ') : data.detail
-  return Object.entries(data)
-    .map(([k, v]) => `${k === 'non_field_errors' || k === '__all__' ? '' : k + ': '}${Array.isArray(v) ? v.join(' ') : v}`)
-    .join('; ')
+  return localizeError(err)
 }
 
 export default api

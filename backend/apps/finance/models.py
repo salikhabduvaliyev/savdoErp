@@ -90,6 +90,8 @@ class Transaction(TenantModel, TimeStamped):
     sale = models.ForeignKey("sales.Sale", null=True, blank=True, on_delete=models.PROTECT, related_name="transactions")
     client = models.ForeignKey("crm.Counterparty", null=True, blank=True, on_delete=models.PROTECT, related_name="client_transactions")
     supplier = models.ForeignKey("crm.Counterparty", null=True, blank=True, on_delete=models.PROTECT, related_name="supplier_transactions")
+    employee = models.ForeignKey("hr.Employee", null=True, blank=True, on_delete=models.PROTECT, related_name="salary_payments",
+                                 help_text="Ish haqi to'lovi — qaysi xodimga (oylik vedomostda to'langan sifatida)")
     category = models.ForeignKey(ExpenseCategory, null=True, blank=True, on_delete=models.PROTECT)
     stock_doc = models.ForeignKey("warehouse.StockDoc", null=True, blank=True, on_delete=models.SET_NULL, related_name="payments",
                                   help_text="Yetkazuvchiga to'lov — qaysi qabul qilish uchun")
@@ -110,6 +112,8 @@ class Transaction(TenantModel, TimeStamped):
             raise ValidationError({"supplier": "Yetkazuvchini tanlang"})
         if self.kind == self.Kind.EXPENSE and not self.category_id:
             raise ValidationError({"category": "Xarajat turini tanlang"})
+        if self.employee_id and self.kind != self.Kind.SALARY:
+            raise ValidationError({"employee": "Xodim faqat ish haqi to'lovida tanlanadi"})
         if self.sale_id and self.kind != self.Kind.CLIENT_PAYMENT:
             raise ValidationError("Sotuvga faqat mijoz to'lovi biriktiriladi")
 
@@ -144,3 +148,49 @@ class Transaction(TenantModel, TimeStamped):
     @property
     def signed_amount(self) -> Decimal:
         return self.amount if self.direction == self.Direction.IN else -self.amount
+
+
+class Adjustment(TenantModel, TimeStamped):
+    """Korrektirovka (MoySklad "Корректировки"): hisob (kassa/bank) qoldig'ini yoki kontragent bilan
+    o'zaro hisob-kitob balansini qo'lda to'g'rilash. Summa ishorali.
+
+    Hisob: + qoldiqni oshiradi, − kamaytiradi.
+    Kontragent: + kontragent foydasiga (bizning qarzimiz oshadi / uning qarzi kamayadi), − uning qarzi oshadi.
+    """
+
+    class Kind(models.TextChoices):
+        ACCOUNT = "account", "Hisob qoldig'i"
+        COUNTERPARTY = "counterparty", "O'zaro hisob-kitob"
+
+    number = models.PositiveIntegerField(editable=False)
+    date = models.DateField(default=timezone.localdate)
+    kind = models.CharField(max_length=14, choices=Kind.choices)
+    account = models.ForeignKey(Account, null=True, blank=True, on_delete=models.PROTECT, related_name="adjustments")
+    counterparty = models.ForeignKey("crm.Counterparty", null=True, blank=True, on_delete=models.PROTECT, related_name="adjustments")
+    amount = models.DecimalField(max_digits=18, decimal_places=2, help_text="Ishorali summa")
+    currency = currency_field()
+    note = models.CharField(max_length=300, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        ordering = ["-date", "-number"]
+
+    def clean(self):
+        if not self.amount:
+            raise ValidationError({"amount": "Summa noldan farq qilishi kerak"})
+        if self.kind == self.Kind.ACCOUNT and not self.account_id:
+            raise ValidationError({"account": "Hisobni tanlang"})
+        if self.kind == self.Kind.COUNTERPARTY and not self.counterparty_id:
+            raise ValidationError({"counterparty": "Kontragentni tanlang"})
+
+    def save(self, *args, **kwargs):
+        if self.kind == self.Kind.ACCOUNT and self.account_id:
+            self.currency = self.account.currency
+            self.counterparty = None
+        if self.kind == self.Kind.COUNTERPARTY:
+            self.account = None
+        if not self.number:
+            from django.db.models import Max
+
+            self.number = (Adjustment.objects.aggregate(m=Max("number"))["m"] or 0) + 1
+        super().save(*args, **kwargs)

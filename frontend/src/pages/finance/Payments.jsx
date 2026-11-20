@@ -7,7 +7,8 @@ import { BulkMenu, SearchSelect, usePager } from '../../components/Controls'
 import { cleanNum, DocField, DocPage, DocTitle } from '../../components/DocEditor'
 import Icon from '../../components/Icon'
 import { Badge, Loading, Modal, MoneyBag, Stat, toast, useFetch } from '../../components/ui'
-import { curLabel } from '../../currency'
+import { baseCurrency, curLabel } from '../../currency'
+import PartyPicker from '../../components/PartyPicker'
 import { date, money, todayISO } from '../../format'
 import { t } from '../../i18n'
 import { confirmDialog, promptDialog } from '../../components/Confirm'
@@ -23,21 +24,46 @@ const DOC = {
 // Chiqim moddasi: maxsus turlar + xarajat moddalari (MoySklad "Статья расходов")
 const SPECIAL_OUT = [['__supplier', "Tovar xaridi (yetkazuvchiga to'lov)"], ['__salary', 'Ish haqi']]
 
+/* Kontragent balansi: asosiy valyutada (0 bo'lsa ham) va hisob valyutasi boshqacha bo'lsa — unda ham */
+function PartyBalance({ bal, accCur }) {
+  if (!bal) return <div className="party-bal muted small">{t('Balans')}: …</div>
+  const base = baseCurrency()
+  const curs = [...new Set([base, ...(accCur && accCur !== base ? [accCur] : []), ...Object.keys(bal)])]
+  return (
+    <div className="party-bal small">
+      <span className="muted">{t('Balans')}:</span>
+      {curs.map((c) => {
+        const n = Number(bal[c] || 0)
+        return (
+          <span key={c} className={n < 0 ? 'red' : n > 0 ? 'green' : 'muted'} title={n < 0 ? t('Kontragent bizga qarzdor') : n > 0 ? t('Biz kontragentga qarzdormiz') : ''}>
+            {money(n, c)}{n < 0 ? ` (${t('qarzi')})` : n > 0 ? ` (${t('bizning qarz')})` : ''}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------ to'lov hujjati */
 export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSale, onClose, onSaved }) {
   const { user } = useAuth()
   const accounts = useFetch('/finance/accounts/')
   const cps = useFetch('/crm/counterparties/', { is_active: true })
   const cats = useFetch('/finance/categories/')
+  const groups = useFetch('/crm/groups/')
   const dir = item?.direction || direction
+  const emps = useFetch(dir === 'out' ? '/hr/employees/' : null, { is_active: true })
   const [v, setV] = useState(() => item ? {
     date: item.date, account: item.account, amount: cleanNum(item.amount), description: item.description || '',
-    counterparty: item.client || item.supplier || '', category: item.kind === 'supplier_payment' ? '__supplier' : item.kind === 'salary' ? '__salary' : (item.category || ''),
+    counterparty: item.employee ? `e:${item.employee}` : (item.client || item.supplier || ''), category: item.kind === 'supplier_payment' ? '__supplier' : item.kind === 'salary' ? '__salary' : (item.category || ''),
     order: item.order || '', sale: item.sale || '', stock_doc: item.stock_doc || '', order_amount: cleanNum(item.order_amount), other: item.kind === 'other_income',
   } : { date: todayISO(), account: '', amount: presetSale ? String(Number(presetSale.debt) || '') : '', description: '', counterparty: presetSale?.client || presetOrder?.client || '', category: '', order: presetOrder?.id || '', sale: presetSale?.id || '', stock_doc: '', order_amount: '', other: false })
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
-  const docs = useFetch(v.counterparty ? '/finance/transactions/open_documents/' : null, { counterparty: v.counterparty, direction: dir })
+  const isEmp = String(v.counterparty || '').startsWith('e:')
+  const cpId = v.counterparty && !isEmp ? v.counterparty : null
+  const docs = useFetch(cpId ? '/finance/transactions/open_documents/' : null, { counterparty: cpId, direction: dir })
+  const bal = useFetch(cpId ? '/finance/settlements/balance/' : null, { counterparty: cpId, _: item?.id || 0 })
   const accs = (accounts.data || []).filter((a) => a.is_active)
   const kindOf = item?.account_kind || accountKind || 'cash'
   const acc = accs.find((a) => String(a.id) === String(v.account)) || null
@@ -53,15 +79,16 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
 
   const kind = dir === 'in'
     ? (v.other || (!v.counterparty && !v.order && !v.sale) ? 'other_income' : 'client_payment')
-    : v.category === '__supplier' ? 'supplier_payment' : v.category === '__salary' ? 'salary' : 'expense'
+    : isEmp || v.category === '__salary' ? 'salary' : v.category === '__supplier' ? 'supplier_payment' : 'expense'
 
   const save = async (close) => {
     setBusy(true)
     setError(null)
     const payload = {
       date: v.date, account: v.account, amount: v.amount, description: v.description, kind,
-      client: dir === 'in' ? v.counterparty || null : null,
-      supplier: dir === 'out' ? v.counterparty || null : null,
+      client: dir === 'in' ? cpId : null,
+      supplier: dir === 'out' ? cpId : null,
+      employee: isEmp ? Number(v.counterparty.slice(2)) : null,
       category: kind === 'expense' || kind === 'salary' ? (v.category?.startsWith('__') ? null : v.category || null) : null,
       order: v.order || null, sale: v.sale || null, stock_doc: v.stock_doc || null,
       ...(linkedDoc && acc && linkedDoc.currency !== acc.currency && v.order_amount ? { order_amount: v.order_amount } : {}),
@@ -83,7 +110,7 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
       category: d.type === 'supply' ? '__supplier' : s.category }))
   }
   const catOpts = [...SPECIAL_OUT.map(([k, l]) => ({ value: k, label: t(l) })), ...(cats.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.affects_profit ? '' : t("foydaga ta'sir qilmaydi") }))]
-  const ok = editable && !busy && v.account && Number(v.amount) > 0 && (dir === 'in' || v.category)
+  const ok = editable && !busy && v.account && Number(v.amount) > 0 && (dir === 'in' || v.category || isEmp)
 
   return (
     <DocPage onClose={onClose} toolbar={<>
@@ -104,14 +131,18 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
               options={accOpts.map((a) => ({ value: a.id, label: a.name, sub: `${money(a.balance, a.currency)}` }))} />
           </DocField>
           <DocField label="Kontragent" required={dir === 'in' && !v.other}>
-            <SearchSelect value={v.counterparty} onChange={(id) => setV((s) => ({ ...s, counterparty: id, order: '', sale: '', stock_doc: '' }))} disabled={!editable}
+            <PartyPicker value={v.counterparty} disabled={!editable}
+              onChange={(id) => setV((s) => ({ ...s, counterparty: id, order: '', sale: '', stock_doc: '', category: String(id).startsWith('e:') ? '__salary' : s.category === '__salary' ? '' : s.category }))}
               empty={dir === 'in' ? undefined : '—'} placeholder={t('Kontragentni tanlang…')}
-              options={(cps.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.phone }))}
+              counterparties={cps.data?.results || cps.data || []} groups={groups.data?.results || groups.data || []}
+              employees={dir === 'out' ? (emps.data?.results || emps.data || null) : null}
               onCreate={async (name) => {
                 const n = name || await promptDialog(t('Yangi kontragent nomi'))
                 if (!n) return
                 try { const { data } = await api.post('/crm/counterparties/', { name: n }); cps.reload(); set('counterparty', data.id) } catch (e) { setError(errorText(e)) }
-              }} createLabel={t('Yangi kontragent')} />
+              }} />
+            {cpId && <PartyBalance bal={bal.data?.balance} accCur={acc?.currency} />}
+            {isEmp && <div className="party-bal muted small">{t("Ish haqi to'lovi — oylik vedomostda «To'langan» ustuniga tushadi")}</div>}
           </DocField>
         </div>
         <div>
@@ -137,7 +168,7 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
 
       <div className="doc-tabs"><span className="active">{t("To'lanayotgan hujjat")}</span></div>
       <div className="positions">
-        {!v.counterparty ? <div className="empty">{t("Kontragentni tanlang — uning to'lanmagan hujjatlari chiqadi")}</div> : !docs.data ? <Loading error={docs.error} /> : (
+        {isEmp ? <div className="empty">{t("Xodimga ish haqi — hujjat biriktirilmaydi")}</div> : !v.counterparty ? <div className="empty">{t("Kontragentni tanlang — uning to'lanmagan hujjatlari chiqadi")}</div> : !docs.data ? <Loading error={docs.error} /> : (
           <div className="table-wrap">
             <table className="t">
               <thead><tr><th style={{ width: 40 }} /><th>{t('Hujjat')}</th><th>{t('Sana')}</th><th className="num">{t('Summa')}</th><th className="num">{t("To'lanmagan")}</th></tr></thead>

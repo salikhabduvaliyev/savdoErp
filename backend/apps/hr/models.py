@@ -100,6 +100,7 @@ class KpiTemplate(TenantModel):
     name = models.CharField(max_length=100)
     unit = models.CharField(max_length=20, blank=True, help_text="mln, %, ...")
     direction = models.CharField(max_length=8, choices=Direction.choices, default=Direction.HIGHER)
+    source = models.CharField(max_length=16, default="manual", help_text="Fakt manbai (kpi_auto.SOURCES): manual — qo'lda")
     cap_pct = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("150"))
 
     class Meta:
@@ -126,7 +127,7 @@ class KpiResult(TenantModel, TimeStamped):
     employee = models.ForeignKey(Employee, null=True, blank=True, on_delete=models.CASCADE, related_name="kpi_results")
     department = models.ForeignKey("production.Department", null=True, blank=True, on_delete=models.CASCADE)
     plan = models.DecimalField(max_digits=18, decimal_places=3)
-    fact = models.DecimalField(max_digits=18, decimal_places=3)
+    fact = models.DecimalField(max_digits=18, decimal_places=3, default=0)
 
     class Meta:
         ordering = ["-month", "id"]

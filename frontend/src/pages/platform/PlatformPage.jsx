@@ -10,14 +10,16 @@ const STATUS = [['trial', t("Sinov muddati")], ['active', t("Faol (to'langan)")]
 
 /* Kompaniya foydalanuvchilari: login, rol, holat; parolni tiklash (yangi parol bir marta ko'rsatiladi) */
 function CompanyUsers({ company }) {
-  const { data, error } = useFetch(`/auth/platform/companies/${company.id}/users/`)
+  const { data, error, reload } = useFetch(`/auth/platform/companies/${company.id}/users/`)
   const [shown, setShown] = useState(null)
+  const [reveal, setReveal] = useState({})
   const copy = (txt) => { navigator.clipboard?.writeText(txt).then(() => toast(t('Nusxalandi')), () => {}) }
   const reset = async (u) => {
     if (!(await confirmDialog(t('«{u}» uchun yangi parol yaratilsinmi?\nEski parol ishlamay qoladi.', { u: u.username }), { okText: t('Yangi parol') }))) return
     try {
       const { data: r } = await api.post(`/auth/platform/companies/${company.id}/reset_password/`, { user: u.id })
       setShown(r)
+      reload()
     } catch (e) { toast(errorText(e), true) }
   }
   if (!data) return <Loading error={error} />
@@ -25,11 +27,20 @@ function CompanyUsers({ company }) {
     <>
       <div className="table-wrap">
         <table className="t">
-          <thead><tr><th>{t('Login')}</th><th>{t('Ism')}</th><th>{t('Rol')}</th><th>{t('Telefon')}</th><th>{t('Oxirgi kirish')}</th><th>{t('Holat')}</th><th /></tr></thead>
+          <thead><tr><th>{t('Login')}</th><th>{t('Parol')}</th><th>{t('Ism')}</th><th>{t('Rol')}</th><th>{t('Telefon')}</th><th>{t('Oxirgi kirish')}</th><th>{t('Holat')}</th><th /></tr></thead>
           <tbody>
             {data.map((u) => (
               <tr key={u.id}>
                 <td><b className="mono">{u.username}</b> <button type="button" className="link-btn small" onClick={() => copy(u.username)}>{t('nusxa')}</button></td>
+                <td>
+                  {u.password ? (
+                    <span className="pw-cell">
+                      <b className="mono">{reveal[u.id] ? u.password : '••••••••'}</b>
+                      <button type="button" className="link-btn small" onClick={() => setReveal((r) => ({ ...r, [u.id]: !r[u.id] }))}>{reveal[u.id] ? t('yashirish') : t("ko'rsatish")}</button>
+                      <button type="button" className="link-btn small" onClick={() => copy(u.password)}>{t('nusxa')}</button>
+                    </span>
+                  ) : <span className="muted small" title={t("Parol foydalanuvchi keyingi kirishida yoki tiklanganda saqlanadi")}>{t("hali ma'lum emas")}</span>}
+                </td>
                 <td>{u.full_name}</td>
                 <td className="small">{t(u.role || '—')}</td>
                 <td className="small">{u.phone || '—'}</td>
@@ -38,18 +49,18 @@ function CompanyUsers({ company }) {
                 <td className="num"><button type="button" className="btn small" onClick={() => reset(u)}>{t('Parolni tiklash')}</button></td>
               </tr>
             ))}
-            {!data.length && <tr><td colSpan={7} className="empty">{t("Foydalanuvchilar yo'q")}</td></tr>}
+            {!data.length && <tr><td colSpan={8} className="empty">{t("Foydalanuvchilar yo'q")}</td></tr>}
           </tbody>
         </table>
       </div>
-      <p className="hint">{t("Parollar shifrlangan holda saqlanadi — ularni hech kim (platforma admini ham) ko'ra olmaydi. Mijoz parolini unutsa, «Parolni tiklash» yangi parol yaratadi va uni bir marta ko'rsatadi.")}</p>
+      <p className="hint">{t("Parollar bazada shifrlangan holda saqlanadi va faqat platforma adminiga ko'rinadi. Eski foydalanuvchining paroli u keyingi marta tizimga kirganda yoki parol tiklanganda paydo bo'ladi. Har bir ko'rish tarixga yoziladi.")}</p>
       {shown && (
         <Modal dialog title={t('Yangi parol')} onClose={() => setShown(null)}>
           <dl className="kv">
             <dt>{t('Login')}</dt><dd><b className="mono">{shown.username}</b></dd>
             <dt>{t('Parol')}</dt><dd><b className="mono pw-big">{shown.password}</b></dd>
           </dl>
-          <p className="red small">{t("Bu parol faqat hozir ko'rsatiladi — nusxalab, mijozga yuboring.")}</p>
+          <p className="muted small">{t("Parol foydalanuvchilar ro'yxatida ham saqlanadi — nusxalab, mijozga yuboring.")}</p>
           <div className="form-actions">
             <button type="button" className="btn" onClick={() => copy(`${shown.username} / ${shown.password}`)}>{t('Nusxalash')}</button>
             <button type="button" className="btn primary" onClick={() => setShown(null)}>{t('Yopish')}</button>

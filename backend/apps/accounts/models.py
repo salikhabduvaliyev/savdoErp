@@ -140,7 +140,15 @@ class User(AbstractUser):
     )
     phone = models.CharField(max_length=32, blank=True)
     avatar = models.FileField(upload_to="avatars/", null=True, blank=True, help_text="Profil rasmi")
+    password_vault = models.TextField(blank=True, editable=False,
+                                      help_text="Joriy parol, shifrlangan (platforma admini ko'radi) — accounts/vault.py")
     preferences = models.JSONField(default=dict, blank=True, help_text="Mavzu, til, jadval ustunlari...")
+
+    def set_password(self, raw_password):
+        super().set_password(raw_password)
+        from .vault import seal
+
+        self.password_vault = seal(raw_password) if raw_password else ""
 
     @property
     def full_name(self):

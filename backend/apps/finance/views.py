@@ -12,7 +12,7 @@ from apps.core.money import sum_by_currency
 from apps.core.tenancy import current_branch_id
 
 from . import services
-from .models import Account, ExpenseCategory, Transaction
+from .models import Account, Adjustment, ExpenseCategory, Transaction
 
 
 class AccountSerializer(serializers.ModelSerializer):
@@ -46,6 +46,7 @@ class TransactionSerializer(serializers.ModelSerializer):
     doc_type = serializers.SerializerMethodField()
     stock_doc_number = serializers.IntegerField(source="stock_doc.number", read_only=True, default=None)
     pair_account = serializers.CharField(source="pair.account.name", read_only=True, default=None)
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True, default=None)
 
     class Meta:
         model = Transaction
@@ -53,7 +54,7 @@ class TransactionSerializer(serializers.ModelSerializer):
             "id", "number", "doc_type", "account_kind", "stock_doc", "stock_doc_number", "pair", "pair_account",
             "date", "account", "account_name", "kind", "kind_display", "direction", "amount", "currency",
             "order", "order_number", "sale", "sale_number", "order_amount", "client", "client_name", "supplier", "supplier_name",
-            "category", "category_name", "description", "counterparty",
+            "category", "category_name", "description", "counterparty", "employee", "employee_name",
         ]
         read_only_fields = ["direction", "currency", "number", "pair"]
         extra_kwargs = {"order_amount": {"required": False}}
@@ -68,6 +69,8 @@ class TransactionSerializer(serializers.ModelSerializer):
         return "Chiqim orderi" if cash else "Chiquvchi to'lov"
 
     def get_counterparty(self, obj):
+        if obj.employee_id:
+            return obj.employee.full_name
         return obj.client.name if obj.client_id else (obj.supplier.name if obj.supplier_id else None)
 
     def validate(self, attrs):
@@ -96,7 +99,7 @@ class TransactionFilter(filters.FilterSet):
 
     class Meta:
         model = Transaction
-        fields = ["account", "kind", "direction", "order", "sale", "client", "supplier", "category", "currency", "stock_doc"]
+        fields = ["account", "kind", "direction", "order", "sale", "client", "supplier", "employee", "category", "currency", "stock_doc"]
 
 
 class AccountViewSet(viewsets.ModelViewSet):
@@ -126,7 +129,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
     action_perms = {"transfer": "create", "open_documents": "view"}
 
     def get_queryset(self):
-        qs = Transaction.objects.select_related("account", "order", "sale", "client", "supplier", "category", "stock_doc", "pair__account")
+        qs = Transaction.objects.select_related("account", "order", "sale", "client", "supplier", "employee", "category", "stock_doc", "pair__account")
         bid = current_branch_id()
         return qs.filter(Q(account__branch_id=bid) | Q(account__branch__isnull=True)) if bid else qs
 
@@ -270,3 +273,78 @@ def cash_flow(request):
     df, dt = _period(request)
     p = request.query_params
     return Response(services.cash_flow(df, dt, group=p.get("group") or "day", account=p.get("account") or None))
+
+
+
+# ------------------------------------------------------------------ o'zaro hisob-kitoblar va korrektirovkalar
+@api_view(["GET"])
+@permission_classes([module_perm("finance")])
+def settlements_view(request):
+    """Vzaimoraschyotlar: ?date_from&date_to&counterparty&group&currency&show_zero=1&search"""
+    from .settlements import settlements
+
+    df, dt = _period(request)
+    p = request.query_params
+    return Response(settlements(df, dt, counterparty=p.get("counterparty") or None, group=p.get("group") or None,
+                                currency=p.get("currency") or None, show_zero=p.get("show_zero") in ("1", "true"),
+                                search=(p.get("search") or "").strip() or None))
+
+
+@api_view(["GET"])
+@permission_classes([module_perm("finance")])
+def settlement_balance(request):
+    """Kontragent balansi (to'lov oynasi uchun): ?counterparty=ID"""
+    from .settlements import balance
+
+    cp = request.query_params.get("counterparty")
+    if not cp:
+        raise serializers.ValidationError({"counterparty": "Kontragentni tanlang"})
+    return Response({"counterparty": int(cp), "balance": balance(cp)})
+
+
+@api_view(["GET"])
+@permission_classes([module_perm("finance")])
+def settlement_statement(request):
+    """Akt-sverka: kontragent bo'yicha davrdagi hujjatlar va qoldiq."""
+    from .settlements import statement
+
+    df, dt = _period(request)
+    cp = request.query_params.get("counterparty")
+    if not cp:
+        raise serializers.ValidationError({"counterparty": "Kontragentni tanlang"})
+    return Response(statement(cp, df, dt, currency=request.query_params.get("currency") or None))
+
+
+class AdjustmentSerializer(serializers.ModelSerializer):
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+    account_name = serializers.CharField(source="account.name", read_only=True, default=None)
+    counterparty_name = serializers.CharField(source="counterparty.name", read_only=True, default=None)
+
+    class Meta:
+        model = Adjustment
+        fields = ["id", "number", "date", "kind", "kind_display", "account", "account_name", "counterparty",
+                  "counterparty_name", "amount", "currency", "note", "created_at"]
+        read_only_fields = ["number"]
+        extra_kwargs = {"currency": {"required": False}}
+
+    def validate(self, attrs):
+        inst = Adjustment(**{**({f.name: getattr(self.instance, f.name) for f in Adjustment._meta.fields} if self.instance else {}), **attrs})
+        inst.clean()
+        if inst.kind == Adjustment.Kind.COUNTERPARTY and not attrs.get("currency", getattr(self.instance, "currency", None)):
+            raise serializers.ValidationError({"currency": "Valyutani tanlang"})
+        return attrs
+
+
+class AdjustmentViewSet(viewsets.ModelViewSet):
+    """Korrektirovkalar (MoySklad "Корректировки"): hisob qoldig'i va kontragent balansi."""
+
+    serializer_class = AdjustmentSerializer
+    module = "finance"
+    filterset_fields = ["kind", "account", "counterparty"]
+    search_fields = ["note", "counterparty__name", "account__name"]
+
+    def get_queryset(self):
+        return Adjustment.objects.select_related("account", "counterparty")
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)

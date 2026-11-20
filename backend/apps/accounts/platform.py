@@ -71,8 +71,11 @@ class PlatformCompanyViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def users(self, request, pk=None):
-        """Kompaniya foydalanuvchilari: login, ism, rol, holat, oxirgi kirish (parollar shifrlangan — ko'rsatilmaydi)."""
+        """Kompaniya foydalanuvchilari: login, joriy parol (shifrdan ochiladi), ism, rol, holat, oxirgi kirish."""
+        from apps.core import audit
+
         from .models import User
+        from .vault import unseal
 
         c = self.get_object()
         rows = []
@@ -80,7 +83,11 @@ class PlatformCompanyViewSet(viewsets.ModelViewSet):
             rows.append({"id": u.id, "username": u.username, "full_name": u.full_name, "phone": u.phone,
                          "role": "Egasi (barcha huquqlar)" if u.is_owner else (u.role.name if u.role_id else None),
                          "is_owner": u.is_owner, "is_active": u.is_active, "last_login": u.last_login,
-                         "date_joined": u.date_joined})
+                         "date_joined": u.date_joined, "password": unseal(u.password_vault)})
+        try:
+            audit.log("passwords_viewed", c, {"Platforma admini": [None, request.user.username]})
+        except Exception:  # noqa: BLE001 — audit ixtiyoriy
+            pass
         return Response(rows)
 
     @action(detail=True, methods=["post"])

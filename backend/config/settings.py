@@ -53,6 +53,7 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",  # Accept-Language: tizim xabarlari tanlangan tilda (uz / ru)
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -120,6 +121,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "uz"
+LANGUAGES = [("uz", "O'zbek"), ("ru", "Русский")]
 TIME_ZONE = "Asia/Tashkent"
 USE_I18N = True
 USE_TZ = True

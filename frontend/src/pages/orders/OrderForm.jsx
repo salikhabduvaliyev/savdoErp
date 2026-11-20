@@ -72,7 +72,7 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
       }))
       const payload = {
         ...v, client: clientId, items, production_date: v.production_date || null, operator: v.operator || null,
-        manager: v.manager || null, amount: items.length ? undefined : v.amount,
+        manager: v.manager || null, amount: items.length ? undefined : (v.amount || 0),
       }
       delete payload.items_count
       const { data } = order ? await api.patch(`/orders/${order.id}/`, payload) : await api.post('/orders/', payload)
@@ -173,7 +173,7 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
           ['Pozitsiyalar', lines.length],
           ['Jami', money(total, v.currency), true],
         ] : [
-          ['Summa (pozitsiyasiz)', <input key="a" className="cell num" style={{ width: 160 }} inputMode="decimal" value={v.amount ?? ''} onChange={set('amount')} placeholder="0" />],
+          ['Summa (pozitsiyasiz)', <NumInput key="a" className="cell num" style={{ width: 160 }} value={v.amount ?? ''} onChange={set('amount')} placeholder="0" />],
           ['Jami', money(v.amount || 0, v.currency), true],
         ]}
       />

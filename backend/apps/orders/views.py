@@ -183,12 +183,18 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def move(self, request, pk=None):
-        """Kalendarda kartochkani sudrash: production_date o'zgaradi (reja sana emas)."""
+        """Kalendarda kartochkani sudrash: {production_date} yoki {plan_date} o'zgaradi."""
         order = self.get_object()
-        value = request.data.get("production_date")
-        order.production_date = date.fromisoformat(value) if value else None
-        order.save(update_fields=["production_date", "updated_at"])
-        return Response({"id": order.id, "production_date": order.production_date})
+        if "plan_date" in request.data:
+            if not request.data.get("plan_date"):
+                raise serializers.ValidationError({"plan_date": "Topshirish muddati bo'sh bo'lmasin"})
+            order.plan_date = date.fromisoformat(request.data["plan_date"])
+            order.save(update_fields=["plan_date", "updated_at"])
+        else:
+            value = request.data.get("production_date")
+            order.production_date = date.fromisoformat(value) if value else None
+            order.save(update_fields=["production_date", "updated_at"])
+        return Response({"id": order.id, "production_date": order.production_date, "plan_date": order.plan_date})
 
     # --- smeta ---
     @action(detail=True, methods=["get"])
@@ -258,11 +264,13 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def calendar(self, request):
+        """Kalendar: ?by=production (ishlab chiqarish kuni, standart) yoki ?by=plan (topshirish muddati)."""
         start = request.query_params.get("start")
         days = int(request.query_params.get("days", 7))
+        field = "plan_date" if request.query_params.get("by") == "plan" else "production_date"
         start = date.fromisoformat(start) if start else timezone.localdate() - timedelta(days=timezone.localdate().weekday())
         end = start + timedelta(days=days - 1)
-        qs = self.filter_queryset(self.get_queryset()).filter(production_date__range=(start, end)).exclude(
+        qs = self.filter_queryset(self.get_queryset()).filter(**{f"{field}__range": (start, end)}).exclude(
             status=Order.Status.CANCELLED
         )
         orders = list(qs)
@@ -271,13 +279,13 @@ class OrderViewSet(viewsets.ModelViewSet):
         result = []
         for i in range(days):
             d = start + timedelta(days=i)
-            cards = [c for c, o in zip(data, orders) if o.production_date == d]
-            volume = sum((o.volume for o in orders if o.production_date == d), Decimal("0"))
+            cards = [c for c, o in zip(data, orders) if getattr(o, field) == d]
+            volume = sum((o.volume for o in orders if getattr(o, field) == d), Decimal("0"))
             load = float(round(volume / capacity * 100)) if capacity else 0
             result.append({"date": d.isoformat(), "load_pct": load, "volume": str(volume), "overload": load > 100, "cards": cards})
         unscheduled = self.get_serializer(
-            self.get_queryset().filter(production_date__isnull=True).exclude(status__in=Order.CLOSED_STATUSES), many=True
-        ).data
+            self.get_queryset().filter(**{f"{field}__isnull": True}).exclude(status__in=Order.CLOSED_STATUSES), many=True
+        ).data if field == "production_date" else []
         return Response({"start": start, "capacity": str(capacity), "days": result, "unscheduled": unscheduled})
 
 

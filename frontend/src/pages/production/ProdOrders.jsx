@@ -11,7 +11,7 @@ import { date, qty, todayISO } from '../../format'
 import { t as tr } from '../../i18n'
 import { JobCard } from './Jobs'
 import { confirmDialog } from '../../components/Confirm'
-import { DateInput } from '../../components/Inputs'
+import { DateInput, NumInput } from '../../components/Inputs'
 
 const STATUSES = [['new', tr('Yangi')], ['in_progress', tr('Jarayonda')], ['done', tr('Bajarildi')], ['cancelled', tr('Bekor qilindi')]]
 const BADGE = { new: 'new', in_progress: 'in_production', done: 'done', cancelled: 'cancelled' }
@@ -92,7 +92,7 @@ function ProdOrderForm({ item, onClose, onSaved }) {
               {lines.map((l, i) => (
                 <tr key={l.key}>
                   <td className="muted">{i + 1}</td><td className="bold">{l.name}</td><td className="muted">{l.tc}</td>
-                  <td className="num"><input className="cell num" inputMode="decimal" value={l.qty} onChange={(e) => setLines((ls) => ls.map((x) => (x.key === l.key ? { ...x, qty: e.target.value } : x)))} /></td>
+                  <td className="num"><NumInput className="cell num" value={l.qty} onChange={(e) => setLines((ls) => ls.map((x) => (x.key === l.key ? { ...x, qty: e.target.value } : x)))} /></td>
                   <td className="muted small">{tr(l.unit || '')}</td>
                   <td className="num"><IconBtn icon="delete" danger title="O'chirish" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} /></td>
                 </tr>

@@ -13,13 +13,16 @@ ZERO = Decimal("0")
 
 def account_balance(account: Account, until=None) -> Decimal:
     qs = account.transactions.all()
+    adj = account.adjustments.all()
     if until:
         qs = qs.filter(date__lte=until)
+        adj = adj.filter(date__lte=until)
     agg = qs.aggregate(
         inc=Sum("amount", filter=Q(direction=Transaction.Direction.IN)),
         out=Sum("amount", filter=Q(direction=Transaction.Direction.OUT)),
     )
-    return account.opening_balance + (agg["inc"] or ZERO) - (agg["out"] or ZERO)
+    corr = adj.aggregate(s=Sum("amount"))["s"] or ZERO
+    return account.opening_balance + (agg["inc"] or ZERO) - (agg["out"] or ZERO) + corr
 
 
 def balances():
@@ -169,10 +172,17 @@ def cash_flow(date_from, date_to, group="day", account=None):
         opening.add(a.opening_balance, a.currency)
     for r in txs.filter(date__lt=date_from).values("direction", "currency").annotate(s=Sum("amount")):
         opening.add(r["s"] if r["direction"] == "in" else -r["s"], r["currency"])
+    from .models import Adjustment
+
+    adjs = Adjustment.objects.filter(kind=Adjustment.Kind.ACCOUNT, account__in=accs)
+    for r in adjs.filter(date__lt=date_from).values("currency").annotate(s=Sum("amount")):
+        opening.add(r["s"], r["currency"])
     rows = defaultdict(lambda: {"in": MoneyBag(), "out": MoneyBag()})
     fmt = "%Y-%m" if group == "month" else "%Y-%m-%d"
     for t in txs.filter(date__range=(date_from, date_to)).values("date", "direction", "currency", "amount"):
         rows[t["date"].strftime(fmt)][t["direction"]].add(t["amount"], t["currency"])
+    for a in adjs.filter(date__range=(date_from, date_to)).values("date", "currency", "amount"):
+        rows[a["date"].strftime(fmt)]["in" if a["amount"] > 0 else "out"].add(abs(a["amount"]), a["currency"])
     out, bal, tin, tout = [], opening, MoneyBag(), MoneyBag()
     for k, v in sorted(rows.items()):
         net = v["in"] - v["out"]

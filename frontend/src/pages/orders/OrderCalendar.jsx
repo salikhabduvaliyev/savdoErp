@@ -21,7 +21,9 @@ export default function OrderCalendar({ stamp }) {
   const nav = useNavigate()
   const [start, setStart] = useState(() => mondayOf(todayISO()))
   const [over, setOver] = useState(null)
-  const { data, error, reload } = useFetch('/orders/calendar/', { start, days: 7, stamp })
+  const [by, setByState] = useState(() => { try { return localStorage.getItem('erp.calendar.by') || 'production' } catch { return 'production' } })
+  const setBy = (v) => { setByState(v); try { localStorage.setItem('erp.calendar.by', v) } catch { /* ignore */ } }
+  const { data, error, reload } = useFetch('/orders/calendar/', { start, days: 7, by, stamp })
   const today = todayISO()
 
   const drop = async (e, day) => {
@@ -29,8 +31,8 @@ export default function OrderCalendar({ stamp }) {
     setOver(null)
     const id = Number(e.dataTransfer.getData('text/plain'))
     try {
-      await api.post(`/orders/${id}/move/`, { production_date: day })
-      toast(`Ishlab chiqarish kuni: ${shortDate(day)}`)
+      await api.post(`/orders/${id}/move/`, by === 'plan' ? { plan_date: day } : { production_date: day })
+      toast(`${by === 'plan' ? t('Topshirish muddati') : t('Ishlab chiqarish kuni')}: ${shortDate(day)}`)
       reload()
     } catch (err) {
       toast(errorText(err), true)
@@ -44,7 +46,7 @@ export default function OrderCalendar({ stamp }) {
       draggable
       onDragStart={(e) => e.dataTransfer.setData('text/plain', String(o.id))}
       onClick={() => nav(`/orders/${o.id}`)}
-      title={`Mijozga topshirish: ${shortDate(o.plan_date)}`}
+      title={by === 'plan' ? `${t('Ishlab chiqarish kuni')}: ${o.production_date ? shortDate(o.production_date) : '—'}` : `${t('Mijozga topshirish')}: ${shortDate(o.plan_date)}`}
     >
       <b>{o.number}</b> {o.client_name}
       <div>{money(o.amount, o.currency)}{o.progress > 0 && ` · ${Math.round(o.progress * 100)}%`}</div>
@@ -58,7 +60,11 @@ export default function OrderCalendar({ stamp }) {
         <button className="btn small ghost" onClick={() => setStart(addDays(start, -7))}>{t("‹ Oldingi hafta")}</button>
         <button className="btn small ghost" onClick={() => setStart(mondayOf(today))}>{t("Bugun")}</button>
         <button className="btn small ghost" onClick={() => setStart(addDays(start, 7))}>{t("Keyingi hafta ›")}</button>
-        {data && <span className="muted small">Kunlik sig'im: {data.capacity} m²</span>}
+        <div className="segmented cal-by" title={t("Kalendar qaysi sana bo'yicha")}>
+          <button className={by === 'production' ? 'active' : ''} onClick={() => setBy('production')}>{t('Ishlab chiqarish kuni')}</button>
+          <button className={by === 'plan' ? 'active' : ''} onClick={() => setBy('plan')}>{t('Topshirish muddati')}</button>
+        </div>
+        {data && <span className="muted small">{t("Kunlik sig'im")}: {data.capacity} m²</span>}
       </div>
       {!data ? <Loading error={error} /> : (
         <>
@@ -96,7 +102,7 @@ export default function OrderCalendar({ stamp }) {
         <span>{t("Rang — status bo'yicha")}</span>
         <span>{t("Qizil chegara — kechikkan")}</span>
         <span>{t("Yuklama 100% dan oshsa ogohlantirish")}</span>
-        <span>{t("Kartochkani sudrab ishlab chiqarish kuni o'zgartiriladi (mijozga topshirish muddati o'zgarmaydi)")}</span>
+        <span>{by === 'plan' ? t("Kartochkani sudrab mijozga topshirish muddati o'zgartiriladi") : t("Kartochkani sudrab ishlab chiqarish kuni o'zgartiriladi (mijozga topshirish muddati o'zgarmaydi)")}</span>
       </div>
     </>
   )

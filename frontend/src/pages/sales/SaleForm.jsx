@@ -9,6 +9,7 @@ import { t as tr } from '../../i18n'
 import { convertPrice, curLabel, CurrencyOptions, baseCurrency } from '../../currency'
 import { SearchSelect } from '../../components/Controls'
 import { confirmDialog, promptDialog } from '../../components/Confirm'
+import { NumInput } from '../../components/Inputs'
 
 const cur = curLabel
 
@@ -162,7 +163,7 @@ export default function SaleForm({ sale, onClose, onSaved }) {
         onComment={(note) => setF('note', note)}
         rows={[
           ['Oraliq jami', money(subtotal, v.currency)],
-          ['Chegirma', <input key="d" className="cell num" style={{ width: 140 }} inputMode="decimal" value={v.discount} onChange={(e) => setF('discount', e.target.value)} />],
+          ['Chegirma', <NumInput key="d" className="cell num" style={{ width: 140 }} value={v.discount} onChange={(e) => setF('discount', e.target.value)} />],
           ["To'lanadi", money(total, v.currency), true],
         ]}
       />

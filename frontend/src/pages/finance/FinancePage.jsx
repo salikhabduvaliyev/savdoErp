@@ -4,33 +4,11 @@ import { Loading, MoneyBag, Stat, toast, useFetch } from '../../components/ui'
 import { date, money, monthLabel } from '../../format'
 import TransactionForm from './TransactionForm'
 import Payments from './Payments'
+import { Adjustments, Settlements } from './Settlements'
 import { t as tr } from '../../i18n'
 import { CurrencyOptions, curLabel, baseCurrency } from '../../currency'
 import Icon from '../../components/Icon'
 import { DateInput } from '../../components/Inputs'
-
-function Debts({ kind }) {
-  const { data, error } = useFetch(kind === 'clients' ? '/finance/client-debts/' : '/finance/supplier-debts/')
-  if (!data) return <Loading error={error} />
-  return (
-    <div className="table-wrap">
-      <table className="t">
-        <thead><tr><th>{kind === 'clients' ? 'Mijoz' : 'Yetkazuvchi'}</th><th className="num">{tr("Qarz (so'm)")}</th><th className="num">{tr("Qarz (USD)")}</th></tr></thead>
-        <tbody>
-          {data.rows.map((r) => (
-            <tr key={r.client || r.supplier}>
-              <td>{r.name}</td>
-              <td className={'num ' + (Number(r.debt.UZS) < 0 ? 'green' : '')}>{Number(r.debt.UZS) ? money(r.debt.UZS, 'UZS') : '—'}</td>
-              <td className={'num ' + (Number(r.debt.USD) < 0 ? 'green' : '')}>{Number(r.debt.USD) ? money(r.debt.USD, 'USD') : '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot><tr><td>{tr("Jami")}</td><td className="num">{money(data.total.UZS, 'UZS')}</td><td className="num">{money(data.total.USD, 'USD')}</td></tr></tfoot>
-      </table>
-      {kind === 'suppliers' && <div className="hint" style={{ padding: '0 12px 10px' }}>{tr("Kreditor = ombor kirimlari (yetkazuvchi ko'rsatilgan) − yetkazuvchiga to'lovlar. Manfiy — avans.")}</div>}
-    </div>
-  )
-}
 
 /* MoySklad "Прибыли и убытки": bitta hisobot valyutasida, moddalar bo'yicha */
 const iso = (d) => d.toISOString().slice(0, 10)
@@ -176,7 +154,7 @@ function CashFlow() {
 export default function FinancePage() {
   const [tab, setTab] = useState('tx')
   const [form, setForm] = useState(null)
-  const tabs = [['tx', tr("To'lovlar")], ['clients', tr("Mijozlar qarzi")], ['suppliers', tr("Yetkazuvchilar qarzi")], ['pnl', tr("Foyda va zarar")], ['cf', tr("Pul oqimi")]]
+  const tabs = [['tx', tr("To'lovlar")], ['settle', tr("O'zaro hisob-kitoblar")], ['adj', tr('Korrektirovkalar')], ['pnl', tr("Foyda va zarar")], ['cf', tr("Pul oqimi")]]
   return (
     <>
       <div className="page-head">
@@ -186,8 +164,8 @@ export default function FinancePage() {
         {tabs.map(([k, l]) => <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === 'tx' && <Payments />}
-      {tab === 'clients' && <Debts kind="clients" />}
-      {tab === 'suppliers' && <Debts kind="suppliers" />}
+      {tab === 'settle' && <Settlements />}
+      {tab === 'adj' && <Adjustments />}
       {tab === 'pnl' && <Pnl />}
       {tab === 'cf' && <CashFlow />}
       {form && <TransactionForm kind={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); toast('Saqlandi') }} />}

@@ -942,3 +942,5 @@ tr.om-src td { background: var(--surface-2); font-size: 12.5px; color: var(--tex
 .create-back .form .full { grid-column: 1 / -1; }
 @media (max-width: 760px) { .create-back .form { grid-template-columns: minmax(0, 1fr); } }
 .create-back .form .span2 { grid-column: span 2; }
+.payroll-filter { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; }
+.payroll-filter input:not([type=checkbox]) { min-width: 220px; }

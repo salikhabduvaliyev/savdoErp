@@ -1347,5 +1347,10 @@
   "Yaratish va qo'shish": "Создать и добавить",
   "«{q}» — yangi tovar yaratish": "«{q}» — создать новый товар",
   "Manfiy — kontragent bizga qarzdor, musbat — biz unga qarzdormiz": "Отрицательный — контрагент должен нам, положительный — мы должны ему",
-  "Smeta": "Смета"
+  "Smeta": "Смета",
+  "Xodim ismi…": "Имя сотрудника…",
+  "Bo'limsiz": "Без отдела",
+  "Tizim: hammasi": "Система: все",
+  "Faqat to'lanadiganlar": "Только к выплате",
+  "{n} xodim": "{n} сотрудников"
 }

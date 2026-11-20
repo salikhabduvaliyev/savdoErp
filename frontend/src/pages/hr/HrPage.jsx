@@ -185,14 +185,37 @@ function KpiTemplates() {
   )
 }
 
+const PAY_KEYS = ['accrued', 'bonus', 'advance', 'deduction', 'paid', 'net']
+
 function Payroll({ month }) {
   const { data, error } = useFetch('/hr/payroll/', { month })
+  const [f, setF] = useState({ search: '', department: '', system: '', due: false })
   if (!data) return <Loading error={error} />
-  const t = data.totals
+  const deps = [...new Set(data.rows.map((r) => r.department).filter(Boolean))].sort()
+  const systems = [...new Map(data.rows.map((r) => [r.pay_system, r.pay_system_display])).entries()]
+  const rows = data.rows.filter((r) => (!f.search.trim() || r.name.toLowerCase().includes(f.search.trim().toLowerCase()))
+    && (!f.department || (f.department === '__none' ? !r.department : r.department === f.department))
+    && (!f.system || r.pay_system === f.system) && (!f.due || Number(r.net) > 0))
+  const t = Object.fromEntries(PAY_KEYS.map((k) => [k, rows.reduce((a, r) => a + Number(r[k] || 0), 0)]))
+  const filtered = rows.length !== data.rows.length
   return (
     <>
+      <div className="table-toolbar filters payroll-filter">
+        <input placeholder={tr('Xodim ismi…')} value={f.search} onChange={(e) => setF({ ...f, search: e.target.value })} />
+        <select value={f.department} onChange={(e) => setF({ ...f, department: e.target.value })}>
+          <option value="">{tr("Bo'lim: hammasi")}</option>
+          {deps.map((d) => <option key={d} value={d}>{d}</option>)}
+          <option value="__none">{tr("Bo'limsiz")}</option>
+        </select>
+        <select value={f.system} onChange={(e) => setF({ ...f, system: e.target.value })}>
+          <option value="">{tr('Tizim: hammasi')}</option>
+          {systems.map(([k, l]) => <option key={k} value={k}>{tr(l)}</option>)}
+        </select>
+        <label className="check"><input type="checkbox" checked={f.due} onChange={(e) => setF({ ...f, due: e.target.checked })} /> {tr("Faqat to'lanadiganlar")}</label>
+        {filtered && <button type="button" className="link-btn small" onClick={() => setF({ search: '', department: '', system: '', due: false })}>{tr('Tozalash')}</button>}
+      </div>
       <div className="stats">
-        <Stat label={tr("Jami hisoblangan")} value={money(t.accrued, 'UZS')} sub={`${data.employees} xodim`} />
+        <Stat label={tr("Jami hisoblangan")} value={money(t.accrued, 'UZS')} sub={tr('{n} xodim', { n: rows.length })} />
         <Stat label={tr("KPI bonus")} value={money(t.bonus, 'UZS')} />
         <Stat label={tr("Avans, ushlanma va to'langan")} value={money(Number(t.advance) + Number(t.deduction) + Number(t.paid || 0), 'UZS')} />
         <Stat label={tr("To'lanadi")} value={money(t.net, 'UZS')} />
@@ -201,7 +224,7 @@ function Payroll({ month }) {
         <table className="t">
           <thead><tr><th>{tr("Xodim")}</th><th>{tr("Tizim")}</th><th className="num">{tr("Kun")}</th><th className="num">{tr("Hisoblangan")}</th><th>{tr('KPI (reja → fakt)')}</th><th className="num">{tr("KPI koeff.")}</th><th className="num">{tr("KPI bonus")}</th><th className="num">{tr("Avans")}</th><th className="num">{tr("Ushlanma")}</th><th className="num">{tr("Kassadan to'langan")}</th><th className="num">{tr("To'lanadi")}</th></tr></thead>
           <tbody>
-            {data.rows.map((r) => (
+            {rows.map((r) => (
               <tr key={r.employee}>
                 <td>{r.name}{r.department && ` · ${r.department}`}</td>
                 <td>{tr(r.pay_system_display)}</td>

@@ -123,9 +123,6 @@ export default function SaleForm({ sale, onClose, onSaved }) {
             <div className="party-card">
               {client.phone && <div><Icon name="user" size={14} /> {client.phone}</div>}
               {client.price_type_name && <div className="muted small">{tr('Narx turi')}: {client.price_type_name}</div>}
-              {client.receivable && Object.entries(client.receivable).filter(([, x]) => Number(x) !== 0).map(([c, x]) => (
-                <div key={c} className={Number(x) > 0 ? 'red small' : 'green small'}>{Number(x) > 0 ? tr('Qarzi') : tr('Avans')}: {money(Math.abs(Number(x)), c)}</div>
-              ))}
             </div>
           )}
         </div>

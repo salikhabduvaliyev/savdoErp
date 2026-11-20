@@ -89,14 +89,22 @@ class CounterpartyViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         rows = self.get_serializer(self.filter_queryset(self.get_queryset()), many=True).data
         if request.query_params.get("with_debt") in ("1", "true") and request.user.can_view("counterparties"):
-            from apps.finance.services import client_debts, supplier_debts
+            # Sof balans (o'zaro hisob-kitob): kontragent ham mijoz, ham yetkazuvchi bo'lsa — qarzlar bir-biridan ayriladi.
+            # Manfiy — u bizga qarzdor (receivable), musbat — biz unga qarzdormiz (payable).
+            from collections import defaultdict
+            from decimal import Decimal
 
-            recv = {r["client"]: r["debt"] for r in client_debts()["rows"]}
-            pay = {r["supplier"]: r["debt"] for r in supplier_debts()["rows"]}
-            zero = {"UZS": "0.00", "USD": "0.00"}
+            from apps.finance.settlements import _entries
+
+            net = defaultdict(lambda: defaultdict(Decimal))
+            for cp, _d, cur, inc, out, _l, _k in _entries():
+                net[cp][cur] += Decimal(inc) - Decimal(out)
             for r in rows:
-                r["receivable"] = recv.get(r["id"], zero)
-                r["payable"] = pay.get(r["id"], zero)
+                bal = net.get(r["id"], {})
+                curs = {"UZS", "USD", *bal.keys()}
+                r["balance"] = {c: f"{bal.get(c, Decimal(0)):.2f}" for c in curs}
+                r["receivable"] = {c: f"{max(-bal.get(c, Decimal(0)), Decimal(0)):.2f}" for c in curs}
+                r["payable"] = {c: f"{max(bal.get(c, Decimal(0)), Decimal(0)):.2f}" for c in curs}
         return Response(rows)
 
     def perform_destroy(self, instance):

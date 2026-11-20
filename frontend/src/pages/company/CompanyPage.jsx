@@ -272,51 +272,123 @@ function Employees({ editable, user }) {
 function Departments({ editable }) {
   const [stamp, setStamp] = useState(0)
   const deps = useFetch('/production/departments/', { stamp })
-  const [form, setForm] = useState(null)
-  const refresh = () => { setForm(null); setStamp((s) => s + 1); toast('Saqlandi') }
-  const remove = async (url, name) => {
-    if (!await confirmDialog(t('"{n}" o\'chirilsinmi?', { n: name }))) return
-    try { await api.delete(url); setStamp((s) => s + 1) } catch (e) { toast(errorText(e), true) }
+  const emps = useFetch('/hr/employees/', { is_active: true, stamp })
+  const [open, setOpen] = useState(null)   // { item } | { item: null } — yangi
+  const reload = () => setStamp((s) => s + 1)
+  const remove = async (d) => {
+    if (!await confirmDialog(t('"{n}" o\'chirilsinmi?', { n: d.name }))) return
+    try { await api.delete(`/production/departments/${d.id}/`); reload() } catch (e) { toast(errorText(e), true) }
   }
-  if (!deps.data) return <Loading error={deps.error} />
+  if (!deps.data || !emps.data) return <Loading error={deps.error || emps.error} />
+  const empList = emps.data.results || emps.data
+  const count = (id) => empList.filter((e) => e.department === id).length
 
   return (
     <>
       {editable && (
         <div className="filters" style={{ marginBottom: 10 }}>
-          <button className="btn primary small" onClick={() => setForm({ item: null })}>{t("+ Bo'lim")}</button>
+          <button className="btn primary small" onClick={() => setOpen({ item: null })}>{t("+ Bo'lim")}</button>
         </div>
       )}
       <div className="table-wrap">
         <table className="t">
-          <thead><tr><th className="num" style={{ width: 70 }}>{t('Tartib')}</th><th>{t("Bo'lim")}</th><th className="num">{t("Kunlik sig'im")}</th><th /></tr></thead>
+          <thead><tr><th className="num" style={{ width: 70 }}>{t('Tartib')}</th><th>{t("Bo'lim")}</th><th className="num">{t("Xodimlar soni")}</th><th /></tr></thead>
           <tbody>
             {deps.data.map((d) => (
-              <tr key={d.id} className={editable ? 'clickable' : ''} onClick={() => editable && setForm({ item: d })}>
+              <tr key={d.id} className="clickable" onClick={() => setOpen({ item: d })}>
                 <td className="num muted">{d.sequence}</td>
                 <td className="bold">{d.name}</td>
-                <td className="num">{num(d.daily_capacity)}</td>
-                <td className="num" onClick={(e) => e.stopPropagation()}>{editable && <IconBtn icon="delete" danger title="O'chirish" onClick={() => remove(`/production/departments/${d.id}/`, d.name)} />}</td>
+                <td className="num">{count(d.id)}</td>
+                <td className="num" onClick={(e) => e.stopPropagation()}>{editable && <IconBtn icon="delete" danger title="O'chirish" onClick={() => remove(d)} />}</td>
               </tr>
             ))}
             {!deps.data.length && <tr><td colSpan={4} className="empty">{t("Bo'limlar yo'q")}</td></tr>}
           </tbody>
         </table>
       </div>
-      <div className="legend"><span>{t("Bosqichlar va ishbay stavkalar Ishlab chiqarish → Bosqichlar bo'limida; ishbay haq bosqichga biriktirilgan xodimga yoziladi.")}</span></div>
-      {form && (
-        <EntityForm
-          title={form.item ? form.item.name : "Yangi bo'lim"} url="/production/departments/" item={form.item}
-          fields={[
-            { name: 'name', label: t("Nomi"), required: true },
-            { name: 'sequence', label: t("Texnologik tartib (10, 20, …)"), type: 'number', required: true },
-            { name: 'daily_capacity', label: t("Kunlik sig'im"), type: 'number' },
-          ]}
-          defaults={{ sequence: (deps.data.length + 1) * 10, daily_capacity: 0 }}
-          onClose={() => setForm(null)} onSaved={refresh}
-        />
+      <div className="legend"><span>{t("Bo'lim ustiga bosing — unga biriktirilgan xodimlar ko'rinadi, xodim qo'shish yoki chiqarish mumkin.")}</span></div>
+      {open && (
+        <DepartmentModal item={open.item} employees={empList} editable={editable} nextSeq={(deps.data.length + 1) * 10}
+          onClose={() => setOpen(null)}
+          onChanged={(d) => { reload(); if (d) setOpen({ item: d }) }}
+          onDeleted={() => { setOpen(null); reload() }} />
       )}
     </>
+  )
+}
+
+function DepartmentModal({ item, employees, editable, nextSeq, onClose, onChanged, onDeleted }) {
+  const [v, setV] = useState({ name: item?.name || '', sequence: item?.sequence ?? nextSeq })
+  const [pick, setPick] = useState('')
+  const [busy, setBusy] = useState(false)
+  const members = item ? employees.filter((e) => e.department === item.id) : []
+  const others = item ? employees.filter((e) => e.department !== item.id) : []
+  const dirty = !item || v.name !== item.name || String(v.sequence) !== String(item.sequence)
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      const body = { name: v.name, sequence: v.sequence || 0 }
+      const { data } = item ? await api.patch(`/production/departments/${item.id}/`, body) : await api.post('/production/departments/', body)
+      toast(t('Saqlandi'))
+      onChanged(data)
+    } catch (e) { toast(errorText(e), true) } finally { setBusy(false) }
+  }
+  const setDep = async (empId, depId) => {
+    try { await api.patch(`/hr/employees/${empId}/`, { department: depId }); setPick(''); onChanged(item) } catch (e) { toast(errorText(e), true) }
+  }
+  const unassign = async (e) => {
+    if (!await confirmDialog(t('"{n}" bo\'limdan chiqarilsinmi?', { n: e.full_name }))) return
+    setDep(e.id, null)
+  }
+  const del = async () => {
+    if (!await confirmDialog(t('"{n}" o\'chirilsinmi?', { n: item.name }))) return
+    try { await api.delete(`/production/departments/${item.id}/`); onDeleted() } catch (e) { toast(errorText(e), true) }
+  }
+
+  return (
+    <Modal title={item ? item.name : t("Yangi bo'lim")} onClose={onClose} dialog>
+      <div className="grid-2">
+        <Field label={t('Nomi')}><input value={v.name} disabled={!editable} onChange={(e) => setV({ ...v, name: e.target.value })} /></Field>
+        <Field label={t("Tartib (10, 20, …)")}><NumInput value={v.sequence} disabled={!editable} onChange={(e) => setV({ ...v, sequence: e.target.value })} /></Field>
+      </div>
+      {editable && (
+        <div className="filters" style={{ margin: '8px 0 14px' }}>
+          <button className="btn primary small" disabled={busy || !v.name.trim() || !dirty} onClick={save}>{t('Saqlash')}</button>
+          {item && <button className="btn small danger-ghost" onClick={del}><Icon name="delete" size={14} /> {t("Bo'limni o'chirish")}</button>}
+        </div>
+      )}
+      {item && (
+        <>
+          <h3 style={{ margin: '6px 0 8px' }}>{t('Xodimlar')} <span className="muted">({members.length})</span></h3>
+          <div className="table-wrap">
+            <table className="t">
+              <thead><tr><th>{t('F.I.Sh.')}</th><th>{t('Lavozim')}</th><th>{t('Telefon')}</th><th /></tr></thead>
+              <tbody>
+                {members.map((e) => (
+                  <tr key={e.id}>
+                    <td className="bold">{e.full_name}</td>
+                    <td>{e.position || <span className="muted">—</span>}</td>
+                    <td>{e.phone || <span className="muted">—</span>}</td>
+                    <td className="num">{editable && <IconBtn icon="close" danger title="Bo'limdan chiqarish" onClick={() => unassign(e)} />}</td>
+                  </tr>
+                ))}
+                {!members.length && <tr><td colSpan={4} className="empty">{t("Bu bo'limga xodim biriktirilmagan")}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          {editable && (
+            <div className="filters" style={{ marginTop: 10 }}>
+              <select value={pick} onChange={(e) => setPick(e.target.value)} style={{ minWidth: 260 }}>
+                <option value="">{t('— xodim tanlang —')}</option>
+                {others.map((e) => <option key={e.id} value={e.id}>{e.full_name}{e.department_name ? ` (${e.department_name})` : ''}</option>)}
+              </select>
+              <button className="btn small primary" disabled={!pick} onClick={() => setDep(pick, item.id)}>{t("+ Xodim qo'shish")}</button>
+            </div>
+          )}
+        </>
+      )}
+    </Modal>
   )
 }
 

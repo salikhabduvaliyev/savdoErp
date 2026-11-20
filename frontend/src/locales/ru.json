@@ -1381,5 +1381,13 @@
   "Bo'limlar yo'q": "Отделов нет",
   "Bosqichlar va ishbay stavkalar Ishlab chiqarish → Bosqichlar bo'limida; ishbay haq bosqichga biriktirilgan xodimga yoziladi.": "Этапы и сдельные ставки — в Производство → Этапы; сдельная оплата начисляется сотруднику, назначенному на этап.",
   "Ishbay haq (bosqichning ishbay stavkasi × miqdor) avtomatik bosqichga biriktirilgan xodimga yoziladi — kerak bo'lsa boshqa xodimni tanlang. Oylik vedomost va KPI'ga tushadi, D blokida ko'rinadi. Tarif — tannarxdagi xizmat narxi.": "Сдельная оплата (ставка этапа × количество) автоматически начисляется сотруднику этапа — при необходимости выберите другого. Попадает в ведомость и KPI, видна в блоке D. Тариф — цена услуги в себестоимости.",
-  "Bosqichga biriktirilgan xodim": "Сотрудник, назначенный на этап"
+  "Bosqichga biriktirilgan xodim": "Сотрудник, назначенный на этап",
+  "Xodimlar soni": "Кол-во сотрудников",
+  "Bo'lim ustiga bosing — unga biriktirilgan xodimlar ko'rinadi, xodim qo'shish yoki chiqarish mumkin.": "Нажмите на отдел — откроется список прикреплённых сотрудников; можно добавить или исключить сотрудника.",
+  "Bo'limni o'chirish": "Удалить отдел",
+  "\"{n}\" bo'limdan chiqarilsinmi?": "Исключить «{n}» из отдела?",
+  "Bo'limdan chiqarish": "Исключить из отдела",
+  "Bu bo'limga xodim biriktirilmagan": "К этому отделу сотрудники не прикреплены",
+  "— xodim tanlang —": "— выберите сотрудника —",
+  "+ Xodim qo'shish": "+ Добавить сотрудника"
 }

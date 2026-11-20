@@ -544,7 +544,7 @@ function FieldsSection({ editable }) {
                 <tr key={'s' + f.key} className={c.hidden ? 'muted' : ''}>
                   <td className="bold">{c.label || t(f.label)}{c.label && <span className="small muted"> ({t(f.label)})</span>}</td>
                   <td>{t(f.type)}</td>
-                  <td><Badge kind="neutral">{t('standart')}</Badge>{f.locked && <> <Badge kind="low">{t('majburiy')}</Badge></>}</td>
+                  <td><Badge kind="neutral">{t('standart · ixtiyoriy')}</Badge></td>
                   <td>{c.hidden ? <span className="muted">{t('yashirilgan')}</span> : <span className="green">{t("formada")}</span>}</td>
                   <td className="num">{editable && <>
                     <IconBtn icon="edit" title="Tahrirlash" onClick={() => setStd(f)} />{' '}

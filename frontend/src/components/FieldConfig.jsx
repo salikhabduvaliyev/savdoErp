@@ -5,23 +5,13 @@ import { t } from '../i18n'
 // type — maydon dasturda nimaga bog'langani (ma'lumot turi)
 // eslint-disable-next-line react-refresh/only-export-components
 export const STANDARD_FIELDS = {
+  // majburiy maydonlar (mijoz, muddat, valyuta, ombor ...) bu ro'yxatda yo'q — ular har doim formada
   order: [
-    { key: 'client', label: 'Mijoz', type: "Kontragent (mijoz)", locked: true },
     { key: 'manager', label: 'Menejer', type: "Foydalanuvchi (sotuvchi)" },
     { key: 'operator', label: 'Operator', type: "Foydalanuvchi" },
-    { key: 'plan_date', label: 'Topshirish muddati', type: "Sana", locked: true },
-    { key: 'production_date', label: 'Ishlab chiqarish kuni', type: "Sana" },
     { key: 'volume', label: 'Hajm, m²', type: "Son (m²) — kalendar yuklamasi" },
-    { key: 'currency', label: 'Valyuta', type: "Valyuta", locked: true },
-    { key: 'price_type', label: 'Narx turi', type: "Narx turi (ma'lumotnoma)" },
   ],
-  sale: [
-    { key: 'client', label: 'Mijoz', type: "Kontragent (mijoz)", locked: true },
-    { key: 'warehouse', label: 'Ombor', type: "Ombor", locked: true },
-    { key: 'price_type', label: 'Narx turi', type: "Narx turi (ma'lumotnoma)" },
-    { key: 'currency', label: 'Valyuta', type: "Valyuta", locked: true },
-    { key: 'discount', label: 'Chegirma', type: "Son (summa)" },
-  ],
+  sale: [],
   counterparty: [],
 }
 
@@ -30,8 +20,10 @@ export const STANDARD_FIELDS = {
 export function useFieldConfig(entity) {
   const { data } = useFetch('/core/settings/')
   const cfg = data?.field_config?.[entity] || {}
+  const known = (key) => (STANDARD_FIELDS[entity] || []).some((f) => f.key === key)
   return {
-    label: (key, def) => cfg[key]?.label || t(def),
-    hidden: (key) => !!cfg[key]?.hidden,
+    label: (key, def) => (known(key) && cfg[key]?.label) || t(def),
+    // faqat ixtiyoriy standart maydonlarni yashirish mumkin
+    hidden: (key) => !!cfg[key]?.hidden && known(key),
   }
 }

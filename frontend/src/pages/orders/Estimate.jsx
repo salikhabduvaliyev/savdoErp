@@ -205,14 +205,17 @@ export default function Estimate({ order }) {
         <div className="card">
           <div className="card-head"><h3>{t("P. Pozitsiyalar tannarxi (tovar va mahsulotlar)")}</h3>{blockTotal(data.blocks.P)}</div>
           <table className="t">
-            <thead><tr><th>{t('Nomi')}</th><th className="num">{t('Miqdor')}</th><th className="num">{t("Jo'natilgan")}</th><th>{t('Asos')}</th><th className="num">{t('Tannarx')}</th></tr></thead>
+            <thead><tr><th>{t('Nomi')}</th><th className="num">{t('Miqdor')}</th><th className="num">{t("Jo'natilgan")}</th><th>{t('Asos')}</th><th className="num">{t('1 birlik tannarxi')}</th><th className="num">{t('Tannarx')}</th></tr></thead>
             <tbody>
               {data.blocks.P.rows.map((r) => (
                 <tr key={r.id}><td>{r.name}</td><td className="num">{qty(r.qty)} {t(r.unit)}</td><td className="num">{qty(r.shipped)}</td>
-                  <td className="small muted">{t(r.basis)}</td><td className="num">{money(r.amount, r.currency)}</td></tr>
+                  <td className={'small ' + (r.basis === 'tannarx topilmadi' ? 'red' : 'muted')}>{t(r.basis)}</td>
+                  <td className="num">{money(r.unit_cost, r.currency)}</td>
+                  <td className="num">{r.in_total === false ? <span className="muted" title={t("Smeta bloklarida hisoblangan — jamiga qayta qo'shilmaydi")}>({money(r.amount, r.currency)})</span> : money(r.amount, r.currency)}</td></tr>
               ))}
             </tbody>
           </table>
+          {data.blocks.P.rows.some((r) => r.in_total === false) && <div className="hint" style={{ marginTop: 8 }}>{t("Texkartasiz (o'lchamli) tovar tannarxi smetadan (A–C bloklar) olinadi va pozitsiyalarga sotuv summasi ulushida taqsimlanadi; qavsdagi summa jamiga qayta qo'shilmaydi.")}</div>}
         </div>
       )}
 

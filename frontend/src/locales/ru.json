@@ -1389,5 +1389,12 @@
   "Bo'limdan chiqarish": "Исключить из отдела",
   "Bu bo'limga xodim biriktirilmagan": "К этому отделу сотрудники не прикреплены",
   "— xodim tanlang —": "— выберите сотрудника —",
-  "+ Xodim qo'shish": "+ Добавить сотрудника"
+  "+ Xodim qo'shish": "+ Добавить сотрудника",
+  "1 birlik tannarxi": "Себестоимость ед.",
+  "tannarx topilmadi": "себестоимость не найдена",
+  "oxirgi xarid narxi": "последняя цена закупки",
+  "xarid narxi": "цена закупки",
+  "smeta (A–C bloklar)": "смета (блоки A–C)",
+  "Smeta bloklarida hisoblangan — jamiga qayta qo'shilmaydi": "Учтено в блоках сметы — повторно в итог не входит",
+  "Texkartasiz (o'lchamli) tovar tannarxi smetadan (A–C bloklar) olinadi va pozitsiyalarga sotuv summasi ulushida taqsimlanadi; qavsdagi summa jamiga qayta qo'shilmaydi.": "Себестоимость товара без техкарты (по размерам) берётся из сметы (блоки A–C) и распределяется по позициям пропорционально сумме продажи; сумма в скобках повторно в итог не входит."
 }

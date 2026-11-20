@@ -108,12 +108,39 @@ def order_costing(order: Order) -> dict:
                 "currency": "UZS", "amount": str(q2(p.amount)),
             })
 
-    # P — pozitsiyalardagi tovar/mahsulot tannarxi: jo'natilgani — sotuvdagi haqiqiy tannarx,
-    # qolgani — ombordagi o'rtacha tannarx (bo'lmasa xarid narxi), buyurtma sanasidagi kurs bo'yicha
+    # P — pozitsiyalardagi tovar/mahsulot tannarxi (1 birlik tannarxi manbasi tartibi):
+    #   jo'natilgani — sotuvdagi haqiqiy tannarx;
+    #   qolgani — ombordagi o'rtacha tannarx → texkartaning rejaviy tannarxi → oxirgi xarid narxi → kartochkadagi xarid narxi;
+    #   hech biri yo'q va smeta bor (texkartasiz, o'lchamli buyurtma) — tannarx smetada (A–C bloklar):
+    #   qatorga sotuv summasi ulushida taqsimlab ko'rsatiladi, jamiga qayta qo'shilmaydi.
     p_rows, p_bag, p_conv = [], MoneyBag(), ZERO
+    from apps.production.models import TechCard
+    from apps.production.services import techcard_cost
     from apps.sales.models import Sale
+    from apps.warehouse.models import StockDoc, StockDocItem
+
+    def unit_cost(prod):
+        stocks = [s for s in prod.stocks.all() if s.qty > 0]
+        sq = sum((s.qty for s in stocks), ZERO)
+        if sq:
+            return sum((s.qty * s.avg_cost for s in stocks), ZERO) / sq, prod.currency, "o'rtacha tannarx"
+        tc = TechCard.objects.filter(product=prod, is_active=True).order_by("id").first()
+        if tc is not None:
+            try:
+                c = techcard_cost(tc)
+                return Decimal(c["total"]), c.get("currency", prod.currency), "texkarta"
+            except Exception:  # noqa: BLE001 — kurs yo'q va h.k.
+                pass
+        last = (StockDocItem.objects.filter(material=prod, doc__type=StockDoc.Type.SUPPLY, doc__posted=True, price__gt=0)
+                .select_related("doc").order_by("-doc__date", "-id").first())
+        if last is not None:
+            return Decimal(last.price), last.doc.currency, "oxirgi xarid narxi"
+        if Decimal(prod.purchase_price or 0) > 0:
+            return Decimal(prod.purchase_price), prod.currency, "xarid narxi"
+        return None, prod.currency, None
 
     sale_items = list(order.sale_items.all())
+    pending = []  # tannarxi smetadan olinadigan qatorlar
     for it in order.items.all():
         prod = it.product
         if not prod or not prod.is_stocked:
@@ -122,32 +149,30 @@ def order_costing(order: Order) -> dict:
         sh_qty = sum((s.qty for s in shipped), ZERO)
         sh_cost = sum((s.cost_amount for s in shipped), ZERO)  # sotuv valyutasi = buyurtma valyutasi
         rest = max(ZERO, Decimal(it.qty) - sh_qty)
-        stocks = [s for s in prod.stocks.all() if s.qty > 0]
-        sq = sum((s.qty for s in stocks), ZERO)
-        unit_cur = prod.currency
-        if sq:
-            unit = sum((s.qty * s.avg_cost for s in stocks), ZERO) / sq
-        else:
-            # omborda yo'q (hali ishlab chiqarilmagan) — texkartaning rejaviy tannarxi
-            from apps.production.models import TechCard
-            from apps.production.services import techcard_cost
-
-            tc = TechCard.objects.filter(product=prod, is_active=True).order_by("id").first()
-            unit = Decimal(prod.purchase_price)
-            if tc is not None:
-                try:
-                    c = techcard_cost(tc)
-                    unit = Decimal(c["total"])  # 1 birlik uchun
-                    unit_cur = c.get("currency", prod.currency)
-                except Exception:  # noqa: BLE001 — kurs yo'q va h.k.
-                    pass
-        rest_cost = conv(rest * unit, unit_cur, order.date)
-        amount = sh_cost + rest_cost
+        unit, unit_cur, basis = (ZERO, cur, None) if not rest else unit_cost(prod)
+        row = {"id": it.id, "name": prod.name, "unit": prod.get_unit_display(), "qty": str(it.qty),
+               "shipped": str(sh_qty), "currency": cur, "in_total": True}
+        if rest and unit is None and estimate is not None and not sh_qty:
+            pending.append((row, Decimal(it.qty) * Decimal(it.price or 0)))
+            p_rows.append(row)
+            continue
+        amount = sh_cost + conv(rest * (unit or ZERO), unit_cur, order.date)
+        if sh_qty >= Decimal(it.qty):
+            basis = "sotuv"
+        elif sh_qty:
+            basis = "aralash"
         p_bag.add(amount, cur)
         p_conv += amount
-        p_rows.append({"id": it.id, "name": prod.name, "unit": prod.get_unit_display(), "qty": str(it.qty),
-                       "shipped": str(sh_qty), "amount": str(q2(amount)), "currency": cur,
-                       "basis": "sotuv" if sh_qty >= Decimal(it.qty) else ("aralash" if sh_qty else "o'rtacha tannarx")})
+        row.update({"amount": str(q2(amount)), "unit_cost": str(q2(amount / Decimal(it.qty))) if Decimal(it.qty) else "0",
+                    "basis": basis or "tannarx topilmadi"})
+        p_rows.append(row)
+    if pending:
+        est_cost = a_conv + b_conv + c_conv
+        weight = sum((w for _, w in pending), ZERO)
+        for row, w in pending:
+            share = est_cost * (w / weight if weight else Decimal(1) / len(pending))
+            row.update({"amount": str(q2(share)), "unit_cost": str(q2(share / Decimal(row["qty"]))) if Decimal(row["qty"]) else "0",
+                        "basis": "smeta (A–C bloklar)", "in_total": False})
 
     total_bag = a_bag + b_bag + c_bag + d_bag + p_bag
     cost = a_conv + b_conv + c_conv + d_conv + p_conv

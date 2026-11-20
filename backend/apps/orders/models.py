@@ -260,6 +260,8 @@ class EstimateService(TenantModel):
 
     estimate = models.ForeignKey(Estimate, on_delete=models.CASCADE, related_name="services")
     operation = models.ForeignKey("production.Operation", on_delete=models.PROTECT)
+    employee = models.ForeignKey("hr.Employee", null=True, blank=True, on_delete=models.SET_NULL, related_name="estimate_services",
+                                 help_text="Ijrochi: ishbay haq (bosqich stavkasi × miqdor) oylik va KPI'ga yoziladi")
     qty = qty_field()
     rate = money_field()
     currency = currency_field()

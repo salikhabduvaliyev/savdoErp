@@ -949,3 +949,4 @@ tr.om-src td { background: var(--surface-2); font-size: 12.5px; color: var(--tex
 .doc-comment textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
 .payroll-month { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); font-weight: 500; }
 .alloc-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; } .alloc-bar .grow { flex: 1; }
+.est-add { padding: 10px 0 0; display: flex; gap: 10px; } .est-add .psearch { flex: 1; }

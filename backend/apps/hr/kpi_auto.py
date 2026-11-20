@@ -73,6 +73,8 @@ def compute_fact(template, month, employee=None, department=None):
         qs = StageCompletion.objects.filter(date__gte=start, date__lt=end)
         qs = qs.filter(employee_id__in=emp_ids) if employee is not None else qs.filter(Q(employee_id__in=emp_ids) | Q(task__department=department))
         val = qs.aggregate(s=Sum("qty"))["s"] or ZERO
+        val += PieceworkEntry.objects.filter(employee_id__in=emp_ids, estimate_service__isnull=False,
+                                             date__gte=start, date__lt=end).aggregate(s=Sum("qty"))["s"] or ZERO
     elif src == "on_time_pct":
         qs = Order.objects.filter(status=Order.Status.DELIVERED, delivered_at__gte=start, delivered_at__lt=end)
         if users:

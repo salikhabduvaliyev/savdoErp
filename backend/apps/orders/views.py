@@ -209,19 +209,24 @@ class OrderViewSet(viewsets.ModelViewSet):
     # --- ishlab chiqarish va ombor ---
     @action(detail=True, methods=["post"])
     def send_to_production(self, request, pk=None):
-        """Ishlab chiqarishga yuborish.
-        Pozitsiyalarda texkartali mahsulot bo'lsa — ishlab chiqarish buyurtmasi yaratiladi (MoySklad uslubi);
-        aks holda smeta (B blok) asosida bosqichli topshiriq."""
-        from apps.production.services import create_job_from_order, production_order_from_client_order
+        """Ishlab chiqarishga yuborish — faqat texkartasi bor mahsulotlar (ishlab chiqarish buyurtmasi, MoySklad uslubi).
+        Texkartasiz buyurtma (o'lchamlari har xil) ishlab chiqarishga yuborilmaydi: materiallar va xizmatlar
+        smetada yoziladi va buyurtma to'g'ridan-to'g'ri sotiladi."""
+        from apps.production.models import TechCard
+        from apps.production.services import production_order_from_client_order
 
         order = self.get_object()
-        if order.items.filter(product__isnull=False).exists():
-            po, created = production_order_from_client_order(order, user=request.user)
-            return Response({"production_order": po.id, "production_order_number": po.number, "created": created})
-        job, created, shortages = create_job_from_order(order, user=request.user)
-        for s in shortages:
-            s["shortage"] = str(s["shortage"])
-        return Response({"job": job.id, "job_number": job.number, "created_tasks": created, "materials": shortages})
+        items = list(order.items.select_related("product"))
+        with_tc = [it for it in items if it.product_id and TechCard.objects.filter(product=it.product, is_active=True).exists()]
+        if not with_tc:
+            names = ", ".join(it.name for it in items if it.name) or "—"
+            raise serializers.ValidationError({"detail": f"Texkarta yo'q: pozitsiyalardagi mahsulotlarning ({names}) texkartasi topilmadi — "
+                                                         f"ishlab chiqarishga yuborib bo'lmaydi. Texkartasiz buyurtma smeta bo'yicha "
+                                                         f"to'g'ridan-to'g'ri sotuvga beriladi."})
+        po, created = production_order_from_client_order(order, user=request.user)
+        missing = [it.name for it in items if it.product_id and it not in with_tc]
+        return Response({"production_order": po.id, "production_order_number": po.number, "created": created,
+                         "without_techcard": missing})
 
     @action(detail=True, methods=["get"])
     def material_plan(self, request, pk=None):
@@ -328,7 +333,7 @@ class EstimateMaterialViewSet(EstimateRowMixin, viewsets.ModelViewSet):
 
 class EstimateServiceViewSet(EstimateRowMixin, viewsets.ModelViewSet):
     def get_queryset(self):
-        return EstimateService.objects.select_related("operation")
+        return EstimateService.objects.select_related("operation", "employee")
 
     serializer_class = EstimateServiceSerializer
 

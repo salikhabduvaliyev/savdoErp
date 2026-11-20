@@ -246,10 +246,13 @@ class SalesRules(Base):
 
         Transaction.objects.create(account=Account.objects.get(name="Kassa (USD)"), kind="client_payment",
                                    amount=1000, order=self.order, date=T)  # avans
+        from apps.production.models import ProductionOrder
+
+        po = ProductionOrder.objects.create(client_order=self.order, status="in_progress")
         with self.assertRaises(ValidationError):
-            sales.sale_from_order(self.order, self.owner)  # hali tayyor emas
-        self.order.status = Order.Status.READY
-        self.order.save()
+            sales.sale_from_order(self.order, self.owner)  # ishlab chiqarish tugallanmagan
+        po.status = ProductionOrder.Status.DONE
+        po.save()
         s, created = sales.sale_from_order(self.order, self.owner)
         self.assertTrue(created)
         self.assertEqual(s.paid, D("1000"))  # avans sotuvga o'tdi
@@ -852,3 +855,50 @@ class AllocateTests(TestCase):
         self.assertEqual(docs, [])
         bad = dict(body, amount="100")
         self.assertEqual(api.post("/api/finance/transactions/allocate/", bad, format="json").status_code, 400)
+
+
+class ProductionRulesNoTechcard(Base):
+    def test_send_to_production_requires_techcard(self):
+        from apps.orders.models import OrderItem
+
+        prod = Material.objects.create(name="Eshik (o'lchamli)", type="product", currency="USD")
+        OrderItem.objects.create(order=self.order, product=prod, name=prod.name, qty=1, price=4200)
+        set_context(None, None)
+        api = APIClient()
+        api.force_authenticate(self.owner)
+        r = api.post(f"/api/orders/{self.order.id}/send_to_production/")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("Texkarta yo'q", r.json()["detail"])
+        # ishlab chiqarishga berilmagan buyurtma — sotuvga istalgan payt
+        with tenant_context(self.company):
+            s, created = sales.sale_from_order(self.order, self.owner)
+            self.assertTrue(created)
+
+
+class EstimateServicePieceworkTests(Base):
+    def test_service_employee_gets_piecework(self):
+        from apps.hr.models import Employee, PieceworkEntry
+        from apps.hr.services import payroll
+
+        emp = Employee.objects.create(full_name="Usta", pay_system="piece")
+        self.op_cut.piece_rate = 15000
+        self.op_cut.employee = emp
+        self.op_cut.save()
+        est = Estimate.objects.create(order=self.order, version=1)
+        set_context(None, None)
+        api = APIClient()
+        api.force_authenticate(self.owner)
+        r = api.post("/api/orders/estimate-services/", {"estimate": est.id, "operation": self.op_cut.id, "qty": "4"}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()["employee"], emp.id)  # bosqichning mas'ul xodimi
+        with tenant_context(self.company):
+            pw = PieceworkEntry.objects.get(estimate_service_id=r.json()["id"])
+            self.assertEqual(pw.amount, D("60000"))
+            row = [x for x in payroll(T.replace(day=1))["rows"] if x["employee"] == emp.id][0]
+            self.assertEqual(D(row["accrued"]), D("60000"))
+        api.patch(f"/api/orders/estimate-services/{r.json()['id']}/", {"qty": "2"}, format="json")
+        with tenant_context(self.company):
+            self.assertEqual(PieceworkEntry.objects.get(estimate_service_id=r.json()["id"]).amount, D("30000"))
+        api.delete(f"/api/orders/estimate-services/{r.json()['id']}/")
+        with tenant_context(self.company):
+            self.assertFalse(PieceworkEntry.objects.exists())

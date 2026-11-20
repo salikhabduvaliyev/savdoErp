@@ -122,7 +122,7 @@ export function ProductSearch({ onPick, params, disabled }) {
 }
 
 /** Ma'lumotnomadan tanlash (MoySklad "Выбор товара"): chapda guruhlar, har qatorda miqdor (−/+), pastda "Tanlash" */
-function ProductPicker({ onPick, onClose, params }) {
+export function ProductPicker({ onPick, onClose, params }) {
   const [q, setQ] = useState('')
   const [group, setGroup] = useState('')
   const [rows, setRows] = useState(null)

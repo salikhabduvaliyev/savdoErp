@@ -4,62 +4,71 @@ import { Loading, MoneyBag, toast, useFetch } from '../../components/ui'
 import { date, money, qty, shortDate } from '../../format'
 import { t } from '../../i18n'
 import { SearchSelect } from '../../components/Controls'
+import { ProductPicker, ProductSearch } from '../../components/DocEditor'
+import { NumInput } from '../../components/Inputs'
 import Icon from '../../components/Icon'
 import { IconBtn } from '../../components/Icon'
 import { curLabel } from '../../currency'
 
-function AddMaterialRow({ estimateId, materials, onAdded }) {
-  const [v, setV] = useState({ material: '', qty: '', waste_pct: '0', price: '' })
-  const mat = materials.find((m) => String(m.id) === String(v.material))
-  const add = async () => {
+/* A blok: qidiruv va ma'lumotnoma orqali material qo'shish (sotuvdagidek); narx — ombordagi o'rtacha tannarx */
+function MaterialAdder({ estimateId, onAdded }) {
+  const [picker, setPicker] = useState(false)
+  const add = async (p, n = 1) => {
     try {
-      const payload = { estimate: estimateId, material: v.material, qty: v.qty, waste_pct: v.waste_pct || 0 }
-      if (v.price) payload.price = v.price
-      await api.post('/orders/estimate-materials/', payload)
-      setV({ material: '', qty: '', waste_pct: '0', price: '' })
+      await api.post('/orders/estimate-materials/', { estimate: estimateId, material: p.id, qty: n || 1, waste_pct: 0 })
       onAdded()
     } catch (e) { toast(errorText(e), true) }
   }
   return (
-    <tr>
-      <td>
-        <SearchSelect value={v.material} onChange={(id) => setV({ ...v, material: id })} placeholder={t("Material tanlang…")}
-          options={materials.map((m) => ({ value: m.id, label: m.name, sub: `${t(m.unit_display)} · ${curLabel(m.currency)}` }))} />
-      </td>
-      <td className="num"><input className="cell" placeholder={t("sarf")} value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} /></td>
-      <td className="num"><input className="cell" style={{ width: 60 }} value={v.waste_pct} onChange={(e) => setV({ ...v, waste_pct: e.target.value })} /></td>
-      <td className="num"><input className="cell" placeholder={t("o'rtacha")} value={v.price} onChange={(e) => setV({ ...v, price: e.target.value })} /></td>
-      <td>{mat ? curLabel(mat.currency) : ''}</td>
-      <td className="num"><button className="btn small primary" disabled={!v.material || !v.qty} onClick={add}>{t("Qo'shish")}</button></td>
-      <td />
-    </tr>
+    <div className="positions-add est-add">
+      <ProductSearch onPick={(p) => add(p, 1)} params={{ type: 'raw,goods,product' }} />
+      <button type="button" className="btn" onClick={() => setPicker(true)}><Icon name="book" size={16} /> {t("Ma'lumotnomadan qo'shish")}</button>
+      {picker && <ProductPicker onPick={add} onClose={() => setPicker(false)} params={{ type: 'raw,goods,product' }} />}
+    </div>
   )
 }
 
-function AddServiceRow({ estimateId, operations, onAdded }) {
-  const [v, setV] = useState({ operation: '', qty: '', rate: '' })
+/* Qatordagi qiymatni o'zgartirish (blur/Enter da saqlanadi) */
+function CellNum({ value, onSave, width = 100 }) {
+  const [v, setV] = useState(String(Number(value)))
+  const save = () => { if (String(Number(value)) !== String(Number(v || 0))) onSave(v || 0) }
+  return <NumInput className="cell num" style={{ width }} value={v} onChange={(e) => setV(e.target.value)} onBlur={save}
+    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
+}
+
+function AddServiceRow({ estimateId, operations, employees, onAdded }) {
+  const [v, setV] = useState({ operation: '', employee: '', qty: '', rate: '' })
   const op = operations.find((o) => String(o.id) === String(v.operation))
   const add = async () => {
     try {
-      const payload = { estimate: estimateId, operation: v.operation, qty: v.qty }
+      const payload = { estimate: estimateId, operation: v.operation, qty: v.qty, employee: v.employee || null }
       if (v.rate) payload.rate = v.rate
       await api.post('/orders/estimate-services/', payload)
-      setV({ operation: '', qty: '', rate: '' })
+      setV({ operation: '', employee: '', qty: '', rate: '' })
       onAdded()
     } catch (e) { toast(errorText(e), true) }
   }
+  const defRate = op ? Number(op.default_rate) || Number(op.piece_rate) : 0
   return (
-    <tr>
+    <tr className="est-add-row">
       <td>
-        <SearchSelect value={v.operation} onChange={(id) => setV({ ...v, operation: id })} placeholder={t("Operatsiya tanlang…")}
+        <SearchSelect value={v.operation} placeholder={t('Xizmat tanlang…')}
+          onChange={(id) => { const o = operations.find((x) => String(x.id) === String(id)); setV({ ...v, operation: id, employee: o?.employee ? String(o.employee) : '' }) }}
           options={operations.map((o) => ({ value: o.id, label: o.name, sub: o.department_name }))} />
       </td>
-      <td className="num"><input className="cell" placeholder={t("miqdor")} value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} /></td>
-      <td className="num">{op?.unit_display || ''}</td>
-      <td className="num"><input className="cell" placeholder={op ? String(Number(op.default_rate)) : 'tarif'} value={v.rate} onChange={(e) => setV({ ...v, rate: e.target.value })} /></td>
-      <td>{op ? curLabel(op.rate_currency) : ''}</td>
-      <td className="num"><button className="btn small primary" disabled={!v.operation || !v.qty} onClick={add}>{t("Qo'shish")}</button></td>
-      <td />
+      <td className="small">{op?.department_name || ''}</td>
+      <td>
+        <select className="cell" value={v.employee} onChange={(e) => setV({ ...v, employee: e.target.value })} disabled={!op}>
+          <option value="">{t('— xodim —')}</option>
+          {employees.map((x) => <option key={x.id} value={x.id}>{x.full_name}</option>)}
+        </select>
+      </td>
+      <td className="num"><NumInput className="cell num" style={{ width: 90 }} placeholder={t('miqdor')} value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} /></td>
+      <td>{op ? t(op.unit_display) : ''}</td>
+      <td className="num"><NumInput className="cell num" style={{ width: 110 }} placeholder={op ? String(defRate) : t('tarif')} value={v.rate} onChange={(e) => setV({ ...v, rate: e.target.value })} /></td>
+      <td>{op ? curLabel(Number(op.default_rate) ? op.rate_currency : 'UZS') : ''}</td>
+      <td className="num">{op && v.qty ? money(Number(v.qty) * Number(v.rate || defRate), Number(op.default_rate) ? op.rate_currency : 'UZS') : ''}</td>
+      <td className="num"><button className="btn small primary" disabled={!v.operation || !Number(v.qty)} onClick={add}>{t("Qo'shish")}</button></td>
     </tr>
   )
 }
@@ -68,8 +77,9 @@ const cur = curLabel
 
 export default function Estimate({ order }) {
   const { data, error, reload } = useFetch(`/orders/${order.id}/costing/`)
-  const materials = useFetch('/warehouse/materials/')
   const operations = useFetch('/production/operations/')
+  const employees = useFetch('/hr/employees/', { is_active: true })
+  const empList = employees.data?.results || employees.data || []
   const [editing, setEditing] = useState(false)
 
   if (!data) return <Loading error={error} />
@@ -77,6 +87,9 @@ export default function Estimate({ order }) {
   const A = data.blocks.A, B = data.blocks.B, C = data.blocks.C, Dd = data.blocks.D
   const profit = Number(data.profit)
 
+  const patch = async (kind, id, body) => {
+    try { await api.patch(`/orders/estimate-${kind}/${id}/`, body); reload() } catch (e) { toast(errorText(e), true) }
+  }
   const del = async (kind, id) => {
     try {
       await api.delete(`/orders/estimate-${kind}/${id}/`)
@@ -104,43 +117,53 @@ export default function Estimate({ order }) {
       <div className="card">
         <div className="card-head"><h3>{t("A. Materiallar (ombordan)")}</h3>{blockTotal(A)}</div>
         <table className="t">
-          <thead><tr><th>{t("Material")}</th><th className="num">{t("Sarf")}</th><th className="num">{t("Chiqindi")}</th><th className="num">{t("Narx")}</th><th>{t("Valyuta")}</th><th className="num">{t("Summa")}</th><th /></tr></thead>
+          <thead><tr><th>{t("Material")}</th><th className="num">{t("Sarf")}</th><th className="num">{t("Chiqindi, %")}</th><th className="num">{t("Narx")}</th><th>{t("Valyuta")}</th><th className="num">{t("Summa")}</th><th /></tr></thead>
           <tbody>
             {A.rows.map((r) => (
               <tr key={r.id}>
                 <td>{r.material_name}</td>
-                <td className="num">{qty(r.qty)} {r.unit}</td>
-                <td className="num">{qty(r.waste_pct)}%</td>
-                <td className="num">{money(r.price, r.currency)}</td>
+                <td className="num">{editing ? <><CellNum value={r.qty} width={90} onSave={(x) => patch('materials', r.id, { qty: x })} /> {t(r.unit)}</> : <>{qty(r.qty)} {t(r.unit)}</>}</td>
+                <td className="num">{editing ? <CellNum value={r.waste_pct} width={70} onSave={(x) => patch('materials', r.id, { waste_pct: x })} /> : `${qty(r.waste_pct)}%`}</td>
+                <td className="num">{editing ? <CellNum value={r.price} width={120} onSave={(x) => patch('materials', r.id, { price: x })} /> : money(r.price, r.currency)}</td>
                 <td>{cur(r.currency)}</td>
                 <td className="num">{money(r.amount, r.currency)}</td>
-                <td className="num">{editing && <IconBtn icon="delete" danger title="O\'chirish" onClick={() => del('materials', r.id)} />}</td>
+                <td className="num">{editing && <IconBtn icon="delete" danger title="O'chirish" onClick={() => del('materials', r.id)} />}</td>
               </tr>
             ))}
-            {editing && est && <AddMaterialRow estimateId={est.id} materials={materials.data || []} onAdded={reload} />}
+            {!A.rows.length && <tr><td colSpan={7} className="muted small">{t("Materiallar yo'q")}{editing ? '' : ` — ${t("«Tahrirlash» bosib qo'shing")}`}</td></tr>}
           </tbody>
         </table>
+        {editing && est && <MaterialAdder estimateId={est.id} onAdded={reload} />}
       </div>
 
       <div className="card">
         <div className="card-head"><h3>{t("B. Xizmatlar (operatsiyalar)")}</h3>{blockTotal(B)}</div>
         <table className="t">
-          <thead><tr><th>{t("Operatsiya / bo'lim")}</th><th className="num">{t("Miqdor")}</th><th className="num">{t("Birlik")}</th><th className="num">{t("Tarif")}</th><th>{t("Valyuta")}</th><th className="num">{t("Summa")}</th><th /></tr></thead>
+          <thead><tr><th>{t("Xizmat")}</th><th>{t("Bo'lim")}</th><th>{t("Xodim")}</th><th className="num">{t("Miqdor")}</th><th>{t("Birlik")}</th><th className="num">{t("Tarif")}</th><th>{t("Valyuta")}</th><th className="num">{t("Summa")}</th><th /></tr></thead>
           <tbody>
             {B.rows.map((r) => (
               <tr key={r.id}>
-                <td>{r.operation_name} / {r.department}</td>
-                <td className="num">{qty(r.qty)}</td>
-                <td className="num">{r.unit}</td>
-                <td className="num">{money(r.rate, r.currency)}</td>
+                <td>{r.operation_name}</td>
+                <td className="small">{r.department}</td>
+                <td>{editing ? (
+                  <select className="cell" value={r.employee || ''} onChange={(e) => patch('services', r.id, { employee: e.target.value || null })}>
+                    <option value="">{t('— xodim —')}</option>
+                    {empList.map((x) => <option key={x.id} value={x.id}>{x.full_name}</option>)}
+                  </select>
+                ) : (r.employee_name || <span className="muted">—</span>)}</td>
+                <td className="num">{editing ? <CellNum value={r.qty} width={90} onSave={(x) => patch('services', r.id, { qty: x })} /> : qty(r.qty)}</td>
+                <td>{t(r.unit)}</td>
+                <td className="num">{editing ? <CellNum value={r.rate} width={110} onSave={(x) => patch('services', r.id, { rate: x })} /> : money(r.rate, r.currency)}</td>
                 <td>{cur(r.currency)}</td>
                 <td className="num">{money(r.amount, r.currency)}</td>
-                <td className="num">{editing && <IconBtn icon="delete" danger title="O\'chirish" onClick={() => del('services', r.id)} />}</td>
+                <td className="num">{editing && <IconBtn icon="delete" danger title="O'chirish" onClick={() => del('services', r.id)} />}</td>
               </tr>
             ))}
-            {editing && est && <AddServiceRow estimateId={est.id} operations={operations.data || []} onAdded={reload} />}
+            {editing && est && <AddServiceRow estimateId={est.id} operations={operations.data || []} employees={empList} onAdded={reload} />}
+            {!B.rows.length && !editing && <tr><td colSpan={9} className="muted small">{t("Xizmatlar yo'q")}</td></tr>}
           </tbody>
         </table>
+        <div className="hint" style={{ marginTop: 8 }}>{t("Xodim tanlansa, unga ishbay haq (bosqichning ishbay stavkasi × miqdor) oylik vedomost va KPI'ga yoziladi — D blokida ko'rinadi. Tarif — tannarxdagi xizmat narxi.")}</div>
       </div>
 
       <div className="card">
@@ -160,13 +183,19 @@ export default function Estimate({ order }) {
       </div>
 
       <div className="card">
-        <div className="card-head"><h3>{t("D. Ish haqi ulushi (ishbay topshiriqlardan)")}</h3>{blockTotal(Dd)}</div>
+        <div className="card-head"><h3>{t("D. Ish haqi ulushi (xizmatlar va topshiriqlar)")}</h3>{blockTotal(Dd)}</div>
         <table className="t">
+          <thead><tr><th>{t('Xodim')}</th><th>{t('Ish')}</th><th>{t('Manba')}</th><th>{t('Sana')}</th><th className="num">{t('Miqdor')}</th><th className="num">{t('Stavka')}</th><th className="num">{t('Summa')}</th></tr></thead>
           <tbody>
             {Dd.rows.map((r) => (
-              <tr key={r.id}><td>{r.employee} · {r.operation}</td><td>{shortDate(r.date)}</td><td className="num">{qty(r.qty)}</td><td>{t("so'm")}</td><td className="num">{money(r.amount, 'UZS')}</td></tr>
+              <tr key={r.id}>
+                <td>{r.employee}</td><td>{r.operation}</td>
+                <td className="small muted">{r.source === 'estimate' ? t('smeta xizmati (tannarx B blokida)') : t('ishlab chiqarish topshirig\'i')}</td>
+                <td>{shortDate(r.date)}</td><td className="num">{qty(r.qty)}</td>
+                <td className="num">{money(r.rate, 'UZS')}</td><td className="num">{money(r.amount, 'UZS')}</td>
+              </tr>
             ))}
-            {!Dd.rows.length && <tr><td className="muted small">{t("Ishbay yozuvlar hali yo'q")}</td></tr>}
+            {!Dd.rows.length && <tr><td colSpan={7} className="muted small">{t("Ishbay yozuvlar hali yo'q")}</td></tr>}
           </tbody>
         </table>
       </div>

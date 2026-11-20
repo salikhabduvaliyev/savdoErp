@@ -81,8 +81,18 @@ class TimesheetSerializer(serializers.ModelSerializer):
 
 class PieceworkSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
-    order_number = serializers.IntegerField(source="task.order.number", read_only=True)
-    operation_name = serializers.CharField(source="task.operation.name", read_only=True)
+    order_number = serializers.SerializerMethodField()
+    operation_name = serializers.SerializerMethodField()
+
+    def get_order_number(self, obj):
+        if obj.task_id:
+            return obj.task.order.number if obj.task.order_id else None
+        return obj.estimate_service.estimate.order.number if obj.estimate_service_id else None
+
+    def get_operation_name(self, obj):
+        if obj.task_id:
+            return obj.task.operation.name
+        return obj.estimate_service.operation.name if obj.estimate_service_id else None
 
     class Meta:
         model = PieceworkEntry
@@ -246,7 +256,8 @@ class TimesheetViewSet(viewsets.ModelViewSet):
 class PieceworkViewSet(viewsets.ModelViewSet):
     module = "hr"
     def get_queryset(self):
-        return PieceworkEntry.objects.select_related("employee", "task__order", "task__operation")
+        return PieceworkEntry.objects.select_related("employee", "task__order", "task__operation",
+                                                     "estimate_service__operation", "estimate_service__estimate__order")
 
     serializer_class = PieceworkSerializer
     filterset_fields = ["employee", "task", "task__order"]

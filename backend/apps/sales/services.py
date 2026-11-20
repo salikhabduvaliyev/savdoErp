@@ -17,6 +17,17 @@ def _branch_id():
     return current_branch_id() or Branch.objects.filter(is_main=True).values_list("id", flat=True).first()
 
 
+def order_production_pending(order):
+    """Buyurtma ishlab chiqarishga berilgan va hali tugallanmagan bo'lsa — tugallanmagan hujjatlar ro'yxati."""
+    from apps.production.models import ProductionJob, ProductionOrder
+
+    pending = [f"ishlab chiqarish buyurtmasi №{po.number}" for po in
+               order.production_orders.exclude(status__in=[ProductionOrder.Status.CANCELLED, ProductionOrder.Status.DONE])]
+    pending += [f"topshiriq №{j.number}" for j in
+                order.jobs.exclude(status__in=[ProductionJob.Status.CANCELLED, ProductionJob.Status.DONE])]
+    return pending
+
+
 @transaction.atomic
 def sale_from_order(order, user):
     """Tayyor buyurtmadan sotuv qoralamasi (yoki mavjud qoralamani qaytaradi)."""
@@ -25,8 +36,11 @@ def sale_from_order(order, user):
     existing = order.sales.exclude(status=Sale.Status.CANCELLED).first()
     if existing:
         return existing, False
-    if order.status not in (Order.Status.READY, Order.Status.DELIVERED):
-        raise ValidationError("Sotuv faqat tayyor buyurtmadan qilinadi")
+    if order.status == Order.Status.CANCELLED:
+        raise ValidationError("Bekor qilingan buyurtmani sotib bo'lmaydi")
+    pending = order_production_pending(order)
+    if pending:
+        raise ValidationError(f"Ishlab chiqarish tugallanmagan ({', '.join(pending)}) — avval ishlab chiqarishni yakunlang")
     sale = Sale.objects.create(
         client=order.client, currency=order.currency, order=order, branch_id=order.branch_id or _branch_id(),
         seller=user, created_by=user, note=f"Buyurtma №{order.number} asosida",

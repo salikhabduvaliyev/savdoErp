@@ -49,13 +49,30 @@ class OrderSerializer(serializers.ModelSerializer):
             "paid", "debt", "status", "state", "state_color", "status_display", "stage", "progress",
             "plan_date", "production_date", "delivered_at", "is_overdue", "overdue_days",
             "manager", "manager_name", "operator", "operator_name", "note", "is_sold", "branch", "branch_name", "extra",
-            "items", "production_orders",
+            "items", "production_orders", "production_pending", "has_techcard",
         ]
         read_only_fields = ["number", "delivered_at", "state"]
         extra_kwargs = {"amount": {"required": False}}
 
     items = OrderItemSerializer(many=True, required=False)
     production_orders = serializers.SerializerMethodField()
+    production_pending = serializers.SerializerMethodField()
+    has_techcard = serializers.SerializerMethodField()
+
+    def get_production_pending(self, obj):
+        if self.context.get("view") is not None and getattr(self.context["view"], "action", None) == "list":
+            return None  # ro'yxatda hisoblanmaydi (tezlik uchun)
+        from apps.sales.services import order_production_pending
+
+        return order_production_pending(obj)
+
+    def get_has_techcard(self, obj):
+        if self.context.get("view") is not None and getattr(self.context["view"], "action", None) == "list":
+            return None
+        from apps.production.models import TechCard
+
+        ids = [it.product_id for it in obj.items.all() if it.product_id]
+        return bool(ids) and TechCard.objects.filter(product_id__in=ids, is_active=True).exists()
 
     def get_production_orders(self, obj):
         return [{"id": p.id, "number": p.number, "status": p.status} for p in obj.production_orders.all()
@@ -130,17 +147,48 @@ class EstimateMaterialSerializer(serializers.ModelSerializer):
 
 
 class EstimateServiceSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True, default=None)
+
     class Meta:
         model = EstimateService
-        fields = ["id", "estimate", "operation", "qty", "rate", "currency"]
-        extra_kwargs = {"rate": {"required": False}, "currency": {"required": False}}
+        fields = ["id", "estimate", "operation", "employee", "employee_name", "qty", "rate", "currency"]
+        extra_kwargs = {"rate": {"required": False}, "currency": {"required": False}, "employee": {"required": False}}
 
     def validate(self, attrs):
         if self.instance is None:
             op = attrs["operation"]
-            attrs.setdefault("rate", op.default_rate)
-            attrs.setdefault("currency", op.rate_currency)
+            # tarif: xizmat narxi (smeta B), bo'lmasa ishbay stavka
+            attrs.setdefault("rate", op.default_rate if op.default_rate else op.piece_rate)
+            attrs.setdefault("currency", op.rate_currency if op.default_rate else "UZS")
+            if "employee" not in attrs and op.employee_id:
+                attrs["employee"] = op.employee
         return attrs
+
+    def create(self, data):
+        obj = super().create(data)
+        sync_estimate_piecework(obj)
+        return obj
+
+    def update(self, obj, data):
+        obj = super().update(obj, data)
+        sync_estimate_piecework(obj)
+        return obj
+
+
+def sync_estimate_piecework(svc):
+    """Smeta xizmatining ijrochisiga ishbay yozuvi: miqdor × bosqichning ishbay stavkasi (oylik va KPI uchun)."""
+    from apps.hr.models import PieceworkEntry
+
+    pw = PieceworkEntry.objects.filter(estimate_service=svc).first()
+    rate = svc.operation.piece_rate or Decimal("0")
+    if not svc.employee_id or not rate or not svc.qty:
+        if pw:
+            pw.delete()
+        return
+    if pw is None:
+        pw = PieceworkEntry(estimate_service=svc)
+    pw.employee_id, pw.qty, pw.rate = svc.employee_id, svc.qty, rate
+    pw.save()
 
 
 class EstimateSerializer(serializers.ModelSerializer):

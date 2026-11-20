@@ -1362,5 +1362,17 @@
   "eng eski hujjatdan boshlab, summa yetguncha": "начиная с самого старого документа, пока хватает суммы",
   "Taqsimlandi": "Распределено",
   "Qoldi (avans)": "Остаток (аванс)",
-  "To'lov summasidan oshib ketdi": "Превышает сумму платежа"
+  "To'lov summasidan oshib ketdi": "Превышает сумму платежа",
+  "Xizmat tanlang…": "Выберите услугу…",
+  "— xodim —": "— сотрудник —",
+  "Chiqindi, %": "Отходы, %",
+  "«Tahrirlash» bosib qo'shing": "нажмите «Редактировать», чтобы добавить",
+  "Xizmatlar yo'q": "Услуг нет",
+  "Xodim tanlansa, unga ishbay haq (bosqichning ishbay stavkasi × miqdor) oylik vedomost va KPI'ga yoziladi — D blokida ko'rinadi. Tarif — tannarxdagi xizmat narxi.": "Если выбран сотрудник, ему начисляется сдельная оплата (сдельная ставка этапа × количество) в ведомость и KPI — видно в блоке D. Тариф — цена услуги в себестоимости.",
+  "D. Ish haqi ulushi (xizmatlar va topshiriqlar)": "D. Доля зарплаты (услуги и задания)",
+  "Ish": "Работа",
+  "Stavka": "Ставка",
+  "smeta xizmati (tannarx B blokida)": "услуга сметы (себестоимость в блоке B)",
+  "ishlab chiqarish topshirig'i": "производственное задание",
+  "Ishlab chiqarishda — tugagach sotiladi": "В производстве — продажа после завершения"
 }

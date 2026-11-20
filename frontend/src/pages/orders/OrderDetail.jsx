@@ -72,10 +72,12 @@ export default function OrderDetail() {
           {states.map((s) => <option key={s.id} value={s.id}>{tr(s.name)}</option>)}
         </select>
         <button className="btn icon-only" onClick={() => setEdit(true)} title={tr("Tahrirlash")}><Icon name="edit" size={16} /></button>
-        {['new', 'confirmed'].includes(o.status) && !o.production_orders?.length && <button className="btn primary" onClick={sendToProduction}><Icon name="production" size={16} /> {tr("Ishlab chiqarishga yuborish")}</button>}
+        {['new', 'confirmed'].includes(o.status) && !o.production_orders?.length && o.has_techcard && <button className="btn primary" onClick={sendToProduction}><Icon name="production" size={16} /> {tr("Ishlab chiqarishga yuborish")}</button>}
         {o.production_orders?.map((po) => <Link key={po.id} className="btn" to={`/production?tab=orders&po=${po.id}`}><Icon name="production" size={16} /> {tr('Ishlab chiqarish')} №{po.number}</Link>)}
-        {['ready', 'delivered'].includes(o.status) && canCreate(user, 'sales') && (
-          <button className="btn success" onClick={makeSale}><Icon name="sales" size={16} /> {o.is_sold ? tr('Sotuvni ochish') : tr('Sotuvga berish')}</button>
+        {o.status !== 'cancelled' && canCreate(user, 'sales') && (
+          o.production_pending?.length
+            ? <span className="badge b-in_production" title={o.production_pending.join(', ')}>{tr('Ishlab chiqarishda — tugagach sotiladi')}</span>
+            : <button className="btn success" onClick={makeSale}><Icon name="sales" size={16} /> {o.is_sold ? tr('Sotuvni ochish') : tr('Sotuvga berish')}</button>
         )}
       </div>
 

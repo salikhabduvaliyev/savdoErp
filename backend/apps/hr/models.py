@@ -54,7 +54,9 @@ class PieceworkEntry(TenantModel, TimeStamped):
     """Ishbay topshiriq bajarilishi. Summa buyurtma smetasining D blokiga tushadi."""
 
     employee = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="piecework")
-    task = models.ForeignKey("production.ProductionTask", on_delete=models.PROTECT, related_name="piecework")
+    task = models.ForeignKey("production.ProductionTask", null=True, blank=True, on_delete=models.PROTECT, related_name="piecework")
+    estimate_service = models.OneToOneField("orders.EstimateService", null=True, blank=True, on_delete=models.CASCADE,
+                                            related_name="piecework", help_text="Texkartasiz buyurtma: smetaning B blokidagi xizmat")
     date = models.DateField(default=timezone.localdate)
     qty = qty_field()
     rate = money_field(help_text="so'm / birlik")
@@ -65,7 +67,8 @@ class PieceworkEntry(TenantModel, TimeStamped):
 
     def save(self, *args, **kwargs):
         if not self.rate:
-            self.rate = self.task.operation.piece_rate
+            op = self.task.operation if self.task_id else (self.estimate_service.operation if self.estimate_service_id else None)
+            self.rate = op.piece_rate if op else 0
         self.amount = (Decimal(self.qty) * Decimal(self.rate)).quantize(Decimal("0.01"))
         super().save(*args, **kwargs)
 

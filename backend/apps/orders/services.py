@@ -70,6 +70,7 @@ def order_costing(order: Order) -> dict:
             b_conv += conv(amt, s.currency, order.date)
             b_rows.append({
                 "id": s.id, "operation": s.operation_id, "operation_name": s.operation.name,
+                "employee": s.employee_id, "employee_name": s.employee.full_name if s.employee_id else None,
                 "department": s.operation.department.name, "unit": s.operation.get_unit_display(),
                 "qty": str(s.qty), "rate": str(q2(s.rate)), "currency": s.currency, "amount": str(q2(amt)),
             })
@@ -94,9 +95,18 @@ def order_costing(order: Order) -> dict:
         d_bag.add(p.amount, "UZS")
         d_conv += conv(p.amount, "UZS", p.date)
         d_rows.append({
-            "id": p.id, "date": p.date.isoformat(), "employee": p.employee.full_name,
-            "operation": p.task.operation.name, "qty": str(p.qty), "currency": "UZS", "amount": str(q2(p.amount)),
+            "id": p.id, "date": p.date.isoformat(), "employee": p.employee.full_name, "source": "task",
+            "operation": p.task.operation.name, "qty": str(p.qty), "rate": str(q2(p.rate)), "currency": "UZS", "amount": str(q2(p.amount)),
         })
+    if estimate:
+        from apps.hr.models import PieceworkEntry
+
+        for p in PieceworkEntry.objects.filter(estimate_service__estimate=estimate).select_related("employee", "estimate_service__operation"):
+            d_rows.append({
+                "id": p.id, "date": p.date.isoformat(), "employee": p.employee.full_name, "source": "estimate",
+                "operation": p.estimate_service.operation.name, "qty": str(p.qty), "rate": str(q2(p.rate)),
+                "currency": "UZS", "amount": str(q2(p.amount)),
+            })
 
     # P — pozitsiyalardagi tovar/mahsulot tannarxi: jo'natilgani — sotuvdagi haqiqiy tannarx,
     # qolgani — ombordagi o'rtacha tannarx (bo'lmasa xarid narxi), buyurtma sanasidagi kurs bo'yicha

@@ -1352,5 +1352,15 @@
   "Bo'limsiz": "Без отдела",
   "Tizim: hammasi": "Система: все",
   "Faqat to'lanadiganlar": "Только к выплате",
-  "{n} xodim": "{n} сотрудников"
+  "{n} xodim": "{n} сотрудников",
+  "Hisoblash oyi": "Месяц начисления",
+  "Hisoblash sanasi": "Дата начисления",
+  "to'lov sanasi": "дата платежа",
+  "Foyda va zararda xarajat shu sanada hisoblanadi (bo'sh — to'lov sanasi)": "В прибылях и убытках расход учитывается на эту дату (пусто — дата платежа)",
+  "Shu to'lovdan": "Из этого платежа",
+  "Avtomatik taqsimlash": "Распределить автоматически",
+  "eng eski hujjatdan boshlab, summa yetguncha": "начиная с самого старого документа, пока хватает суммы",
+  "Taqsimlandi": "Распределено",
+  "Qoldi (avans)": "Остаток (аванс)",
+  "To'lov summasidan oshib ketdi": "Превышает сумму платежа"
 }

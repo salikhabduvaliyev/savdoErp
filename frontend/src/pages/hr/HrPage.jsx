@@ -187,7 +187,7 @@ function KpiTemplates() {
 
 const PAY_KEYS = ['accrued', 'bonus', 'advance', 'deduction', 'paid', 'net']
 
-function Payroll({ month }) {
+function Payroll({ month, onMonth }) {
   const { data, error } = useFetch('/hr/payroll/', { month })
   const [f, setF] = useState({ search: '', department: '', system: '', due: false })
   if (!data) return <Loading error={error} />
@@ -201,6 +201,7 @@ function Payroll({ month }) {
   return (
     <>
       <div className="table-toolbar filters payroll-filter">
+        <label className="payroll-month">{tr('Hisoblash oyi')}: <MonthPicker value={month} onChange={onMonth} /></label>
         <input placeholder={tr('Xodim ismi…')} value={f.search} onChange={(e) => setF({ ...f, search: e.target.value })} />
         <select value={f.department} onChange={(e) => setF({ ...f, department: e.target.value })}>
           <option value="">{tr("Bo'lim: hammasi")}</option>
@@ -304,14 +305,14 @@ export default function HrPage() {
       <div className="page-head">
         <h1>{tab === 'payroll' || tab === 'tabel' ? 'Oylik (maosh)' : 'KPI'}</h1>
         <span className="grow" />
-        <MonthPicker value={month} onChange={setMonth} />
+        {tab !== 'payroll' && <MonthPicker value={month} onChange={setMonth} />}
       </div>
       <div className="tabs">
         {tabs.map(([k, l]) => <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === 'kpi' && <KpiResults month={month} />}
       {tab === 'give' && <><KpiResults month={month} give /><div style={{ height: 16 }} /><KpiTemplates /></>}
-      {tab === 'payroll' && <Payroll month={month} />}
+      {tab === 'payroll' && <Payroll month={month} onMonth={setMonth} />}
       {tab === 'tabel' && <Timesheets month={month} />}
     </>
   )

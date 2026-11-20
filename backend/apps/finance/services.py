@@ -2,6 +2,7 @@ from collections import defaultdict
 from decimal import Decimal
 
 from django.db.models import F, Q, Sum
+from django.db.models.functions import Coalesce
 
 from apps.core.money import MoneyBag, q2
 from apps.core.tenancy import current_branch_id
@@ -141,8 +142,8 @@ def profit_and_loss(date_from, date_to):
     revenue, cost = revenue + s_rev, cost + s_cost
     overhead = MoneyBag()
     for row in (
-        Transaction.objects.filter(
-            date__range=(date_from, date_to), direction=Transaction.Direction.OUT, order__isnull=True,
+        Transaction.objects.annotate(pdate=Coalesce("accrual_date", "date")).filter(
+            pdate__range=(date_from, date_to), direction=Transaction.Direction.OUT, order__isnull=True,
             kind__in=[Transaction.Kind.EXPENSE, Transaction.Kind.SALARY],
         ).exclude(category__affects_profit=False)
         .values("currency")
@@ -237,11 +238,13 @@ def pnl_report(date_from, date_to, currency="UZS"):
 
     # operatsion xarajatlar: buyurtmaga biriktirilmagan, foydaga ta'sir qiladigan
     opex = defaultdict(lambda: Decimal("0"))
-    for t in (Transaction.objects.filter(date__range=(date_from, date_to), direction=Transaction.Direction.OUT,
-                                         order__isnull=True, kind__in=[Transaction.Kind.EXPENSE, Transaction.Kind.SALARY])
+    # foyda-zararda hisoblash sanasi (accrual_date) bo'yicha, bo'lmasa to'lov sanasi
+    for t in (Transaction.objects.annotate(pdate=Coalesce("accrual_date", "date"))
+              .filter(pdate__range=(date_from, date_to), direction=Transaction.Direction.OUT,
+                      order__isnull=True, kind__in=[Transaction.Kind.EXPENSE, Transaction.Kind.SALARY])
               .exclude(category__affects_profit=False).select_related("category")):
         name = t.category.name if t.category else ("Ish haqi" if t.kind == Transaction.Kind.SALARY else "Boshqa xarajatlar")
-        opex[name] += cv(t.amount, t.currency, t.date)
+        opex[name] += cv(t.amount, t.currency, t.pdate)
     # hisobdan chiqarishlar (Списания) va inventarizatsiya kamomadi — tannarx bo'yicha
     losses = Decimal("0")
     for mv in StockMove.objects.filter(date__range=(date_from, date_to), doc__type="loss"):

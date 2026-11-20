@@ -54,7 +54,7 @@ class TransactionSerializer(serializers.ModelSerializer):
             "id", "number", "doc_type", "account_kind", "stock_doc", "stock_doc_number", "pair", "pair_account",
             "date", "account", "account_name", "kind", "kind_display", "direction", "amount", "currency",
             "order", "order_number", "sale", "sale_number", "order_amount", "client", "client_name", "supplier", "supplier_name",
-            "category", "category_name", "description", "counterparty", "employee", "employee_name",
+            "category", "category_name", "description", "counterparty", "employee", "employee_name", "accrual_date",
         ]
         read_only_fields = ["direction", "currency", "number", "pair"]
         extra_kwargs = {"order_amount": {"required": False}}
@@ -126,7 +126,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
     filterset_class = TransactionFilter
     search_fields = ["description", "client__name", "supplier__name"]
     module = "finance"
-    action_perms = {"transfer": "create", "open_documents": "view"}
+    action_perms = {"transfer": "create", "allocate": "create", "open_documents": "view"}
 
     def get_queryset(self):
         qs = Transaction.objects.select_related("account", "order", "sale", "client", "supplier", "employee", "category", "stock_doc", "pair__account")
@@ -154,6 +154,44 @@ class TransactionViewSet(viewsets.ModelViewSet):
                 Transaction.objects.filter(pk__in=[instance.pk, pair.pk]).update(pair=None)
                 pair.delete()
             instance.delete()
+
+    @action(detail=False, methods=["post"])
+    def allocate(self, request):
+        """Bitta to'lovni bir nechta hujjatga taqsimlash (MoySklad: платеж по нескольким документам).
+
+        {..to'lov maydonlari.., amount, allocations: [{type: order|sale|supply, id, amount}]}
+        Har bir hujjatga alohida yozuv yaratiladi; ortgan qismi hujjatsiz (avans) yozuv bo'ladi.
+        """
+        from decimal import Decimal, InvalidOperation
+
+        from django.db import transaction as dbtx
+
+        data = {k: v for k, v in request.data.items() if k not in ("allocations", "order", "sale", "stock_doc", "order_amount")}
+        allocs = request.data.get("allocations") or []
+        try:
+            total = Decimal(str(request.data.get("amount") or 0))
+            parts = [(a["type"], int(a["id"]), Decimal(str(a["amount"]))) for a in allocs]
+        except (KeyError, ValueError, InvalidOperation):
+            raise serializers.ValidationError({"allocations": "Taqsimot noto'g'ri"})
+        if total <= 0:
+            raise serializers.ValidationError({"amount": "Summa musbat bo'lishi kerak"})
+        if any(x <= 0 for _t, _i, x in parts):
+            raise serializers.ValidationError({"allocations": "Hujjatga taqsimlangan summa musbat bo'lishi kerak"})
+        allocated = sum((x for _t, _i, x in parts), Decimal("0"))
+        if allocated > total:
+            raise serializers.ValidationError({"allocations": "Taqsimlangan summa to'lov summasidan oshib ketdi"})
+        field = {"order": "order", "sale": "sale", "supply": "stock_doc"}
+        created = []
+        with dbtx.atomic():
+            rows = [({field[t]: i}, x) for t, i, x in parts]
+            if total - allocated > 0:
+                rows.append(({}, total - allocated))  # avans / qolgan qismi
+            for link, amount in rows:
+                ser = self.get_serializer(data={**data, **link, "amount": str(amount)})
+                ser.is_valid(raise_exception=True)
+                self.perform_create(ser)
+                created.append(ser.data)
+        return Response({"created": created, "allocated": str(allocated), "rest": str(total - allocated)}, status=201)
 
     @action(detail=False, methods=["post"])
     def transfer(self, request):
@@ -211,18 +249,18 @@ class TransactionViewSet(viewsets.ModelViewSet):
             for o in with_paid(Order.objects.filter(client_id=cp).exclude(status=Order.Status.CANCELLED)):
                 if o.debt > 0 and not o.is_sold:
                     rows.append({"type": "order", "id": o.id, "label": f"Buyurtma №{o.number}", "date": o.date,
-                                 "amount": str(o.amount), "debt": str(o.debt), "currency": o.currency})
+                                 "amount": str(o.amount), "debt": str(o.debt), "paid": str(o.amount - o.debt), "currency": o.currency})
             for s in with_totals(Sale.objects.filter(client_id=cp, status=Sale.Status.COMPLETED)):
                 if s.debt > 0:
                     rows.append({"type": "sale", "id": s.id, "label": f"Sotuv №{s.number}", "date": s.date,
-                                 "amount": str(s.total), "debt": str(s.debt), "currency": s.currency})
+                                 "amount": str(s.total), "debt": str(s.debt), "paid": str(s.total - s.debt), "currency": s.currency})
         else:
             for doc in StockDoc.objects.filter(counterparty_id=cp, type="supply", posted=True).prefetch_related("items"):
                 paid = sum((p.amount for p in doc.payments.all() if p.currency == doc.currency), Decimal("0"))
                 debt = doc.total - paid
                 if debt > 0:
                     rows.append({"type": "supply", "id": doc.id, "label": f"Qabul qilish №{doc.number}", "date": doc.date,
-                                 "amount": str(doc.total), "debt": str(debt), "currency": doc.currency})
+                                 "amount": str(doc.total), "debt": str(debt), "paid": str(paid), "currency": doc.currency})
         rows.sort(key=lambda r: r["date"])
         return Response(rows)
 

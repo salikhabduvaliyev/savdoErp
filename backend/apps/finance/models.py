@@ -98,6 +98,8 @@ class Transaction(TenantModel, TimeStamped):
     pair = models.OneToOneField("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
                                 help_text="Hisoblar orasida ko'chirish — juft yozuv")
     description = models.CharField(max_length=300, blank=True)
+    accrual_date = models.DateField(null=True, blank=True,
+                                    help_text="Hisoblash sanasi (MoySklad: Дата начисления) — xarajat foyda-zararda shu sanada; bo'sh — to'lov sanasi")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:

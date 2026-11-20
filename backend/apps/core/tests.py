@@ -811,3 +811,44 @@ class SettlementsKpiVaultTests(Base):
         self.assertEqual(api.post(f"/api/orders/{self.order.id}/move/", {"plan_date": str(T)}, format="json").status_code, 200)
         self.order.refresh_from_db()
         self.assertEqual(self.order.plan_date, T)
+
+
+class AccrualDateTests(Base):
+    def test_expense_accrual_date_moves_pnl_period(self):
+        from apps.finance.services import pnl_report
+
+        acc = Account.objects.create(name="Kassa", currency="UZS", opening_balance=0)
+        rent, _ = ExpenseCategory.objects.get_or_create(name="Ijara", defaults={"affects_profit": True})
+        Transaction.objects.create(account=acc, kind="expense", category=rent, amount=500000, date=T,
+                                   accrual_date=T - timedelta(days=40))
+        def opex(d1, d2):
+            rows = pnl_report(d1, d2, "UZS")["rows"]
+            return [D(r["amount"]) for r in rows if r.get("label") == "Ijara"]
+        self.assertEqual(opex(T - timedelta(days=45), T - timedelta(days=35)), [D("500000.00")])
+        self.assertEqual(opex(T - timedelta(days=5), T), [])
+
+
+class AllocateTests(TestCase):
+    def test_payment_split_across_documents(self):
+        c, owner = register_company(company_name="Taqsim", full_name="A", phone="5", username="tq", password="Parol12345!")
+        with tenant_context(c):
+            cli = Counterparty.objects.create(name="Mijoz")
+            acc = Account.objects.create(name="Kassa", currency="UZS", opening_balance=0)
+            o1 = Order.objects.create(client=cli, currency="UZS", amount=6000, plan_date=T)
+            o2 = Order.objects.create(client=cli, currency="UZS", amount=3000, plan_date=T)
+        set_context(None, None)
+        api = APIClient()
+        api.force_authenticate(owner)
+        body = {"account": acc.id, "kind": "client_payment", "client": cli.id, "date": str(T), "amount": "10000",
+                "allocations": [{"type": "order", "id": o1.id, "amount": "6000"}, {"type": "order", "id": o2.id, "amount": "3000"}]}
+        r = api.post("/api/finance/transactions/allocate/", body, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual((r.json()["allocated"], r.json()["rest"]), ("9000", "1000"))
+        with tenant_context(c):
+            self.assertEqual(Transaction.objects.count(), 3)  # 2 hujjat + 1 avans
+            self.assertEqual((o1.debt, o2.debt), (D("0"), D("0")))
+        # to'liq to'langan hujjatlar ro'yxatda chiqmaydi
+        docs = api.get("/api/finance/transactions/open_documents/", {"counterparty": cli.id, "direction": "in"}).json()
+        self.assertEqual(docs, [])
+        bad = dict(body, amount="100")
+        self.assertEqual(api.post("/api/finance/transactions/allocate/", bad, format="json").status_code, 400)

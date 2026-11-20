@@ -38,10 +38,11 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
   const [v, setV] = useState(() => item ? {
     date: item.date, account: item.account, amount: cleanNum(item.amount), description: item.description || '',
     counterparty: item.employee ? `e:${item.employee}` : (item.client || item.supplier || ''), category: item.kind === 'supplier_payment' ? '__supplier' : item.kind === 'salary' ? '__salary' : (item.category || ''),
-    order: item.order || '', sale: item.sale || '', stock_doc: item.stock_doc || '', order_amount: cleanNum(item.order_amount), other: item.kind === 'other_income',
-  } : { date: todayISO(), account: '', amount: presetSale ? String(Number(presetSale.debt) || '') : '', description: '', counterparty: presetSale?.client || presetOrder?.client || '', category: '', order: presetOrder?.id || '', sale: presetSale?.id || '', stock_doc: '', order_amount: '', other: false })
+    order: item.order || '', sale: item.sale || '', stock_doc: item.stock_doc || '', order_amount: cleanNum(item.order_amount), other: item.kind === 'other_income', accrual_date: item.accrual_date || '',
+  } : { date: todayISO(), account: '', amount: presetSale ? String(Number(presetSale.debt) || '') : '', description: '', counterparty: presetSale?.client || presetOrder?.client || '', category: '', order: presetOrder?.id || '', sale: presetSale?.id || '', stock_doc: '', order_amount: '', other: false, accrual_date: '' })
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [alloc, setAlloc] = useState({}) // yangi to'lov: {"type:id": summa} — bir nechta hujjatga taqsimlash
   const isEmp = String(v.counterparty || '').startsWith('e:')
   const cpId = v.counterparty && !isEmp ? v.counterparty : null
   const docs = useFetch(cpId ? '/finance/transactions/open_documents/' : null, { counterparty: cpId, direction: dir })
@@ -71,11 +72,18 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
       supplier: dir === 'out' ? cpId : null,
       employee: isEmp ? Number(v.counterparty.slice(2)) : null,
       category: kind === 'expense' || kind === 'salary' ? (v.category?.startsWith('__') ? null : v.category || null) : null,
+      accrual_date: showAccrual ? (v.accrual_date || null) : null,
       order: v.order || null, sale: v.sale || null, stock_doc: v.stock_doc || null,
       ...(linkedDoc && acc && linkedDoc.currency !== acc.currency && v.order_amount ? { order_amount: v.order_amount } : {}),
     }
     try {
-      item ? await api.patch(`/finance/transactions/${item.id}/`, payload) : await api.post('/finance/transactions/', payload)
+      const parts = Object.entries(alloc).filter(([, a]) => Number(a) > 0)
+      if (!item && parts.length) {
+        delete payload.order; delete payload.sale; delete payload.stock_doc
+        await api.post('/finance/transactions/allocate/', { ...payload, allocations: parts.map(([k, a]) => ({ type: k.split(':')[0], id: k.split(':')[1], amount: a })) })
+      } else {
+        item ? await api.patch(`/finance/transactions/${item.id}/`, payload) : await api.post('/finance/transactions/', payload)
+      }
       toast(t('Saqlandi'))
       onSaved(close)
     } catch (err) { setError(errorText(err)) } finally { setBusy(false) }
@@ -84,14 +92,50 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
     if (!await confirmDialog(t("O'chirilsinmi?"))) return
     try { await api.delete(`/finance/transactions/${item.id}/`); toast(t("O'chirildi")); onSaved(true) } catch (err) { setError(errorText(err)) }
   }
+  // bir nechta hujjat (faqat yangi to'lovda, kassa valyutasidagi hujjatlar)
+  const multiOk = (d) => !item && acc && d.currency === acc.currency
+  const keyOf = (d) => `${d.type}:${d.id}`
+  const allocated = Object.values(alloc).reduce((a, x) => a + Number(x || 0), 0)
+  const rest = Math.round((Number(v.amount || 0) - allocated) * 100) / 100
+  const toggleAlloc = (d) => {
+    const k = keyOf(d)
+    setV((s) => ({ ...s, order: '', sale: '', stock_doc: '' }))
+    setAlloc((m) => {
+      const next = { ...m }
+      if (k in next) { delete next[k]; return next }
+      const free = Number(v.amount || 0) - Object.values(next).reduce((a, x) => a + Number(x || 0), 0)
+      const part = Number(v.amount) ? Math.max(0, Math.min(Number(d.debt), free)) : Number(d.debt)
+      next[k] = cleanNum(part)
+      if (!Number(v.amount)) setTimeout(() => setV((s) => ({ ...s, amount: cleanNum(Object.values(next).reduce((a, x) => a + Number(x || 0), 0)) })), 0)
+      return next
+    })
+    if (d.type === 'supply') setV((s) => ({ ...s, category: '__supplier' }))
+  }
+  const autoAlloc = () => {
+    let left = Number(v.amount || 0)
+    const next = {}
+    for (const d of (docs.data || []).filter(multiOk)) {
+      if (left <= 0) break
+      const part = Math.min(Number(d.debt), left)
+      next[keyOf(d)] = cleanNum(part)
+      left -= part
+    }
+    setAlloc(next)
+    setV((s) => ({ ...s, order: '', sale: '', stock_doc: '', category: Object.keys(next).some((k) => k.startsWith('supply')) ? '__supplier' : s.category }))
+  }
   const pick = (d) => {
+    if (multiOk(d)) { toggleAlloc(d); return }
+    setAlloc({})
     const reset = { order: '', sale: '', stock_doc: '' }
     if (linked && linked.type === d.type && String(linked.id) === String(d.id)) { setV((s) => ({ ...s, ...reset })); return }
     setV((s) => ({ ...s, ...reset, [d.type === 'supply' ? 'stock_doc' : d.type]: d.id, amount: s.amount || (acc && acc.currency === d.currency ? cleanNum(d.debt) : s.amount),
       category: d.type === 'supply' ? '__supplier' : s.category }))
   }
+  const cat = (cats.data || []).find((c) => String(c.id) === String(v.category))
+  const showAccrual = dir === 'out' && (kind === 'salary' || (kind === 'expense' && cat?.affects_profit))
   const catOpts = [...SPECIAL_OUT.map(([k, l]) => ({ value: k, label: t(l) })), ...(cats.data || []).map((c) => ({ value: c.id, label: c.name, sub: c.affects_profit ? '' : t("foydaga ta'sir qilmaydi") }))]
   const ok = editable && !busy && v.account && Number(v.amount) > 0 && (dir === 'in' || v.category || isEmp)
+    && Object.values(alloc).reduce((a, x) => a + Number(x || 0), 0) <= Number(v.amount) + 0.001
 
   return (
     <DocPage onClose={onClose} toolbar={<>
@@ -108,12 +152,12 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
       <div className="doc-grid">
         <div>
           <DocField label={acc?.kind === 'bank' ? 'Bank hisobi' : 'Kassa'} required>
-            <SearchSelect value={v.account} onChange={(id) => set('account', id)} disabled={!editable}
+            <SearchSelect value={v.account} onChange={(id) => { setAlloc({}); set('account', id) }} disabled={!editable}
               options={accOpts.map((a) => ({ value: a.id, label: a.name, sub: `${money(a.balance, a.currency)}` }))} />
           </DocField>
           <DocField label="Kontragent" required={dir === 'in' && !v.other}>
             <PartyPicker value={v.counterparty} disabled={!editable}
-              onChange={(id) => setV((s) => ({ ...s, counterparty: id, order: '', sale: '', stock_doc: '', category: String(id).startsWith('e:') ? '__salary' : s.category === '__salary' ? '' : s.category }))}
+              onChange={(id) => setAlloc({}) || setV((s) => ({ ...s, counterparty: id, order: '', sale: '', stock_doc: '', category: String(id).startsWith('e:') ? '__salary' : s.category === '__salary' ? '' : s.category }))}
               empty={dir === 'in' ? undefined : '—'} placeholder={t('Kontragentni tanlang…')}
               counterparties={cps.data?.results || cps.data || []} groups={groups.data?.results || groups.data || []}
               employees={dir === 'out' ? (emps.data?.results || emps.data || null) : null}
@@ -143,7 +187,12 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
           )}
         </div>
         <div>
-          <DocField label="Asos / izoh" wide><textarea rows={3} value={v.description} onChange={(e) => set('description', e.target.value)} disabled={!editable} /></DocField>
+          {showAccrual && (
+            <DocField label="Hisoblash sanasi">
+              <DateInput value={v.accrual_date} placeholder={t("to'lov sanasi")} onChange={(e) => set('accrual_date', e.target.value)} disabled={!editable} />
+              <div className="small muted" style={{ marginTop: 4 }}>{t("Foyda va zararda xarajat shu sanada hisoblanadi (bo'sh — to'lov sanasi)")}</div>
+            </DocField>
+          )}
         </div>
       </div>
 
@@ -152,23 +201,41 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
         {isEmp ? <div className="empty">{t("Xodimga ish haqi — hujjat biriktirilmaydi")}</div> : !v.counterparty ? <div className="empty">{t("Kontragentni tanlang — uning to'lanmagan hujjatlari chiqadi")}</div> : !docs.data ? <Loading error={docs.error} /> : (
           <div className="table-wrap">
             <table className="t">
-              <thead><tr><th style={{ width: 40 }} /><th>{t('Hujjat')}</th><th>{t('Sana')}</th><th className="num">{t('Summa')}</th><th className="num">{t("To'lanmagan")}</th></tr></thead>
+              <thead><tr><th style={{ width: 40 }} /><th>{t('Hujjat')}</th><th>{t('Sana')}</th><th className="num">{t('Summa')}</th><th className="num">{t("To'langan")}</th><th className="num">{t("To'lanmagan")}</th>{!item && <th className="num" style={{ width: 170 }}>{t("Shu to'lovdan")}</th>}</tr></thead>
               <tbody>
                 {docs.data.map((d) => {
-                  const on = linked && linked.type === d.type && String(linked.id) === String(d.id)
+                  const k = keyOf(d)
+                  const on = (linked && linked.type === d.type && String(linked.id) === String(d.id)) || k in alloc
                   return (
                     <tr key={d.type + d.id} className={'clickable' + (on ? ' picked' : '')} onClick={() => editable && pick(d)}>
-                      <td><input type="radio" readOnly checked={!!on} /></td>
+                      <td><input type={multiOk(d) ? 'checkbox' : 'radio'} readOnly checked={!!on} /></td>
                       <td className="bold">{t(d.label.split(' №')[0])} №{d.label.split('№')[1]}</td>
                       <td>{date(d.date)}</td>
                       <td className="num">{money(d.amount, d.currency)}</td>
+                      <td className="num muted">{Number(d.paid) ? money(d.paid, d.currency) : '—'}</td>
                       <td className="num red bold">{money(d.debt, d.currency)}</td>
+                      {!item && (
+                        <td className="num" onClick={(e) => e.stopPropagation()}>
+                          {k in alloc ? <NumInput className="cell num" value={alloc[k]} onChange={(e) => setAlloc((m) => ({ ...m, [k]: e.target.value }))} /> : ''}
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
-                {!docs.data.length && <tr><td colSpan={5} className="empty">{t("To'lanmagan hujjatlar yo'q — to'lov avans sifatida yoziladi")}</td></tr>}
+                {!docs.data.length && <tr><td colSpan={7} className="empty">{t("To'lanmagan hujjatlar yo'q — to'lov avans sifatida yoziladi")}</td></tr>}
               </tbody>
             </table>
+          </div>
+        )}
+        {!item && docs.data?.some(multiOk) && (
+          <div className="positions-add alloc-bar">
+            <button type="button" className="btn small" disabled={!Number(v.amount)} onClick={autoAlloc}>{t('Avtomatik taqsimlash')}</button>
+            <span className="muted small">{t("eng eski hujjatdan boshlab, summa yetguncha")}</span>
+            <span className="grow" />
+            {Object.keys(alloc).length > 0 && <>
+              <span>{t('Taqsimlandi')}: <b>{money(allocated, acc?.currency)}</b></span>
+              <span className={rest < 0 ? 'red' : 'muted'}>{rest < 0 ? t("To'lov summasidan oshib ketdi") : `${t('Qoldi (avans)')}: ${money(rest, acc?.currency)}`}</span>
+            </>}
           </div>
         )}
         {linkedDoc && acc && linkedDoc.currency !== acc.currency && (
@@ -180,6 +247,9 @@ export function PaymentDoc({ direction, accountKind, item, presetOrder, presetSa
         {item && (item.order || item.sale) && !linkedDoc && (
           <div className="positions-add small">{t("Bog'langan")}: {item.order ? <Link to={`/orders/${item.order}`}>{t('Buyurtma')} №{item.order_number}</Link> : `${t('Sotuv')} №${item.sale_number}`}</div>
         )}
+      </div>
+      <div className="doc-comment">
+        <textarea rows={3} value={v.description} placeholder={t('Asos / izoh')} onChange={(e) => set('description', e.target.value)} disabled={!editable} />
       </div>
     </DocPage>
   )

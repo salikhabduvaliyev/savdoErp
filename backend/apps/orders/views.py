@@ -417,11 +417,23 @@ class EstimateViewSet(viewsets.ReadOnlyModelViewSet):
 
 class OrderStateSerializer(serializers.ModelSerializer):
     kind_display = serializers.SerializerMethodField()
+    department_name = serializers.CharField(source="department.name", read_only=True, default=None)
+
+    def validate(self, attrs):
+        from .models import TRIGGER_KIND
+
+        trig = attrs.get("trigger", getattr(self.instance, "trigger", ""))
+        if trig and trig not in TRIGGER_KIND:
+            raise serializers.ValidationError({"trigger": "Noto'g'ri hodisa"})
+        if trig == "department" and not attrs.get("department", getattr(self.instance, "department", None)):
+            raise serializers.ValidationError({"department": "Bo'limni tanlang"})
+        return attrs
     orders_count = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderState
-        fields = ["id", "name", "color", "kind", "kind_display", "position", "orders_count"]
+        fields = ["id", "name", "color", "kind", "kind_display", "trigger", "department", "department_name", "position",
+                  "orders_count"]
 
     def get_kind_display(self, obj):
         return dict(Order.Status.choices).get(obj.kind, obj.kind)

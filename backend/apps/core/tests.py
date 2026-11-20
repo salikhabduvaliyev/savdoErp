@@ -596,6 +596,15 @@ class StockDocTests(TestCase):
         self.assertEqual([(t["operation_name"], D(t["plan_qty"]), t["order_number"]) for t in tasks],
                          [("Kesish-T", D("7.5"), order["number"]), ("Yig'ish-T", D("6"), order["number"])])
         self.assertEqual(self.api.get(f"/api/orders/{order['id']}/").json()["status"], "in_production")
+        # status bo'limga bog'lanadi: bosqich shu bo'limda ishlansa — buyurtma "Kesishda" statusiga o'tadi
+        st = self.api.post("/api/orders/states/", {"name": "Kesishda", "color": "#123456", "kind": "new",
+                                                   "trigger": "department", "department": dep.id}, format="json")
+        self.assertEqual(st.status_code, 201, st.content)
+        self.assertEqual(st.json()["kind"], "in_production")  # tur hodisaga qarab avtomatik
+        r = self.api.post(f"/api/production/tasks/{tasks[0]['id']}/start/")
+        self.assertIn(r.status_code, (200, 409), r.content)
+        o = self.api.get(f"/api/orders/{order['id']}/").json()
+        self.assertEqual((o["status"], o["state"]), ("in_production", st.json()["id"]))
         # ikkinchi marta — tugallanmagan topshiriq bor
         r = self.api.post(f"/api/orders/{order['id']}/to_job/", {"stages": [{"operation": op1.id, "qty": "1"}]}, format="json")
         self.assertEqual(r.status_code, 400)

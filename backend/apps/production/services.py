@@ -8,6 +8,8 @@ from django.utils import timezone
 
 from apps.core.money import convert
 
+from apps.orders.models import apply_order_event
+
 from .models import (ProductionJob, ProductionOrder, ProductionOrderItem, ProductionOrderStage, ProductionTask, StageCompletion,
                      TechCard)
 
@@ -44,6 +46,15 @@ def create_job_from_techcard(techcard: TechCard, qty, *, materials_warehouse=Non
     return job
 
 
+def _order_event(order, trigger):
+    """Ishlab chiqarishga berildi: bog'langan status bo'lsa — o'shanga, bo'lmasa Yangi → Tasdiqlandi."""
+    if apply_order_event(order, trigger):
+        return
+    if order.status == order.Status.NEW:
+        order.status = order.Status.CONFIRMED
+        order.save()
+
+
 @transaction.atomic
 def create_job_from_order(order, user=None):
     """Mijoz buyurtmasi (smeta B bloki) asosida topshiriq + materialni rezerv qilish."""
@@ -66,9 +77,7 @@ def create_job_from_order(order, user=None):
         ProductionTask.objects.create(job=job, order=order, position=pos, operation=s.operation, plan_qty=s.qty,
                                       deadline=order.plan_date, planned_date=order.production_date)
         created += 1
-    if order.status == order.Status.NEW:
-        order.status = order.Status.CONFIRMED
-        order.save(update_fields=["status", "updated_at"])
+    _order_event(order, "sent_to_production")
     shortages = reserve_for_order(order)
     return job, created, shortages
 
@@ -116,9 +125,7 @@ def production_request_from_process(order, process, stages, *, plan_date=None, n
                                         note=note or f"Buyurtma №{order.number} asosida")
     for pos, (op, q) in enumerate(stages):
         ProductionOrderStage.objects.create(production_order=po, operation=op, qty=q, position=pos)
-    if order.status == order.Status.NEW:
-        order.status = order.Status.CONFIRMED
-        order.save()
+    _order_event(order, "sent_to_production")
     return po
 
 
@@ -134,8 +141,9 @@ def create_jobs_for_production_order(po: ProductionOrder, *, materials_warehouse
         jobs.append(_job_from_stages(order, po.process, stages, production_order=po, plan_end=po.plan_date,
                                      note=po.note, branch_id=po.branch_id, user=user))
         if order is not None and order.status in (order.Status.NEW, order.Status.CONFIRMED):
-            order.status = order.Status.IN_PRODUCTION
-            order.save()
+            if not apply_order_event(order, "production_started"):
+                order.status = order.Status.IN_PRODUCTION
+                order.save()
     for item in po.items.select_related("techcard__process"):
         if po.jobs.filter(techcard=item.techcard).exclude(status=ProductionJob.Status.CANCELLED).exists():
             continue
@@ -479,9 +487,7 @@ def production_order_from_client_order(order, user=None):
                                         branch_id=order.branch_id, created_by=user, note=f"Buyurtma №{order.number} asosida")
     for tc, q in rows:
         ProductionOrderItem.objects.create(production_order=po, techcard=tc, qty=q)
-    if order.status == order.Status.NEW:
-        order.status = order.Status.CONFIRMED
-        order.save(update_fields=["status", "updated_at"])
+    _order_event(order, "sent_to_production")
     return po, True
 
 

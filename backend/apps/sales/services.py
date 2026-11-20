@@ -125,9 +125,13 @@ def complete_sale(sale):
     sale.status = Sale.Status.COMPLETED
     sale.completed_at = timezone.now()
     sale.save(update_fields=["status", "completed_at", "updated_at"])
-    if sale.order_id and sale.order.status != Order.Status.DELIVERED:
-        sale.order.status = Order.Status.DELIVERED
-        sale.order.save()
+    if sale.order_id:
+        from apps.orders.models import apply_order_event
+
+        # "Sotuv o'tkazilganda" statusiga bog'langan bo'lsa — o'sha, bo'lmasa "Topshirildi" turi
+        if not apply_order_event(sale.order, "sold") and sale.order.status != Order.Status.DELIVERED:
+            sale.order.status = Order.Status.DELIVERED
+            sale.order.save()
     return sale
 
 

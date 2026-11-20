@@ -1457,5 +1457,15 @@
   "Ishlab chiqarish buyurtmasi №{n} yaratildi — ish \"Ishlab chiqarish buyurtmalari\"da boshlanadi": "Создан заказ на производство №{n} — работа запускается в разделе «Заказы на производство»",
   "Boshlansa, bosqichlar buyurtma raqami bilan bo'limlarga (Bo'lim ekrani) tushadi.": "После запуска этапы поступят в отделы (экран отдела) с номером заказа.",
   "Mahsulotsiz buyurtma — texjarayon bo'yicha": "Заказ без товара — по техпроцессу",
-  "bosqich": "этап."
+  "bosqich": "этап.",
+  "— qo'lda —": "— вручную —",
+  "Ishlab chiqarishga berilganda": "При передаче в производство",
+  "Ish boshlanganda": "При начале работы",
+  "Bosqich shu bo'limga kelganda": "Когда этап дошёл до отдела",
+  "Ishlab chiqarish tugaganda": "По завершении производства",
+  "Sotuv o'tkazilganda": "При проведении продажи",
+  "Avtomatik o'tish": "Автопереход",
+  "Tur avtomatik o'tish hodisasiga qarab belgilanadi": "Тип задаётся событием автоперехода",
+  "— bo'lim —": "— отдел —",
+  "«{n}»: bo'limni tanlang": "«{n}»: выберите отдел"
 }

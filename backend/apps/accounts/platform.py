@@ -1,4 +1,6 @@
-"""Platforma admini: kompaniyalar, obuna muddatlari, bloklash."""
+"""Platforma admini: kompaniyalar, obuna muddatlari, bloklash, kompaniya foydalanuvchilari."""
+import secrets
+import string
 from datetime import timedelta
 
 from django.db.models import Count
@@ -66,3 +68,44 @@ class PlatformCompanyViewSet(viewsets.ModelViewSet):
         c.save()
         c.users_count = c.users.count()
         return Response(self.get_serializer(c).data)
+
+    @action(detail=True, methods=["get"])
+    def users(self, request, pk=None):
+        """Kompaniya foydalanuvchilari: login, ism, rol, holat, oxirgi kirish (parollar shifrlangan — ko'rsatilmaydi)."""
+        from .models import User
+
+        c = self.get_object()
+        rows = []
+        for u in User.objects.filter(company=c).select_related("role", "employee").order_by("-is_owner", "username"):
+            rows.append({"id": u.id, "username": u.username, "full_name": u.full_name, "phone": u.phone,
+                         "role": "Egasi (barcha huquqlar)" if u.is_owner else (u.role.name if u.role_id else None),
+                         "is_owner": u.is_owner, "is_active": u.is_active, "last_login": u.last_login,
+                         "date_joined": u.date_joined})
+        return Response(rows)
+
+    @action(detail=True, methods=["post"])
+    def reset_password(self, request, pk=None):
+        """Parolni tiklash: {user, password?} — berilmasa tasodifiy 10 belgili parol. Yangi parol bir marta qaytariladi."""
+        from django.contrib.auth.password_validation import validate_password
+
+        from apps.core import audit
+
+        from .models import User
+
+        c = self.get_object()
+        u = User.objects.filter(company=c, pk=request.data.get("user")).first()
+        if not u:
+            raise serializers.ValidationError({"user": "Foydalanuvchi topilmadi"})
+        pw = (request.data.get("password") or "").strip()
+        if pw:
+            validate_password(pw, u)
+        else:
+            alphabet = string.ascii_letters + string.digits
+            pw = "".join(secrets.choice(alphabet) for _ in range(10))
+        u.set_password(pw)
+        u.save(update_fields=["password"])
+        try:
+            audit.log("password_reset", u, {"Platforma admini": [None, request.user.username]})
+        except Exception:  # noqa: BLE001 — audit ixtiyoriy
+            pass
+        return Response({"username": u.username, "password": pw})

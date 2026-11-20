@@ -4,13 +4,67 @@ import { Badge, Field, Loading, Modal, Stat, toast, useFetch } from '../../compo
 import { date } from '../../format'
 import { t } from '../../i18n'
 import { DateInput, NumInput } from '../../components/Inputs'
+import { confirmDialog } from '../../components/Confirm'
 
 const STATUS = [['trial', t("Sinov muddati")], ['active', t("Faol (to'langan)")], ['blocked', t("Bloklangan")]]
+
+/* Kompaniya foydalanuvchilari: login, rol, holat; parolni tiklash (yangi parol bir marta ko'rsatiladi) */
+function CompanyUsers({ company }) {
+  const { data, error } = useFetch(`/auth/platform/companies/${company.id}/users/`)
+  const [shown, setShown] = useState(null)
+  const copy = (txt) => { navigator.clipboard?.writeText(txt).then(() => toast(t('Nusxalandi')), () => {}) }
+  const reset = async (u) => {
+    if (!(await confirmDialog(t('«{u}» uchun yangi parol yaratilsinmi?\nEski parol ishlamay qoladi.', { u: u.username }), { okText: t('Yangi parol') }))) return
+    try {
+      const { data: r } = await api.post(`/auth/platform/companies/${company.id}/reset_password/`, { user: u.id })
+      setShown(r)
+    } catch (e) { toast(errorText(e), true) }
+  }
+  if (!data) return <Loading error={error} />
+  return (
+    <>
+      <div className="table-wrap">
+        <table className="t">
+          <thead><tr><th>{t('Login')}</th><th>{t('Ism')}</th><th>{t('Rol')}</th><th>{t('Telefon')}</th><th>{t('Oxirgi kirish')}</th><th>{t('Holat')}</th><th /></tr></thead>
+          <tbody>
+            {data.map((u) => (
+              <tr key={u.id}>
+                <td><b className="mono">{u.username}</b> <button type="button" className="link-btn small" onClick={() => copy(u.username)}>{t('nusxa')}</button></td>
+                <td>{u.full_name}</td>
+                <td className="small">{t(u.role || '—')}</td>
+                <td className="small">{u.phone || '—'}</td>
+                <td className="small">{u.last_login ? date(u.last_login) : <span className="muted">{t('hech qachon')}</span>}</td>
+                <td><Badge kind={u.is_active ? 'ok' : 'low'}>{u.is_active ? t('Faol') : t('Bloklangan')}</Badge></td>
+                <td className="num"><button type="button" className="btn small" onClick={() => reset(u)}>{t('Parolni tiklash')}</button></td>
+              </tr>
+            ))}
+            {!data.length && <tr><td colSpan={7} className="empty">{t("Foydalanuvchilar yo'q")}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">{t("Parollar shifrlangan holda saqlanadi — ularni hech kim (platforma admini ham) ko'ra olmaydi. Mijoz parolini unutsa, «Parolni tiklash» yangi parol yaratadi va uni bir marta ko'rsatadi.")}</p>
+      {shown && (
+        <Modal dialog title={t('Yangi parol')} onClose={() => setShown(null)}>
+          <dl className="kv">
+            <dt>{t('Login')}</dt><dd><b className="mono">{shown.username}</b></dd>
+            <dt>{t('Parol')}</dt><dd><b className="mono pw-big">{shown.password}</b></dd>
+          </dl>
+          <p className="red small">{t("Bu parol faqat hozir ko'rsatiladi — nusxalab, mijozga yuboring.")}</p>
+          <div className="form-actions">
+            <button type="button" className="btn" onClick={() => copy(`${shown.username} / ${shown.password}`)}>{t('Nusxalash')}</button>
+            <button type="button" className="btn primary" onClick={() => setShown(null)}>{t('Yopish')}</button>
+          </div>
+        </Modal>
+      )}
+    </>
+  )
+}
 
 function Manage({ c, onClose, onSaved }) {
   const [v, setV] = useState({ status: c.status, trial_ends: c.trial_ends || '', paid_until: c.paid_until || '',
     max_users: c.max_users, platform_note: c.platform_note })
   const [days, setDays] = useState(30)
+  const [tab, setTab] = useState('sub')
   const [error, setError] = useState(null)
   const save = async (e) => {
     e.preventDefault()
@@ -34,6 +88,12 @@ function Manage({ c, onClose, onSaved }) {
         <dt>{t("Ro'yxatdan o'tgan")}</dt><dd>{date(c.created_at)}</dd>
         <dt>{t("Foydalanuvchilar / filiallar")}</dt><dd>{c.users_count} / {c.branches_count}</dd>
       </dl>
+      <div className="tabs">
+        <button type="button" className={'btn' + (tab === 'sub' ? ' active' : '')} onClick={() => setTab('sub')}>{t('Obuna')}</button>
+        <button type="button" className={'btn' + (tab === 'users' ? ' active' : '')} onClick={() => setTab('users')}>{t('Foydalanuvchilar')} ({c.users_count})</button>
+      </div>
+      {tab === 'users' && <CompanyUsers company={c} />}
+      {tab === 'sub' && <>
       <div className="card" style={{ background: 'var(--surface-2)', marginBottom: 14 }}>
         <div className="filters">
           <b>{t("Tezkor uzaytirish:")}</b>
@@ -58,6 +118,7 @@ function Manage({ c, onClose, onSaved }) {
           <button className="btn primary">{t("Saqlash")}</button>
         </div>
       </form>
+      </>}
     </Modal>
   )
 }

@@ -1224,5 +1224,16 @@
   "Logo yuklanmagan": "Логотип не загружен",
   "Logoni almashtirish": "Заменить логотип",
   "Logo yuklash": "Загрузить логотип",
-  "Barcha huquqlar": "Все права"
+  "Barcha huquqlar": "Все права",
+  "Obuna": "Подписка",
+  "Nusxalandi": "Скопировано",
+  "nusxa": "копия",
+  "Nusxalash": "Копировать",
+  "Parolni tiklash": "Сбросить пароль",
+  "Ism": "Имя",
+  "Foydalanuvchilar yo'q": "Пользователей нет",
+  "«{u}» uchun yangi parol yaratilsinmi?\nEski parol ishlamay qoladi.": "Создать новый пароль для «{u}»?\nСтарый пароль перестанет работать.",
+  "Parollar shifrlangan holda saqlanadi — ularni hech kim (platforma admini ham) ko'ra olmaydi. Mijoz parolini unutsa, «Parolni tiklash» yangi parol yaratadi va uni bir marta ko'rsatadi.": "Пароли хранятся в зашифрованном виде — их никто не видит (даже администратор платформы). Если клиент забыл пароль, «Сбросить пароль» создаст новый и покажет его один раз.",
+  "Bu parol faqat hozir ko'rsatiladi — nusxalab, mijozga yuboring.": "Пароль показывается только сейчас — скопируйте и отправьте клиенту.",
+  "Egasi (barcha huquqlar)": "Владелец (все права)"
 }

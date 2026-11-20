@@ -722,3 +722,26 @@ class StockDocTests(TestCase):
         self.assertEqual(r.status_code, 200, r.content)
         self.assertEqual(D(r.json()["lines"][0]["qty"]), D("1.5"))
         self.assertEqual(self.api.get("/api/production/techcards/import_template/").status_code, 200)
+
+
+class PlatformUsersTests(TestCase):
+    def test_list_and_reset_password(self):
+        c1, o1 = register_company(company_name="P1", full_name="A", phone="1", username="p1", password="Parol12345!")
+        c2, o2 = register_company(company_name="P2", full_name="B", phone="2", username="p2", password="Parol12345!")
+        set_context(None, None)
+        admin = User.objects.create_superuser("root", password="Root12345!")
+        api = APIClient()
+        api.force_authenticate(admin)
+        rows = api.get(f"/api/auth/platform/companies/{c1.id}/users/").json()
+        self.assertEqual([r["username"] for r in rows], ["p1"])
+        self.assertNotIn("password", rows[0])
+        r = api.post(f"/api/auth/platform/companies/{c1.id}/reset_password/", {"user": o1.id}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        o1.refresh_from_db()
+        self.assertTrue(o1.check_password(r.json()["password"]))
+        # boshqa kompaniya foydalanuvchisi — yo'q
+        bad = api.post(f"/api/auth/platform/companies/{c1.id}/reset_password/", {"user": o2.id}, format="json")
+        self.assertEqual(bad.status_code, 400)
+        # oddiy foydalanuvchi platforma API'siga kira olmaydi
+        api.force_authenticate(o2)
+        self.assertEqual(api.get(f"/api/auth/platform/companies/{c1.id}/users/").status_code, 403)

@@ -90,7 +90,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     search_fields = ["=number", "client__name", "note"]
     ordering_fields = ["number", "date", "plan_date", "amount"]
     module = "orders"
-    action_perms = {"bulk": "view"}
+    action_perms = {"bulk": "view", "files": "edit", "delete_file": "edit", "to_job": "edit"}
 
     def get_queryset(self):
         qs = Order.objects.select_related("client", "state", "manager__employee", "operator__employee", "branch").prefetch_related("tasks__department", "items__product", "production_orders")
@@ -227,6 +227,64 @@ class OrderViewSet(viewsets.ModelViewSet):
         missing = [it.name for it in items if it.product_id and it not in with_tc]
         return Response({"production_order": po.id, "production_order_number": po.number, "created": created,
                          "without_techcard": missing})
+
+    @action(detail=True, methods=["post"])
+    def to_job(self, request, pk=None):
+        """Mahsulotsiz buyurtma → texjarayon bo'yicha topshiriq:
+        {process, stages: [{operation, qty}], plan_start, plan_end, note}"""
+        from django.core.exceptions import ValidationError as DjValidationError
+
+        from apps.production.models import Operation, TechProcess
+        from apps.production.services import create_job_from_process
+
+        order = self.get_object()
+        d = request.data
+        process = TechProcess.objects.filter(pk=d.get("process")).first() if d.get("process") else None
+        stages = []
+        for st in d.get("stages") or []:
+            op = Operation.objects.filter(pk=st.get("operation")).first()
+            if op is None:
+                raise serializers.ValidationError({"stages": "Bosqich topilmadi"})
+            try:
+                q = Decimal(str(st.get("qty") or 0))
+            except Exception:  # noqa: BLE001
+                raise serializers.ValidationError({"stages": f"{op.name}: miqdor noto'g'ri"})
+            stages.append((op, q))
+        try:
+            job = create_job_from_process(order, process, stages, plan_start=d.get("plan_start") or None,
+                                          plan_end=d.get("plan_end") or None, note=d.get("note", ""), user=request.user)
+        except DjValidationError as e:
+            raise serializers.ValidationError({"detail": "; ".join(e.messages)})
+        return Response({"job": job.id, "job_number": job.number, "tasks": job.tasks.count()}, status=201)
+
+    @action(detail=True, methods=["get", "post"], url_path="files")
+    def files(self, request, pk=None):
+        """Buyurtma fayllari: GET — ro'yxat; POST (multipart, file) — yuklash."""
+        from .models import OrderFile
+
+        order = self.get_object()
+        if request.method == "POST":
+            f = request.FILES.get("file")
+            if not f:
+                raise serializers.ValidationError({"file": "Faylni tanlang"})
+            if f.size > 20 * 1024 * 1024:
+                raise serializers.ValidationError({"file": "Fayl hajmi 20 MB dan oshmasin"})
+            OrderFile.objects.create(order=order, file=f, name=f.name[:255], size=f.size, uploaded_by=request.user)
+        rows = [{"id": x.id, "name": x.name or x.file.name.rsplit("/", 1)[-1], "size": x.size,
+                 "url": request.build_absolute_uri(x.file.url), "created_at": x.created_at,
+                 "uploaded_by": x.uploaded_by.full_name if x.uploaded_by_id else None}
+                for x in order.files.select_related("uploaded_by")]
+        return Response(rows, status=201 if request.method == "POST" else 200)
+
+    @action(detail=True, methods=["delete"], url_path=r"files/(?P<fid>\d+)")
+    def delete_file(self, request, pk=None, fid=None):
+        order = self.get_object()
+        f = order.files.filter(pk=fid).first()
+        if f is None:
+            raise serializers.ValidationError({"detail": "Fayl topilmadi"})
+        f.file.delete(save=False)
+        f.delete()
+        return Response(status=204)
 
     @action(detail=True, methods=["get"])
     def material_plan(self, request, pk=None):

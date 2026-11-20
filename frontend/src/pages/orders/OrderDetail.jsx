@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import api, { errorText } from '../../api'
-import { canCreate, useAuth } from '../../auth'
+import { canCreate, canEdit, useAuth } from '../../auth'
 import { Badge, Loading, Progress, Stat, toast, useFetch } from '../../components/ui'
 import { date, money, qty } from '../../format'
 import PaymentForm from '../finance/TransactionForm'
@@ -13,6 +13,7 @@ import { useRefs } from './OrdersPage'
 import { t as tr } from '../../i18n'
 import Icon from '../../components/Icon'
 import { TechCardForm } from '../production/TechCardForm'
+import { OrderFiles, ProcessJobModal } from './OrderJobs'
 
 export default function OrderDetail() {
   const { id } = useParams()
@@ -27,6 +28,9 @@ export default function OrderDetail() {
   const states = useOrderStates()
   const tasks = useFetch('/production/tasks/', { order: id, stamp })
   const txs = useFetch('/finance/transactions/', { order: id, stamp })
+  const jobs = useFetch('/production/jobs/', { order: id, stamp })
+  const files = useFetch(`/orders/${id}/files/`, { stamp })
+  const [procJob, setProcJob] = useState(false)
 
   if (!o) return <Loading error={error} />
   const refresh = () => { reload(); setStamp((s) => s + 1) }
@@ -74,6 +78,17 @@ export default function OrderDetail() {
         </select>
         <button className="btn icon-only" onClick={() => setEdit(true)} title={tr("Tahrirlash")}><Icon name="edit" size={16} /></button>
         {['new', 'confirmed'].includes(o.status) && !o.production_orders?.length && o.has_techcard && <button className="btn primary" onClick={sendToProduction}><Icon name="production" size={16} /> {tr("Ishlab chiqarishga yuborish")}</button>}
+        {(() => {
+          const active = (jobs.data?.results || jobs.data || []).filter((j) => !['cancelled'].includes(j.status))
+          return <>
+            {active.map((j) => <Link key={'j' + j.id} className="btn" to={`/production?tab=jobs&job=${j.id}`}><Icon name="production" size={16} /> {tr('Topshiriq')} №{j.number}</Link>)}
+            {!['delivered', 'cancelled'].includes(o.status) && !o.production_orders?.length && !active.some((j) => j.status !== 'done') && canEdit(user, 'orders') && (
+              <button className={'btn' + (o.has_techcard ? '' : ' primary')} onClick={() => setProcJob(true)} title={tr("Mahsulotsiz: texjarayon bosqichlari va kv bo'yicha")}>
+                <Icon name="production" size={16} /> {tr('Ishlab chiqarishga (texjarayon)')}
+              </button>
+            )}
+          </>
+        })()}
         {o.production_orders?.map((po) => <Link key={po.id} className="btn" to={`/production?tab=orders&po=${po.id}`}><Icon name="production" size={16} /> {tr('Ishlab chiqarish')} №{po.number}</Link>)}
         {o.status !== 'cancelled' && canCreate(user, 'sales') && (
           o.production_pending?.length
@@ -95,7 +110,7 @@ export default function OrderDetail() {
       </div>
 
       <div className="tabs">
-        {[['items', tr("Pozitsiyalar") + (o.items?.length ? ` (${o.items.length})` : '')], ['estimate', tr("Smeta (tannarx)")], ['tasks', tr("Ishlab chiqarish")], ['payments', tr("To'lovlar va xarajatlar")], ['materials', tr("Material")]].map(([k, l]) => (
+        {[['items', tr("Pozitsiyalar") + (o.items?.length ? ` (${o.items.length})` : '')], ['estimate', tr("Smeta (tannarx)")], ['tasks', tr("Ishlab chiqarish")], ['payments', tr("To'lovlar va xarajatlar")], ['materials', tr("Material")], ['files', tr("Fayllar") + (files.data?.length ? ` (${files.data.length})` : '')]].map(([k, l]) => (
           <button key={k} className={'btn' + (tab === k ? ' active' : '')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -105,6 +120,8 @@ export default function OrderDetail() {
           lines={o.items.map((i) => ({ key: i.id, product: i.product, name: i.name, code: i.product_code || '', unit: i.unit, qty: i.qty, price: i.price, discount_pct: i.discount_pct }))} />
       ) : <div className="card empty">{tr("Pozitsiyalar yo'q — buyurtma umumiy summa bilan kiritilgan.")} <button className="link-btn" onClick={() => setEdit(true)}>{tr("Pozitsiya qo'shish")}</button></div>)}
       {tab === 'estimate' && <Estimate key={stamp} order={o} onChanged={refresh} />}
+      {tab === 'files' && <OrderFiles orderId={o.id} editable={canEdit(user, 'orders')} onChanged={() => setStamp((s) => s + 1)} />}
+      {procJob && <ProcessJobModal order={o} onClose={() => setProcJob(false)} onSaved={() => { setProcJob(false); setTab('tasks'); refresh() }} />}
 
       {tab === 'tasks' && (tasks.data || []).length > 0 && (
         <div className="stage-flow" style={{ marginBottom: 12 }}>

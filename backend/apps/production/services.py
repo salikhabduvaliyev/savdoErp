@@ -73,6 +73,30 @@ def create_job_from_order(order, user=None):
 
 
 @transaction.atomic
+def create_job_from_process(order, process, stages, *, plan_start=None, plan_end=None, note="", user=None):
+    """Mahsulotsiz (texkartasiz) buyurtma → texjarayon bo'yicha topshiriq.
+    stages: [(Operation, plan_qty)] — bosqichlar va har biriga kv (m²) / miqdor."""
+    if order.status == order.Status.CANCELLED:
+        raise ValidationError("Bekor qilingan buyurtma")
+    if order.jobs.exclude(status__in=[ProductionJob.Status.CANCELLED, ProductionJob.Status.DONE]).exists():
+        raise ValidationError("Bu buyurtma bo'yicha tugallanmagan topshiriq bor")
+    stages = [(op, _q(q)) for op, q in stages if q and Decimal(q) > 0]
+    if not stages:
+        raise ValidationError("Kamida bitta bosqichga miqdor kiriting")
+    job = ProductionJob.objects.create(
+        order=order, process=process, qty=order.volume or max(q for _, q in stages),
+        plan_start=plan_start or order.production_date, plan_end=plan_end or order.plan_date,
+        branch_id=order.branch_id, note=note or "", created_by=user)
+    for pos, (op, q) in enumerate(stages):
+        ProductionTask.objects.create(job=job, order=order, position=pos, operation=op, plan_qty=q,
+                                      deadline=order.plan_date, planned_date=plan_start or order.production_date)
+    if order.status in (order.Status.NEW, order.Status.CONFIRMED):
+        order.status = order.Status.IN_PRODUCTION
+        order.save()
+    return job
+
+
+@transaction.atomic
 def create_jobs_for_production_order(po: ProductionOrder, *, materials_warehouse=None, products_warehouse=None, user=None,
                                      allow_negative=False):
     if po.status == ProductionOrder.Status.CANCELLED:

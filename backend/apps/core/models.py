@@ -220,6 +220,8 @@ class SystemSettings(TenantModel):
     allow_negative_stock = models.BooleanField(default=False, help_text="Sotuvda qoldiqdan ko'p sotishga ruxsat")
     production_without_stock = models.BooleanField(
         default=False, help_text="Material omborda yetishmasa ham ishlab chiqarishga ruxsat (sarf manfiy qoldiqqa yoziladi)")
+    field_config = models.JSONField(default=dict, blank=True,
+                                    help_text="Standart maydonlar: {entity: {key: {label, hidden}}}")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["company"], name="uniq_settings_company")]
@@ -257,6 +259,7 @@ class CustomField(TenantModel):
     required = models.BooleanField(default=False)
     show_in_list = models.BooleanField(default=True, help_text="Ro'yxatda ustun sifatida")
     filterable = models.BooleanField(default=True)
+    main = models.BooleanField(default=False, help_text="Formaning asosiy blokida (standart maydonlar qatorida)")
     position = models.PositiveSmallIntegerField(default=0)
 
     class Meta:

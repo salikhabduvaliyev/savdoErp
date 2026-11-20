@@ -128,6 +128,21 @@ function Director() {
         </div>
         <div>
           <div className="card">
+            <h2>{t("Eng ko'p foyda keltirgan 5 ta buyurtma")}</h2>
+            <table className="t dash-t">
+              <tbody>
+                {(data.best_orders || []).map((o, i) => (
+                  <tr key={o.id}>
+                    <td className="dash-rank">{i + 1}</td>
+                    <td><Link to={`/orders/${o.id}`}>№{o.number}</Link> · {o.client}<div className="small muted">{t('summa')} {money(o.amount, o.currency)} · {t('rentabellik')} {pct(Number(o.margin_pct))}</div></td>
+                    <td className="num bold green">{money(o.profit, o.currency)}</td>
+                  </tr>
+                ))}
+                {!data.best_orders?.length && <tr><td className="empty">{t("Davrda foydali buyurtma yo'q")}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="card">
             <h2>{t("Eng zararli buyurtmalar")}</h2>
             <ul className="list-plain">
               {data.worst_orders.map((o) => (

@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import api, { errorText } from '../../api'
 import { useAuth } from '../../auth'
-import { Badge, Loading, Progress, Stat, toast, useFetch } from '../../components/ui'
-import { date, pct, qty, shortDate } from '../../format'
+import { Badge, Loading, Modal, MoneyBag, Progress, Stat, toast, useFetch } from '../../components/ui'
+import { date, money, pct, qty, shortDate } from '../../format'
+import { DateInput } from '../../components/Inputs'
 import { cleanNum } from '../../components/DocEditor'
 import { t as tr } from '../../i18n'
 import { promptDialog } from '../../components/Confirm'
@@ -64,6 +65,7 @@ function TaskCard({ t, onDone, employees, me }) {
         <div className="tcard-mats">
           {t.materials.map((m) => <span key={m.name} className="mat-chip">{m.name} <b>{qty(m.qty)} {tr(m.unit)}</b></span>)}
           {t.drawing && <a href={t.drawing} target="_blank" rel="noreferrer">{tr('Chizma')}</a>}
+          {(t.order_files || []).map((f) => <a key={f.id} href={f.url} target="_blank" rel="noreferrer" style={{ marginLeft: 8 }}>📎 {f.name}</a>)}
         </div>
       )}
       {t.status === 'blocked' && <div className="warn-box">{t.blocked_reason}</div>}
@@ -142,14 +144,67 @@ export function DeptBoard() {
   )
 }
 
+function StatusOrders({ st, onClose }) {
+  return (
+    <Modal title={`${tr(st.label)} — ${st.count} ${tr('ta buyurtma')}`} onClose={onClose} dialog wide>
+      <div className="small muted" style={{ marginBottom: 8 }}>{tr('Summa')}: <MoneyBag bag={st.amount} inline /> · {tr('Qarz')}: <MoneyBag bag={st.debt} inline /></div>
+      <div className="table-wrap">
+        <table className="t">
+          <thead><tr><th>№</th><th>{tr('Mijoz')}</th><th>{tr('Sana')}</th><th>{tr('Muddat')}</th><th>{tr('Menejer')}</th><th className="num">{tr('Summa')}</th><th className="num">{tr('Qarz')}</th></tr></thead>
+          <tbody>
+            {st.orders.map((o) => (
+              <tr key={o.id}>
+                <td><Link to={`/orders/${o.id}`}>{o.number}</Link></td>
+                <td>{o.client}</td>
+                <td className="small">{date(o.date)}</td>
+                <td className={'small' + (o.overdue_days ? ' red' : '')}>{date(o.plan_date)}{o.overdue_days ? ` · ${o.overdue_days} ${tr('kun kechikkan')}` : ''}</td>
+                <td className="small">{o.manager || '—'}</td>
+                <td className="num bold">{money(o.amount, o.currency)}</td>
+                <td className={'num' + (Number(o.debt) > 0 ? ' red' : '')}>{money(o.debt, o.currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
+  )
+}
+
 export function ProductionDashboard({ title = true }) {
-  const { data, error } = useFetch('/dashboard/production/')
+  const [f, setF] = useState({ date_from: '', date_to: '', manager: '' })
+  const params = Object.fromEntries(Object.entries(f).filter(([, v]) => v))
+  const { data, error } = useFetch('/dashboard/production/', params)
+  const users = useFetch('/auth/users-lookup/')
+  const [open, setOpen] = useState(null)
   if (!data) return <Loading error={error} />
   const defectBad = data.defect_pct !== null && data.defect_pct > data.defect_norm_pct
   const tone = (p) => (p >= 90 ? 'ok' : p < 50 ? 'warn' : '')
   return (
     <>
       {title && <div className="page-head"><h1>{tr("Ishlab chiqarish dashboardi")}</h1></div>}
+      <div className="filters" style={{ marginBottom: 12 }}>
+        <span className="small muted">{tr('Buyurtma sanasi')}:</span>
+        <DateInput value={f.date_from} onChange={(e) => setF({ ...f, date_from: e.target.value })} placeholder={tr('dan')} style={{ width: 150 }} />
+        <DateInput value={f.date_to} onChange={(e) => setF({ ...f, date_to: e.target.value })} placeholder={tr('gacha')} style={{ width: 150 }} />
+        <select value={f.manager} onChange={(e) => setF({ ...f, manager: e.target.value })}>
+          <option value="">{tr('Menejer: hammasi')}</option>
+          {(users.data || []).map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+        </select>
+        {(f.date_from || f.date_to || f.manager) && <button className="btn small ghost" onClick={() => setF({ date_from: '', date_to: '', manager: '' })}>{tr('Tozalash')}</button>}
+        <span className="small muted">{f.date_from || f.date_to ? tr('davrdagi barcha buyurtmalar') : tr('osilib turgan (topshirilmagan) buyurtmalar')}</span>
+      </div>
+      <div className="status-tiles">
+        {data.statuses.map((s) => (
+          <button key={s.id} type="button" className="card status-tile" onClick={() => setOpen(s)} title={tr("Ko'rish")}>
+            <div className="status-tile-head"><span className="grp-dot" style={{ background: s.color }} /> {tr(s.label)}</div>
+            <div className="status-tile-count">{s.count} <span className="small muted">{tr('ta')}</span></div>
+            <div className="small"><MoneyBag bag={s.amount} inline /></div>
+            {Object.values(s.debt || {}).some((x) => Number(x) > 0) && <div className="small red">{tr('qarz')}: <MoneyBag bag={s.debt} inline /></div>}
+          </button>
+        ))}
+        {!data.statuses.length && <div className="card muted">{tr("Buyurtmalar yo'q")}</div>}
+      </div>
+      {open && <StatusOrders st={open} onClose={() => setOpen(null)} />}
       <div className="stats">
         <Stat label={tr("Reja bajarilishi")} value={pct(data.plan_completion_pct)} sub={tr("bugungi reja / fakt")} />
         <Stat label={tr("Muddatida topshirish")} value={pct(data.on_time_pct)} sub={tr("oxirgi 30 kun")} />

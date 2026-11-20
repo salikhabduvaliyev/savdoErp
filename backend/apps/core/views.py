@@ -180,7 +180,7 @@ class CustomFieldSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomField
         fields = ["id", "entity", "entity_display", "key", "name", "type", "type_display", "options", "required",
-                  "show_in_list", "filterable", "position"]
+                  "show_in_list", "filterable", "main", "position"]
         extra_kwargs = {"key": {"required": False}}
 
     def validate(self, attrs):
@@ -286,6 +286,12 @@ def system_settings(request):
         s = SystemSettingsSerializer(obj, data=request.data, partial=True)
         s.is_valid(raise_exception=True)
         s.save()
+        if s.instance.production_without_stock:
+            # ruxsat yoqildi — "Material yo'q" bilan to'xtagan bosqichlar qayta navbatga
+            from apps.production.models import ProductionTask
+
+            ProductionTask.objects.filter(status=ProductionTask.Status.BLOCKED).update(
+                status=ProductionTask.Status.WAITING, blocked_reason="")
         return Response(s.data)
     return Response(SystemSettingsSerializer(obj).data)
 

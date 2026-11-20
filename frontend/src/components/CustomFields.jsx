@@ -31,6 +31,8 @@ export function formatExtra(field, value, users = []) {
   }
 }
 
+export function CustomFieldInput(props) { return <Input {...props} /> }
+
 function Input({ f, value, onChange, users, compact }) {
   const cls = compact ? undefined : undefined
   switch (f.type) {
@@ -104,11 +106,11 @@ export function CustomFieldFilter({ f, value, onChange, users = [] }) {
 }
 
 /* ---------------------------------------------------------------- boshqaruv */
-function FieldForm({ entity, item, onClose, onSaved }) {
+export function FieldForm({ entity, item, onClose, onSaved }) {
   const [v, setV] = useState(() => ({
     name: item?.name || '', type: item?.type || 'text', options: (item?.options || []).join('\n'),
     required: item?.required || false, show_in_list: item?.show_in_list ?? true, filterable: item?.filterable ?? true,
-    position: item?.position ?? 0,
+    main: item?.main ?? true, position: item?.position ?? 0,
   }))
   const [error, setError] = useState(null)
   const submit = async (e) => {
@@ -120,7 +122,7 @@ function FieldForm({ entity, item, onClose, onSaved }) {
     } catch (err) { setError(errorText(err)) }
   }
   return (
-    <Modal title={item ? item.name : t("Yangi qo'shimcha maydon")} onClose={onClose}>
+    <Modal title={item ? item.name : t("Yangi maydon")} onClose={onClose} dialog>
       {error && <div className="error">{error}</div>}
       <form className="form" onSubmit={submit}>
         <Field label={t('Nomi')} full><input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} required autoFocus /></Field>
@@ -135,6 +137,7 @@ function FieldForm({ entity, item, onClose, onSaved }) {
             <textarea rows={4} value={v.options} onChange={(e) => setV({ ...v, options: e.target.value })} placeholder={'PVX\nTermo\nAlyumin'} />
           </Field>
         )}
+        <label className="check full"><input type="checkbox" checked={v.main} onChange={(e) => setV({ ...v, main: e.target.checked })} /> {t("Formaning asosiy blokida (standart maydonlar qatorida)")}</label>
         <label className="check full"><input type="checkbox" checked={v.required} onChange={(e) => setV({ ...v, required: e.target.checked })} /> {t("Majburiy maydon")}</label>
         <label className="check full"><input type="checkbox" checked={v.show_in_list} onChange={(e) => setV({ ...v, show_in_list: e.target.checked })} /> {t("Ro'yxatda ustun sifatida ko'rsatish")}</label>
         <label className="check full"><input type="checkbox" checked={v.filterable} onChange={(e) => setV({ ...v, filterable: e.target.checked })} /> {t('Filtrda ishlatish')}</label>

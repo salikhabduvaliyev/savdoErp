@@ -371,7 +371,9 @@ class ProductionOrderViewSet(viewsets.ModelViewSet):
         pw = Warehouse.objects.filter(pk=request.data.get("products_warehouse")).first()
         if not pw:
             raise serializers.ValidationError({"products_warehouse": "Mahsulot qaysi omborga tushishini tanlang"})
-        allow = bool(request.data.get("allow_negative"))
+        from apps.core.models import SystemSettings
+
+        allow = bool(request.data.get("allow_negative")) or SystemSettings.load().production_without_stock
         short = [r for r in services.production_order_requirements(po, mw) if Decimal(r["shortage"]) > 0]
         if short and not allow:
             return Response({"detail": "Material yetarli emas", "shortages": short}, status=409)
@@ -393,6 +395,17 @@ class ProductionOrderViewSet(viewsets.ModelViewSet):
 
 # =================================================================== topshiriq va bosqichlar
 
+def _order_files(order, request):
+    if order is None:
+        return []
+    out = []
+    for f in order.files.all():
+        url = f.file.url
+        out.append({"id": f.id, "name": f.name or f.file.name.rsplit("/", 1)[-1],
+                    "url": request.build_absolute_uri(url) if request else url})
+    return out
+
+
 class TaskSerializer(serializers.ModelSerializer):
     order_number = serializers.IntegerField(source="order.number", read_only=True, default=None)
     client_name = serializers.SerializerMethodField()
@@ -410,6 +423,10 @@ class TaskSerializer(serializers.ModelSerializer):
     overdue_days = serializers.IntegerField(read_only=True)
     materials = serializers.SerializerMethodField()
     flow = serializers.SerializerMethodField()
+    order_files = serializers.SerializerMethodField()
+
+    def get_order_files(self, obj):
+        return _order_files(obj.order, self.context.get("request"))
 
     class Meta:
         model = ProductionTask
@@ -418,6 +435,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "operation_name", "operation_employee", "department", "department_name", "unit", "piece_rate", "plan_qty", "done_qty",
             "remaining", "defect_qty", "status", "status_display", "progress", "deadline", "planned_date",
             "is_overdue", "overdue_days", "started_at", "finished_at", "blocked_reason", "drawing", "note", "materials",
+            "order_files",
         ]
         read_only_fields = ["department", "status", "started_at", "finished_at", "blocked_reason", "done_qty", "defect_qty"]
 
@@ -467,13 +485,16 @@ class JobSerializer(serializers.ModelSerializer):
     order_number = serializers.IntegerField(source="order.number", read_only=True, default=None)
     production_order_number = serializers.IntegerField(source="production_order.number", read_only=True, default=None)
     techcard_name = serializers.CharField(source="techcard.name", read_only=True, default=None)
+    process_name = serializers.CharField(source="process.name", read_only=True, default=None)
+    order_files = serializers.SerializerMethodField()
     materials_warehouse_name = serializers.CharField(source="materials_warehouse.name", read_only=True, default=None)
     products_warehouse_name = serializers.CharField(source="products_warehouse.name", read_only=True, default=None)
     stages = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductionJob
-        fields = ["id", "number", "date", "title", "status", "status_display", "techcard", "techcard_name", "order",
+        fields = ["id", "number", "date", "title", "status", "status_display", "techcard", "techcard_name", "process", "process_name",
+                  "order_files", "order",
                   "order_number", "production_order", "production_order_number", "qty", "produced_qty", "product_unit",
                   "materials_warehouse", "materials_warehouse_name", "products_warehouse", "products_warehouse_name",
                   "plan_start", "plan_end", "started_at", "finished_at", "capitalized", "progress", "note", "stages"]
@@ -481,6 +502,9 @@ class JobSerializer(serializers.ModelSerializer):
 
     def get_product_unit(self, obj):
         return obj.techcard.product.get_unit_display() if obj.techcard_id else "m²"
+
+    def get_order_files(self, obj):
+        return _order_files(obj.order, self.context.get("request"))
 
     def get_progress(self, obj):
         return float(round(obj.progress, 3))

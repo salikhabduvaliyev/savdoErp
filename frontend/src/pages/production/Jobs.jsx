@@ -137,7 +137,11 @@ export function JobCard({ id, onClose, onChanged }) {
         {j.techcard && Number(j.produced_qty) > 0 && <Stat label={tr("Haqiqiy tannarx")} value={num(Number(j.capitalized) / Number(j.produced_qty), 2)} sub={tr('jami {n}', { n: num(j.capitalized) })} />}
         <Stat label={tr("Bajarilish")} value={`${Math.round(j.progress * 100)}%`} />
       </div>
-      {j.order && <div className="card" style={{ marginBottom: 12 }}>{tr("Mijoz buyurtmasi:")} <Link to={`/orders/${j.order}`}>№{j.order_number}</Link></div>}
+      {j.order && <div className="card" style={{ marginBottom: 12 }}>{tr("Mijoz buyurtmasi:")} <Link to={`/orders/${j.order}`}>№{j.order_number}</Link>
+        {j.process_name && <> · {tr('texjarayon')}: <b>{j.process_name}</b></>}
+        {j.note && <div className="small muted">{j.note}</div>}
+        {(j.order_files || []).length > 0 && <div className="small" style={{ marginTop: 6 }}>{j.order_files.map((f) => <a key={f.id} href={f.url} target="_blank" rel="noreferrer" style={{ marginRight: 10 }}>📎 {f.name}</a>)}</div>}
+      </div>}
       <h2>{tr("Bosqichlar")}</h2>
       <div className="table-wrap">
         <table className="t">

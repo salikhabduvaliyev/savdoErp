@@ -137,7 +137,8 @@ def director(request):
             revenue.add(o.amount, o.currency)
             cost.add(o_cost, o.currency)
             order_profits.append({"id": o.id, "number": o.number, "client": o.client.name,
-                                  "currency": o.currency, "profit": str(q2(o_profit))})
+                                  "currency": o.currency, "profit": str(q2(o_profit)), "amount": str(q2(o.amount)),
+                                  "margin_pct": c["margin_pct"]})
         if o.date >= chart_from:
             key = o.date.strftime("%Y-%m")
             monthly[key]["revenue"].add(o.amount, o.currency)
@@ -149,6 +150,11 @@ def director(request):
     profit = revenue - cost
     margin = {cur: _pct(profit[cur], revenue[cur]) for cur in ("UZS", "USD")}
     worst = sorted([p for p in order_profits if Decimal(p["profit"]) < 0], key=lambda p: Decimal(p["profit"]))[:5]
+    from apps.core.currency import company_base_currency
+
+    base = company_base_currency()
+    best = sorted([p for p in order_profits if Decimal(p["profit"]) > 0],
+                  key=lambda p: -_base_sum({p["currency"]: p["profit"]}, base))[:5]
 
     months = []
     for i in range(5, -1, -1):
@@ -166,6 +172,7 @@ def director(request):
         "revenue": revenue.as_dict(), "cost": cost.as_dict(), "profit": profit.as_dict(), "margin_pct": margin,
         "monthly": months,
         "worst_orders": worst,
+        "best_orders": best,
         "debts": {"clients": fin.client_debts()["total"], "suppliers": fin.supplier_debts()["total"]},
         "statuses": [{"status": st.kind, "label": st.name, "color": st.color, "count": st_counts.get(st.id, 0)}
                      for st in OrderState.objects.all()],
@@ -218,7 +225,44 @@ def production(request):
         for mid, n in norm.items() if n
     ]
 
+    # --- statuslar bo'yicha: nechta buyurtma va qancha summa (filtr: sana oralig'i, menejer)
+    from apps.core.currency import company_base_currency
+    from apps.orders.models import OrderState, ensure_order_states
+
+    ensure_order_states()
+    base = company_base_currency()
+    qp = request.query_params
+    oq = Order.objects.select_related("client", "state", "manager")
+    if qp.get("date_from"):
+        oq = oq.filter(date__gte=qp["date_from"])
+    if qp.get("date_to"):
+        oq = oq.filter(date__lte=qp["date_to"])
+    if qp.get("manager"):
+        oq = oq.filter(manager_id=qp["manager"])
+    if not qp.get("date_from") and not qp.get("date_to"):
+        oq = oq.exclude(status__in=[Order.Status.DELIVERED, Order.Status.CANCELLED])  # standart: osilib turganlari
+    by_state = {}
+    for o in oq.order_by("plan_date", "id")[:2000]:
+        g = by_state.setdefault(o.state_id, {"count": 0, "amount": MoneyBag(), "debt": MoneyBag(), "orders": []})
+        g["count"] += 1
+        g["amount"].add(o.amount, o.currency)
+        debt = o.debt
+        g["debt"].add(debt, o.currency)
+        g["orders"].append({"id": o.id, "number": o.number, "client": o.client.name, "date": o.date, "plan_date": o.plan_date,
+                            "amount": str(q2(o.amount)), "debt": str(q2(debt)), "currency": o.currency,
+                            "manager": o.manager.full_name if o.manager_id else None, "overdue_days": o.overdue_days})
+    statuses = []
+    for st in OrderState.objects.all():
+        g = by_state.get(st.id)
+        if not g:
+            continue
+        statuses.append({"id": st.id, "label": st.name, "color": st.color, "kind": st.kind, "count": g["count"],
+                         "amount": g["amount"].as_dict(), "debt": g["debt"].as_dict(),
+                         "amount_base": str(q2(_base_sum(g["amount"].as_dict(), base))), "orders": g["orders"]})
+
     return Response({
+        "base_currency": base,
+        "statuses": statuses,
         "plan_completion_pct": _pct(todays["d"] or ZERO, todays["p"]) if todays["p"] else None,
         "on_time_pct": _pct(Decimal(on_time), Decimal(delivered.count())),
         "defect_pct": _pct(recent["b"] or ZERO, recent["d"]) if recent["d"] else None,

@@ -12,6 +12,7 @@ import { confirmDialog } from '../../components/Confirm'
 import { NumInput } from '../../components/Inputs'
 import { newCounterpartyDialog } from '../../components/NewCounterparty'
 import PartyBalance from '../../components/PartyBalance'
+import { useFieldConfig } from '../../components/FieldConfig'
 
 const cur = curLabel
 
@@ -20,6 +21,7 @@ export default function SaleForm({ sale, order, onClose, onSaved }) {
   const clients = useFetch('/crm/counterparties/', { is_active: true, with_debt: 1 })
   const warehouses = useFetch('/warehouse/warehouses/')
   const priceTypes = useFetch('/warehouse/price-types/')
+  const fc = useFieldConfig('sale')
   const fromOrder = !!sale?.order || !!order
   const [v, setV] = useState(() => (order ? {
     client: order.client, warehouse: '', price_type: '', currency: order.currency, date: todayISO(), discount: '0',
@@ -139,10 +141,10 @@ export default function SaleForm({ sale, order, onClose, onSaved }) {
           <DocField label="Ombor" required>
             <SearchSelect value={v.warehouse ?? ''} onChange={(id) => setF('warehouse', id)} options={(warehouses.data || []).map((w) => ({ value: w.id, label: w.name }))} />
           </DocField>
-          <DocField label="Narx turi">
+          {!fc.hidden('price_type') && <DocField label={fc.label('price_type', 'Narx turi')}>
             <SearchSelect value={v.price_type ?? ''} onChange={(id) => changePriceType(id)} empty="—"
               options={(priceTypes.data || []).map((p) => ({ value: p.id, label: p.name, sub: cur(p.currency) }))} />
-          </DocField>
+          </DocField>}
         </div>
         <div>
           <DocField label="Valyuta" required>
@@ -172,9 +174,9 @@ export default function SaleForm({ sale, order, onClose, onSaved }) {
         onComment={(note) => setF('note', note)}
         rows={[
           ['Oraliq jami', money(subtotal, v.currency)],
-          ['Chegirma', <NumInput key="d" className="cell num" style={{ width: 140 }} value={v.discount} onChange={(e) => setF('discount', e.target.value)} />],
+          !fc.hidden('discount') && [fc.label('discount', 'Chegirma'), <NumInput key="d" className="cell num" style={{ width: 140 }} value={v.discount} onChange={(e) => setF('discount', e.target.value)} />],
           ["To'lanadi", money(total, v.currency), true],
-        ]}
+        ].filter(Boolean)}
       />
     </DocPage>
   )

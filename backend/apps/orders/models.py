@@ -190,6 +190,23 @@ class Order(TenantModel, TimeStamped):
         return self.estimates.filter(is_active=True).order_by("-version").first()
 
 
+class OrderFile(TenantModel):
+    """Buyurtmaga biriktirilgan fayl (chizma, PDF, Word ...)."""
+
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="files")
+    file = models.FileField(upload_to="orders/")
+    name = models.CharField(max_length=255, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return self.name or self.file.name
+
+
 class OrderItem(TenantModel):
     """Buyurtma pozitsiyasi (MoySklad: "Позиции заказа") — tovar/xizmat/mahsulot, miqdor, narx, chegirma."""
 

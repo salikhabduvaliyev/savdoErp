@@ -564,6 +564,42 @@ class StockDocTests(TestCase):
         r = self.api.post("/api/sales/from_order/", {"order": order["id"], "items": [{"product": prod.id, "qty": "1", "price": "1"}]}, format="json")
         self.assertEqual(r.status_code, 400)
 
+    def test_order_to_job_by_process_and_files(self):
+        """Mahsulotsiz buyurtma → texjarayon bosqichlari bo'yicha topshiriq (kv bilan); buyurtmaga fayl biriktiriladi."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.production.models import Department, Operation, TechProcess, TechProcessStage
+
+        with tenant_context(self.c):
+            dep = Department.objects.create(name="Kesish-T", sequence=10)
+            op1 = Operation.objects.create(name="Kesish-T", department=dep, unit="m2")
+            op2 = Operation.objects.create(name="Yig'ish-T", department=dep, unit="m2")
+            proc = TechProcess.objects.create(name="Eshik-T")
+            TechProcessStage.objects.create(process=proc, operation=op1, position=0)
+            TechProcessStage.objects.create(process=proc, operation=op2, position=1)
+        set_context(None, None)
+        order = self.api.post("/api/orders/", {"client": self.cli.id, "currency": "UZS", "plan_date": str(T), "date": str(T),
+                                               "amount": "5000000", "volume": "7.5"}, format="json").json()
+        r = self.api.post(f"/api/orders/{order['id']}/to_job/", {"process": proc.id, "stages": [
+            {"operation": op1.id, "qty": "7.5"}, {"operation": op2.id, "qty": "6"}]}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        tasks = self.api.get("/api/production/tasks/", {"job": r.json()["job"]}).json()
+        tasks = tasks.get("results", tasks) if isinstance(tasks, dict) else tasks
+        self.assertEqual([(t["operation_name"], D(t["plan_qty"]), t["order_number"]) for t in tasks],
+                         [("Kesish-T", D("7.5"), order["number"]), ("Yig'ish-T", D("6"), order["number"])])
+        self.assertEqual(self.api.get(f"/api/orders/{order['id']}/").json()["status"], "in_production")
+        # ikkinchi marta — tugallanmagan topshiriq bor
+        r = self.api.post(f"/api/orders/{order['id']}/to_job/", {"stages": [{"operation": op1.id, "qty": "1"}]}, format="json")
+        self.assertEqual(r.status_code, 400)
+        # fayl
+        f = SimpleUploadedFile("chizma.pdf", b"%PDF-1.4 test", content_type="application/pdf")
+        r = self.api.post(f"/api/orders/{order['id']}/files/", {"file": f}, format="multipart")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()[0]["name"], "chizma.pdf")
+        self.assertEqual(tasks and len(self.api.get(f"/api/production/tasks/{tasks[0]['id']}/").json()["order_files"]), 1)
+        fid = r.json()[0]["id"]
+        self.assertEqual(self.api.delete(f"/api/orders/{order['id']}/files/{fid}/").status_code, 204)
+
     def test_order_to_production_flow_audit_bulk(self):
         """Buyurtma → ishlab chiqarishga yuborish → boshlash (minusga ruxsat) → bosqichlar → buyurtma tayyor; tarix va ommaviy amallar."""
         from apps.production.models import Department, Operation, TechCard, TechCardMaterial, TechProcess, TechProcessStage

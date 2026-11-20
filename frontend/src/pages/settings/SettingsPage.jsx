@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import api, { errorText } from '../../api'
 import { canEdit, useAuth } from '../../auth'
-import { CustomFieldsManager } from '../../components/CustomFields'
+import { FieldForm } from '../../components/CustomFields'
+import { STANDARD_FIELDS } from '../../components/FieldConfig'
 import EntityForm from '../../components/EntityForm'
 import Icon, { IconBtn } from '../../components/Icon'
 import { Badge, Field, Loading, Modal, toast, useFetch, DialogMode } from '../../components/ui'
@@ -15,7 +16,7 @@ import { Avatar, MyProfile, UserModal } from './Profile'
 const SECTIONS = [
   { grp: 'Shaxsiy', items: [['profile', t("Mening profilim"), 'user']] },
   { grp: 'Jamoa', items: [['users', t("Foydalanuvchilar"), 'user'], ['roles', t("Rollar va huquqlar"), 'roles']] },
-  { grp: 'Tizim', items: [['general', t("Umumiy sozlamalar"), 'sliders'], ['fields', t("Qo'shimcha maydonlar"), 'orders'], ['rates', t("Valyutalar"), 'currency'], ['refs', t("Ma'lumotnomalar"), 'book']] },
+  { grp: 'Tizim', items: [['general', t("Umumiy sozlamalar"), 'sliders'], ['fields', t("Maydonlar"), 'orders'], ['rates', t("Valyutalar"), 'currency'], ['refs', t("Ma'lumotnomalar"), 'book']] },
 ]
 const ACTIONS = [['view', t("Ko'rish")], ['create', t("Yaratish")], ['edit', t("Tahrirlash")], ['delete', t("O'chirish")]]
 
@@ -472,21 +473,107 @@ function General({ editable }) {
   )
 }
 
-/* ---------------- Qo'shimcha maydonlar ---------------- */
+/* ---------------- Maydonlar (standart + qo'shimcha) ---------------- */
+function StdFieldForm({ f, cfg, onClose, onSave }) {
+  const [label, setLabel] = useState(cfg.label || '')
+  const [hidden, setHidden] = useState(!!cfg.hidden)
+  return (
+    <Modal title={t(f.label)} onClose={onClose} dialog>
+      <div className="form">
+        <Field label={t('Formadagi nomi')} full><input value={label} placeholder={t(f.label)} onChange={(e) => setLabel(e.target.value)} autoFocus /></Field>
+        <Field label={t("Bog'langan turi")} full><input value={t(f.type)} readOnly className="muted-input" /></Field>
+        {!f.locked && <label className="check full"><input type="checkbox" checked={!hidden} onChange={(e) => setHidden(!e.target.checked)} /> {t("Formada ko'rsatish")}</label>}
+        {f.locked && <div className="hint full">{t("Majburiy tizim maydoni — yashirib bo'lmaydi, faqat nomini o'zgartirish mumkin")}</div>}
+      </div>
+      <div className="form-actions">
+        <button type="button" className="btn ghost" onClick={onClose}>{t('Bekor')}</button>
+        <button type="button" className="btn primary" onClick={() => onSave({ label: label.trim(), hidden: f.locked ? false : hidden })}>{t('Saqlash')}</button>
+      </div>
+    </Modal>
+  )
+}
+
 function FieldsSection({ editable }) {
   const [entity, setEntity] = useState('order')
+  const [stamp, setStamp] = useState(0)
+  const settings = useFetch('/core/settings/')
+  const custom = useFetch('/core/custom-fields/', { entity, stamp })
+  const [std, setStd] = useState(null)
+  const [form, setForm] = useState(null)
+  if (!settings.data || !custom.data) return <Loading error={settings.error || custom.error} />
+  const all = settings.data.field_config || {}
+  const cfg = all[entity] || {}
+  const saveStd = async (key, patch) => {
+    const next = { ...all, [entity]: { ...cfg, [key]: { ...(cfg[key] || {}), ...patch } } }
+    try {
+      const { data } = await api.patch('/core/settings/', { field_config: next })
+      settings.setData(data); setStd(null); toast(t('Saqlandi'))
+    } catch (e) { toast(errorText(e), true) }
+  }
+  const removeStd = async (f) => {
+    if (!await confirmDialog(t('"{n}" formadan olib tashlansinmi? Standart maydon o\'chirilmaydi — yashiriladi, keyin tiklash mumkin.', { n: cfg[f.key]?.label || t(f.label) }))) return
+    saveStd(f.key, { hidden: true })
+  }
+  const removeCustom = async (f) => {
+    if (!await confirmDialog(t('"{n}" maydoni o\'chirilsinmi? Kiritilgan qiymatlar ko\'rinmay qoladi.', { n: f.name }))) return
+    try { await api.delete(`/core/custom-fields/${f.id}/`); setStamp((s) => s + 1) } catch (e) { toast(errorText(e), true) }
+  }
+  const stdRows = STANDARD_FIELDS[entity] || []
   return (
     <>
       <div className="page-head">
-        <div><h1>{t("Qo'shimcha maydonlar")}</h1><div className="page-sub">{t("Hujjatlarga o'zingizning maydonlaringizni qo'shing — formada, ro'yxat ustunida va filtrda ko'rinadi")}</div></div>
+        <div><h1>{t("Maydonlar")}</h1><div className="page-sub">{t("Hujjat formasidagi maydonlar: standartlarini qayta nomlash yoki yashirish, yangi maydon qo'shish — har biri qaysi turga bog'langani ko'rsatiladi")}</div></div>
         <span className="grow" />
         <div className="segmented">
-          {[['order', t("Buyurtmalar")], ['counterparty', t("Kontragentlar")], ['sale', t("Sotuvlar")]].map(([k, l]) => (
+          {[['order', t("Buyurtmalar")], ['sale', t("Sotuvlar")], ['counterparty', t("Kontragentlar")]].map(([k, l]) => (
             <button key={k} className={entity === k ? 'active' : ''} onClick={() => setEntity(k)}>{l}</button>
           ))}
         </div>
       </div>
-      <CustomFieldsManager key={entity} entity={entity} editable={editable} embedded />
+      <div className="table-wrap">
+        <div className="table-toolbar">
+          <b>{t('Maydonlar')}</b><span style={{ flex: 1 }} />
+          {editable && <button className="btn primary small" onClick={() => setForm({ item: null })}>+ {t('Yangi maydon')}</button>}
+        </div>
+        <table className="t">
+          <thead><tr><th>{t('Maydon')}</th><th>{t("Bog'langan turi")}</th><th>{t('Manba')}</th><th>{t('Holat')}</th><th /></tr></thead>
+          <tbody>
+            {stdRows.map((f) => {
+              const c = cfg[f.key] || {}
+              return (
+                <tr key={'s' + f.key} className={c.hidden ? 'muted' : ''}>
+                  <td className="bold">{c.label || t(f.label)}{c.label && <span className="small muted"> ({t(f.label)})</span>}</td>
+                  <td>{t(f.type)}</td>
+                  <td><Badge kind="neutral">{t('standart')}</Badge>{f.locked && <> <Badge kind="low">{t('majburiy')}</Badge></>}</td>
+                  <td>{c.hidden ? <span className="muted">{t('yashirilgan')}</span> : <span className="green">{t("formada")}</span>}</td>
+                  <td className="num">{editable && <>
+                    <IconBtn icon="edit" title="Tahrirlash" onClick={() => setStd(f)} />{' '}
+                    {c.hidden
+                      ? <button className="btn small" onClick={() => saveStd(f.key, { hidden: false })}>{t('Tiklash')}</button>
+                      : !f.locked && <IconBtn icon="delete" danger title="O'chirish" onClick={() => removeStd(f)} />}
+                  </>}</td>
+                </tr>
+              )
+            })}
+            {custom.data.map((f) => (
+              <tr key={'c' + f.id}>
+                <td className="bold">{f.name}{f.options?.length > 0 && <div className="small muted">{f.options.join(', ')}</div>}</td>
+                <td>{t(f.type_display)}</td>
+                <td><Badge kind="draft">{f.main ? t('yangi (asosiy blokda)') : t("qo'shimcha (boshqa maydonlar)")}</Badge>{f.required && <> <Badge kind="low">{t('majburiy')}</Badge></>}</td>
+                <td><span className="green">{t('formada')}</span>{f.show_in_list && <span className="small muted"> · {t("ro'yxatda")}</span>}{f.filterable && <span className="small muted"> · {t('filtr')}</span>}</td>
+                <td className="num">{editable && <>
+                  <IconBtn icon="edit" title="Tahrirlash" onClick={() => setForm({ item: f })} />{' '}
+                  <IconBtn icon="delete" danger title="O'chirish" onClick={() => removeCustom(f)} />
+                </>}</td>
+              </tr>
+            ))}
+            {!stdRows.length && !custom.data.length && <tr><td colSpan={5} className="empty">{t("Maydonlar yo'q")}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="legend"><span>{t("Standart maydon o'chirilsa formadan yashiriladi (ma'lumot saqlanadi). Yangi maydon qo'shilganda turini tanlang: matn, son, sana, ha/yo'q, ro'yxat yoki xodim.")}</span></div>
+      {std && <StdFieldForm f={std} cfg={cfg[std.key] || {}} onClose={() => setStd(null)} onSave={(p) => saveStd(std.key, p)} />}
+      {form && <FieldForm entity={entity} item={form.item} onClose={() => setForm(null)} onSaved={() => { setForm(null); setStamp((s) => s + 1); toast(t('Saqlandi')) }} />}
     </>
   )
 }

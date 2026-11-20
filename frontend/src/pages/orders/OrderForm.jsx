@@ -1,7 +1,8 @@
 // Buyurtma hujjati — MoySklad "Заказ покупателя" uslubida
 import { useEffect, useState } from 'react'
 import api, { errorText } from '../../api'
-import { CustomFieldInputs, useCustomFields } from '../../components/CustomFields'
+import { CustomFieldInput, CustomFieldInputs, useCustomFields } from '../../components/CustomFields'
+import { useFieldConfig } from '../../components/FieldConfig'
 import { cleanNum, DocField, DocFooter, DocPage, DocTitle, newKey, Positions, useLinesTotal } from '../../components/DocEditor'
 import Icon from '../../components/Icon'
 import { SearchSelect } from '../../components/Controls'
@@ -22,7 +23,10 @@ const toLines = (items) => (items || []).map((i) => ({
 
 export default function OrderForm({ refs, order: initial, fields: fieldsProp, onClose, onSaved, onCreated }) {
   const loaded = useCustomFields(fieldsProp ? null : 'order')
+  const fc = useFieldConfig('order')
   const fields = fieldsProp || loaded
+  const mainFields = fields.filter((f) => f.main)
+  const otherFields = fields.filter((f) => !f.main)
   const priceTypes = useFetch('/warehouse/price-types/')
   const [order, setOrder] = useState(initial || null)
   const [v, setV] = useState(() => ({
@@ -137,19 +141,19 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
             )}
           </DocField>
           {v.client && <PartyBalance counterparty={v.client} currency={v.currency} />}
-          <DocField label="Menejer">
+          {!fc.hidden('manager') && <DocField label={fc.label('manager', 'Menejer')}>
             <SearchSelect value={v.manager || ''} onChange={(id) => { setV((x) => ({ ...x, manager: id })); setDirty(true) }} empty={t('— men —')}
               options={refs.users.map((u) => ({ value: u.id, label: u.full_name }))} />
-          </DocField>
-          <DocField label="Operator">
+          </DocField>}
+          {!fc.hidden('operator') && <DocField label={fc.label('operator', 'Operator')}>
             <SearchSelect value={v.operator || ''} onChange={(id) => { setV((x) => ({ ...x, operator: id })); setDirty(true) }} empty="—"
               options={refs.users.map((u) => ({ value: u.id, label: u.full_name }))} />
-          </DocField>
+          </DocField>}
         </div>
         <div>
           <DocField label="Topshirish muddati" required><DateInput value={v.plan_date || ''} onChange={set('plan_date')} /></DocField>
-          <DocField label="Ishlab chiqarish kuni"><DateInput value={v.production_date || ''} onChange={set('production_date')} /></DocField>
-          <DocField label="Hajm, m²"><NumInput step="0.001" min="0" value={v.volume ?? ''} onChange={set('volume')} /></DocField>
+          {!fc.hidden('production_date') && <DocField label={fc.label('production_date', 'Ishlab chiqarish kuni')}><DateInput value={v.production_date || ''} onChange={set('production_date')} /></DocField>}
+          {!fc.hidden('volume') && <DocField label={fc.label('volume', 'Hajm, m²')}><NumInput step="0.001" min="0" value={v.volume ?? ''} onChange={set('volume')} /></DocField>}
         </div>
         <div>
           <DocField label="Valyuta" required>
@@ -157,18 +161,24 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
               <CurrencyOptions withName value={v.currency} />
             </select>
           </DocField>
-          <DocField label="Narx turi"><input value={ptAny ? `${ptAny.name}${ptAny.currency !== v.currency ? ` (${ptAny.currency} → ${v.currency})` : ''}` : '—'} readOnly className="muted-input" title={t("Mijozning narx turi yoki standart narx turi")} /></DocField>
+          {!fc.hidden('price_type') && <DocField label={fc.label('price_type', 'Narx turi')}><input value={ptAny ? `${ptAny.name}${ptAny.currency !== v.currency ? ` (${ptAny.currency} → ${v.currency})` : ''}` : '—'} readOnly className="muted-input" title={t("Mijozning narx turi yoki standart narx turi")} /></DocField>}
+          {mainFields.map((f) => (
+            <DocField key={f.id} label={f.name} required={f.required}>
+              <CustomFieldInput f={f} value={v.extra?.[f.key]} users={refs.users}
+                onChange={(val) => { setV((s) => ({ ...s, extra: { ...(s.extra || {}), [f.key]: val } })); setDirty(true) }} />
+            </DocField>
+          ))}
         </div>
       </div>
 
-      {fields.length > 0 && (
+      {otherFields.length > 0 && (
         <div className="doc-more">
           <button type="button" className="link-btn" onClick={() => setShowMore((s) => !s)}>
-            <Icon name={showMore ? 'chevron-down' : 'chevron-right'} size={15} /> {t('Boshqa maydonlar')} <span className="muted">({fields.length})</span>
+            <Icon name={showMore ? 'chevron-down' : 'chevron-right'} size={15} /> {t('Boshqa maydonlar')} <span className="muted">({otherFields.length})</span>
           </button>
           {showMore && (
             <div className="form three" style={{ marginTop: 10 }}>
-              <CustomFieldInputs fields={fields} values={v.extra || {}} onChange={(extra) => { setV((s) => ({ ...s, extra })); setDirty(true) }} users={refs.users} />
+              <CustomFieldInputs fields={otherFields} values={v.extra || {}} onChange={(extra) => { setV((s) => ({ ...s, extra })); setDirty(true) }} users={refs.users} />
             </div>
           )}
         </div>

@@ -178,6 +178,8 @@ class ProductionJob(TenantModel, TimeStamped):
     order = models.ForeignKey("orders.Order", null=True, blank=True, on_delete=models.CASCADE, related_name="jobs",
                               help_text="Mijoz buyurtmasi (smeta asosida) — individual buyurtmalar uchun")
     techcard = models.ForeignKey(TechCard, null=True, blank=True, on_delete=models.PROTECT, related_name="jobs")
+    process = models.ForeignKey(TechProcess, null=True, blank=True, on_delete=models.SET_NULL, related_name="jobs",
+                                help_text="Mahsulotsiz buyurtma topshirig'i — texjarayon bosqichlari bo'yicha")
     qty = qty_field(help_text="Rejalashtirilgan miqdor (mahsulot birligida)")
     produced_qty = qty_field()
     materials_warehouse = models.ForeignKey("warehouse.Warehouse", null=True, blank=True, on_delete=models.PROTECT, related_name="+")

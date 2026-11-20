@@ -1374,5 +1374,12 @@
   "Stavka": "Ставка",
   "smeta xizmati (tannarx B blokida)": "услуга сметы (себестоимость в блоке B)",
   "ishlab chiqarish topshirig'i": "производственное задание",
-  "Ishlab chiqarishda — tugagach sotiladi": "В производстве — продажа после завершения"
+  "Ishlab chiqarishda — tugagach sotiladi": "В производстве — продажа после завершения",
+  "Avtomatik": "Автоматически",
+  "Mas'ul xodim (haq shu xodimga)": "Ответственный (оплата ему)",
+  "Bosqich — ishlab chiqarishning bitta qadami. Ishbay stavka × bajarilgan miqdor bosqichga biriktirilgan xodimning oyligi va KPI'siga yoziladi.": "Этап — один шаг производства. Сдельная ставка × выполненный объём начисляется в зарплату и KPI сотрудника, назначенного на этап.",
+  "Bo'limlar yo'q": "Отделов нет",
+  "Bosqichlar va ishbay stavkalar Ishlab chiqarish → Bosqichlar bo'limida; ishbay haq bosqichga biriktirilgan xodimga yoziladi.": "Этапы и сдельные ставки — в Производство → Этапы; сдельная оплата начисляется сотруднику, назначенному на этап.",
+  "Ishbay haq (bosqichning ishbay stavkasi × miqdor) avtomatik bosqichga biriktirilgan xodimga yoziladi — kerak bo'lsa boshqa xodimni tanlang. Oylik vedomost va KPI'ga tushadi, D blokida ko'rinadi. Tarif — tannarxdagi xizmat narxi.": "Сдельная оплата (ставка этапа × количество) автоматически начисляется сотруднику этапа — при необходимости выберите другого. Попадает в ведомость и KPI, видна в блоке D. Тариф — цена услуги в себестоимости.",
+  "Bosqichga biriktirilgan xodim": "Сотрудник, назначенный на этап"
 }

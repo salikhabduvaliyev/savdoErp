@@ -41,7 +41,8 @@ function AddServiceRow({ estimateId, operations, employees, onAdded }) {
   const op = operations.find((o) => String(o.id) === String(v.operation))
   const add = async () => {
     try {
-      const payload = { estimate: estimateId, operation: v.operation, qty: v.qty, employee: v.employee || null }
+      // xodim tanlanmasa — bosqichga biriktirilgan xodim avtomatik (backend)
+      const payload = { estimate: estimateId, operation: v.operation, qty: v.qty, ...(v.employee ? { employee: v.employee } : {}) }
       if (v.rate) payload.rate = v.rate
       await api.post('/orders/estimate-services/', payload)
       setV({ operation: '', employee: '', qty: '', rate: '' })
@@ -53,14 +54,14 @@ function AddServiceRow({ estimateId, operations, employees, onAdded }) {
     <tr className="est-add-row">
       <td>
         <SearchSelect value={v.operation} placeholder={t('Xizmat tanlang…')}
-          onChange={(id) => { const o = operations.find((x) => String(x.id) === String(id)); setV({ ...v, operation: id, employee: o?.employee ? String(o.employee) : '' }) }}
+          onChange={(id) => setV({ ...v, operation: id, employee: '' })}
           options={operations.map((o) => ({ value: o.id, label: o.name, sub: o.department_name }))} />
       </td>
       <td className="small">{op?.department_name || ''}</td>
       <td>
         <select className="cell" value={v.employee} onChange={(e) => setV({ ...v, employee: e.target.value })} disabled={!op}>
-          <option value="">{t('— xodim —')}</option>
-          {employees.map((x) => <option key={x.id} value={x.id}>{x.full_name}</option>)}
+          <option value="">{op?.employee_name ? `${t('Avtomatik')} — ${op.employee_name}` : t('— xodim —')}</option>
+          {employees.filter((x) => String(x.id) !== String(op?.employee)).map((x) => <option key={x.id} value={x.id}>{x.full_name}</option>)}
         </select>
       </td>
       <td className="num"><NumInput className="cell num" style={{ width: 90 }} placeholder={t('miqdor')} value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} /></td>
@@ -163,7 +164,7 @@ export default function Estimate({ order }) {
             {!B.rows.length && !editing && <tr><td colSpan={9} className="muted small">{t("Xizmatlar yo'q")}</td></tr>}
           </tbody>
         </table>
-        <div className="hint" style={{ marginTop: 8 }}>{t("Xodim tanlansa, unga ishbay haq (bosqichning ishbay stavkasi × miqdor) oylik vedomost va KPI'ga yoziladi — D blokida ko'rinadi. Tarif — tannarxdagi xizmat narxi.")}</div>
+        <div className="hint" style={{ marginTop: 8 }}>{t("Ishbay haq (bosqichning ishbay stavkasi × miqdor) avtomatik bosqichga biriktirilgan xodimga yoziladi — kerak bo'lsa boshqa xodimni tanlang. Oylik vedomost va KPI'ga tushadi, D blokida ko'rinadi. Tarif — tannarxdagi xizmat narxi.")}</div>
       </div>
 
       <div className="card">

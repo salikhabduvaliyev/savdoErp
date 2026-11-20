@@ -166,17 +166,15 @@ export function StagesTab() {
       <div className="table-wrap">
         <div className="table-toolbar">
           {canCreate(user, 'production') && <button className="btn primary small" onClick={() => setForm({ item: null })}>{t("+ Bosqich")}</button>}
-          {canCreate(user, 'production') && <button className="btn small" onClick={() => setDepForm({ item: null })}>{t("+ Bo'lim (ijrochi)")}</button>}
         </div>
         <table className="t">
-          <thead><tr><th>{t("Bosqich")}</th><th>{t("Bo'lim (ijrochi)")}</th><th>{t("Birlik")}</th><th>{t("Mas'ul xodim")}</th><th className="num">{t("Ishbay stavka")}</th><th className="num">{t("Xizmat narxi (smeta)")}</th><th /></tr></thead>
+          <thead><tr><th>{t("Bosqich")}</th><th>{t("Mas'ul xodim (haq shu xodimga)")}</th><th>{t("Birlik")}</th><th className="num">{t("Ishbay stavka")}</th><th className="num">{t("Xizmat narxi (smeta)")}</th><th /></tr></thead>
           <tbody>
             {data.map((o) => (
               <tr key={o.id} className="clickable" onClick={() => canEdit(user, 'production') && setForm({ item: o })}>
                 <td className="bold">{o.name}{o.description && <div className="small muted">{o.description}</div>}</td>
-                <td>{o.department_name}</td>
-                <td>{o.unit_display}</td>
-                <td>{o.employee_name || <span className="muted">—</span>}</td>
+                <td>{o.employee_name || <span className="red small">{t('biriktirilmagan')}</span>}</td>
+                <td>{t(o.unit_display)}</td>
                 <td className="num">{money(o.piece_rate, 'UZS')}</td>
                 <td className="num">{money(o.default_rate, o.rate_currency)}</td>
                 <td className="num" onClick={(e) => e.stopPropagation()}>{canDelete(user, 'production') && <IconBtn icon="delete" danger title="O\'chirish" onClick={() => remove(o)} />}</td>
@@ -185,12 +183,11 @@ export function StagesTab() {
           </tbody>
         </table>
       </div>
-      <div className="legend"><span>{t("Bosqich — ishlab chiqarishning bitta qadami. Ishbay stavka bajarilgan har birlik uchun ijrochiga hisoblanadi.")}</span></div>
+      <div className="legend"><span>{t("Bosqich — ishlab chiqarishning bitta qadami. Ishbay stavka × bajarilgan miqdor bosqichga biriktirilgan xodimning oyligi va KPI'siga yoziladi.")}</span></div>
       {form && (
         <EntityForm title={form.item ? form.item.name : 'Yangi bosqich'} url="/production/operations/" item={form.item}
           fields={[
             { name: 'name', label: t("Nomi"), required: true },
-            { name: 'department', label: t("Bo'lim (ijrochi)"), type: 'select', options: deps.data.map((d) => [d.id, d.name]), required: true },
             { name: 'unit', label: t("O'lchov birligi"), type: 'select', options: UNITS, noEmpty: true },
             { name: 'piece_rate', label: t("Ishbay stavka, so'm / birlik"), type: 'number' },
             { name: 'employee', label: t("Mas'ul xodim (ishbay haq shu xodimga yoziladi)"), type: 'select', options: (emps.data || []).map((x) => [x.id, x.full_name]) },

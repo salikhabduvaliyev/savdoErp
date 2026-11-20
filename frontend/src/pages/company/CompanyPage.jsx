@@ -16,7 +16,7 @@ const TABS = [
   ['info', t("Kompaniya ma'lumotlari")],
   ['branches', t("Filiallar")],
   ['employees', t("Xodimlar")],
-  ['departments', t("Bo'limlar va operatsiyalar")],
+  ['departments', t("Bo'limlar")],
   ['warehouses', t("Omborlar")],
   ['accounts', t("Kassa va bank")],
   ['history', t("Tarix")],
@@ -268,66 +268,43 @@ function Employees({ editable, user }) {
   )
 }
 
-/* ---------------- Bo'limlar va operatsiyalar ---------------- */
-const UNITS = [['pcs', t("dona")], ['m', 'm'], ['m2', 'm²'], ['kg', t("kg")], ['set', t("to'plam")]]
-
+/* ---------------- Bo'limlar ---------------- */
 function Departments({ editable }) {
   const [stamp, setStamp] = useState(0)
   const deps = useFetch('/production/departments/', { stamp })
-  const ops = useFetch('/production/operations/', { stamp })
   const [form, setForm] = useState(null)
   const refresh = () => { setForm(null); setStamp((s) => s + 1); toast('Saqlandi') }
   const remove = async (url, name) => {
-    if (!await confirmDialog(`"${name}" o'chirilsinmi?`)) return
+    if (!await confirmDialog(t('"{n}" o\'chirilsinmi?', { n: name }))) return
     try { await api.delete(url); setStamp((s) => s + 1) } catch (e) { toast(errorText(e), true) }
   }
-  if (!deps.data || !ops.data) return <Loading error={deps.error || ops.error} />
+  if (!deps.data) return <Loading error={deps.error} />
 
   return (
     <>
       {editable && (
         <div className="filters" style={{ marginBottom: 10 }}>
-          <button className="btn primary small" onClick={() => setForm({ kind: 'dep', item: null })}>{t("+ Bo'lim")}</button>
-          <button className="btn small" onClick={() => setForm({ kind: 'op', item: null })}>{t("+ Operatsiya")}</button>
+          <button className="btn primary small" onClick={() => setForm({ item: null })}>{t("+ Bo'lim")}</button>
         </div>
       )}
-      {deps.data.map((d) => {
-        const list = ops.data.filter((o) => o.department === d.id)
-        return (
-          <div className="card" key={d.id}>
-            <div className="card-head">
-              <h3>{d.sequence}. {d.name} <span className="muted small">· kunlik sig'im {num(d.daily_capacity)}</span></h3>
-              {editable && (
-                <span>
-                  <IconBtn icon="edit" title="Tahrirlash" onClick={() => setForm({ kind: 'dep', item: d })} />{' '}
-                  <IconBtn icon="delete" danger title="O\'chirish" onClick={() => remove(`/production/departments/${d.id}/`, d.name)} />
-                </span>
-              )}
-            </div>
-            <table className="t">
-              <thead><tr><th>{t("Operatsiya")}</th><th>{t("Birlik")}</th><th className="num">{t("Xizmat tarifi (smeta)")}</th><th className="num">{t("Ishbay stavka (so'm)")}</th><th /></tr></thead>
-              <tbody>
-                {list.map((o) => (
-                  <tr key={o.id}>
-                    <td>{o.name}</td>
-                    <td>{t(o.unit_display)}</td>
-                    <td className="num">{money(o.default_rate, o.rate_currency)}</td>
-                    <td className="num">{num(o.piece_rate)}</td>
-                    <td className="num">
-                      {editable && <>
-                        <IconBtn icon="edit" title="Tahrirlash" onClick={() => setForm({ kind: 'op', item: o })} />{' '}
-                        <IconBtn icon="delete" danger title="O\'chirish" onClick={() => remove(`/production/operations/${o.id}/`, o.name)} />
-                      </>}
-                    </td>
-                  </tr>
-                ))}
-                {!list.length && <tr><td colSpan={5} className="muted small">{t("Operatsiyalar yo'q")}</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        )
-      })}
-      {form?.kind === 'dep' && (
+      <div className="table-wrap">
+        <table className="t">
+          <thead><tr><th className="num" style={{ width: 70 }}>{t('Tartib')}</th><th>{t("Bo'lim")}</th><th className="num">{t("Kunlik sig'im")}</th><th /></tr></thead>
+          <tbody>
+            {deps.data.map((d) => (
+              <tr key={d.id} className={editable ? 'clickable' : ''} onClick={() => editable && setForm({ item: d })}>
+                <td className="num muted">{d.sequence}</td>
+                <td className="bold">{d.name}</td>
+                <td className="num">{num(d.daily_capacity)}</td>
+                <td className="num" onClick={(e) => e.stopPropagation()}>{editable && <IconBtn icon="delete" danger title="O'chirish" onClick={() => remove(`/production/departments/${d.id}/`, d.name)} />}</td>
+              </tr>
+            ))}
+            {!deps.data.length && <tr><td colSpan={4} className="empty">{t("Bo'limlar yo'q")}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="legend"><span>{t("Bosqichlar va ishbay stavkalar Ishlab chiqarish → Bosqichlar bo'limida; ishbay haq bosqichga biriktirilgan xodimga yoziladi.")}</span></div>
+      {form && (
         <EntityForm
           title={form.item ? form.item.name : "Yangi bo'lim"} url="/production/departments/" item={form.item}
           fields={[
@@ -336,21 +313,6 @@ function Departments({ editable }) {
             { name: 'daily_capacity', label: t("Kunlik sig'im"), type: 'number' },
           ]}
           defaults={{ sequence: (deps.data.length + 1) * 10, daily_capacity: 0 }}
-          onClose={() => setForm(null)} onSaved={refresh}
-        />
-      )}
-      {form?.kind === 'op' && (
-        <EntityForm
-          title={form.item ? form.item.name : 'Yangi operatsiya'} url="/production/operations/" item={form.item}
-          fields={[
-            { name: 'name', label: t("Nomi"), required: true },
-            { name: 'department', label: t("Bo'lim"), type: 'select', options: deps.data.map((d) => [d.id, d.name]), required: true },
-            { name: 'unit', label: t("O'lchov birligi"), type: 'select', options: UNITS, noEmpty: true },
-            { name: 'default_rate', label: t("Xizmat tarifi (smeta B blok)"), type: 'number' },
-            { name: 'rate_currency', label: t("Tarif valyutasi"), type: 'select', options: currencyOptions(), noEmpty: true },
-            { name: 'piece_rate', label: t("Ishbay stavka, so'm / birlik"), type: 'number' },
-          ]}
-          defaults={{ unit: 'm2', rate_currency: 'UZS', default_rate: 0, piece_rate: 0 }}
           onClose={() => setForm(null)} onSaved={refresh}
         />
       )}

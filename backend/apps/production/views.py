@@ -56,6 +56,13 @@ class OperationSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.name", read_only=True)
     unit_display = serializers.CharField(source="get_unit_display", read_only=True)
     employee_name = serializers.CharField(source="employee.full_name", read_only=True, default=None)
+    department = serializers.PrimaryKeyRelatedField(queryset=Department.objects, required=False)
+
+    def validate(self, attrs):
+        # bo'lim ko'rsatilmasa — umumiy "Ishlab chiqarish" bo'limi (topshiriqlar va bo'lim ekrani uchun ichki kerak)
+        if not attrs.get("department") and not getattr(self.instance, "department_id", None):
+            attrs["department"], _ = Department.objects.get_or_create(name="Ishlab chiqarish", defaults={"sequence": 100})
+        return attrs
 
     class Meta:
         model = Operation
@@ -571,14 +578,14 @@ class TaskViewSet(viewsets.ModelViewSet):
         return qs
 
     def _employee(self, task=None):
-        """Ijrochi: so'rovda ko'rsatilgan → bosqichning mas'ul xodimi → joriy foydalanuvchi."""
+        """Ijrochi: bosqichga biriktirilgan xodim (har doim) → so'rovda ko'rsatilgan → joriy foydalanuvchi."""
         from apps.hr.models import Employee
 
+        if task is not None and task.operation.employee_id:
+            return task.operation.employee
         emp_id = self.request.data.get("employee")
         if emp_id:
             return Employee.objects.filter(pk=emp_id).first()
-        if task is not None and task.operation.employee_id:
-            return task.operation.employee
         return getattr(self.request.user, "employee", None)
 
     def _extra(self):

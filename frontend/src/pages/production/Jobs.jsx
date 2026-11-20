@@ -36,7 +36,7 @@ export function CompleteStageModal({ task, onClose, onSaved }) {
         <Field label={`Bajarildi, ${task.unit || ''}`}><NumInput step="any" min="0" value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} required autoFocus /></Field>
         <Field label={tr("Brak")}><NumInput step="any" min="0" value={v.defect_qty} onChange={(e) => setV({ ...v, defect_qty: e.target.value })} /></Field>
         <Field label={tr("Ijrochi (ishbay haq hisoblanadi)")}>
-          <select value={v.employee} onChange={(e) => setV({ ...v, employee: e.target.value })}>
+          <select value={v.employee} disabled={!!task.operation_employee} title={task.operation_employee ? tr('Bosqichga biriktirilgan xodim') : ''} onChange={(e) => setV({ ...v, employee: e.target.value })}>
             <option value="">{tr("— men —")}</option>
             {(emps.data || []).map((x) => <option key={x.id} value={x.id}>{x.full_name}{x.department_name ? ` · ${x.department_name}` : ''}</option>)}
           </select>

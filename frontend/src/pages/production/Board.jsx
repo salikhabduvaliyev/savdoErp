@@ -83,7 +83,7 @@ function TaskCard({ t, onDone, employees, me }) {
               <button onClick={() => setDone(String(Math.min(ready, amount + 1)))}>+</button>
               <span className="muted">{unit}</span>
             </div>
-            <select className="emp-select" value={emp} onChange={(e) => setEmp(e.target.value)} title={tr('Ijrochi — shu xodimga ishbay haq yoziladi')}>
+            <select className="emp-select" value={emp} disabled={!!t.operation_employee} onChange={(e) => setEmp(e.target.value)} title={tr('Ijrochi — shu xodimga ishbay haq yoziladi')}>
               <option value="">{tr('Ijrochi: tanlanmagan')}</option>
               {employees.map((x) => <option key={x.id} value={x.id}>{x.full_name}{me && x.id === me.id ? ` (${tr('men')})` : ''}</option>)}
             </select>

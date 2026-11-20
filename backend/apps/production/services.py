@@ -224,8 +224,8 @@ def complete_stage(task, qty, *, defect_qty=ZERO, employee=None, date=None, user
             _issue(mat, q, job=job, order=job.order if job else task.order,
                    warehouse=job.materials_warehouse if job else None, date=date, user=user, note=f"{tag} · qo'shimcha")
 
-    # 2) ishbay haq (ijrochi ko'rsatilmasa — bosqichning mas'ul xodimi)
-    if employee is None and task.operation.employee_id:
+    # 2) ishbay haq — bosqichga biriktirilgan xodimga (biriktirilmagan bo'lsa — ko'rsatilgan ijrochiga)
+    if task.operation.employee_id:
         employee = task.operation.employee
     rate = task.operation.piece_rate or ZERO
     amount = ZERO

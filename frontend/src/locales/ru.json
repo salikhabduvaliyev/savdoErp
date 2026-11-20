@@ -1397,5 +1397,8 @@
   "smeta (A–C bloklar)": "смета (блоки A–C)",
   "Smeta bloklarida hisoblangan — jamiga qayta qo'shilmaydi": "Учтено в блоках сметы — повторно в итог не входит",
   "Texkartasiz (o'lchamli) tovar tannarxi smetadan (A–C bloklar) olinadi va pozitsiyalarga sotuv summasi ulushida taqsimlanadi; qavsdagi summa jamiga qayta qo'shilmaydi.": "Себестоимость товара без техкарты (по размерам) берётся из сметы (блоки A–C) и распределяется по позициям пропорционально сумме продажи; сумма в скобках повторно в итог не входит.",
-  "Material omborda yetishmasa ham ishlab chiqarishga ruxsat": "Разрешить производство при нехватке материалов на складе"
+  "Material omborda yetishmasa ham ishlab chiqarishga ruxsat": "Разрешить производство при нехватке материалов на складе",
+  "Buyurtma №{n} asosida": "На основании заказа №{n}",
+  "qiymatlarni o'zgartirish mumkin; saqlanganda sotuv o'tkaziladi (tovar ombordan chiqadi)": "значения можно изменить; при сохранении продажа проводится (товар списывается со склада)",
+  "Sotuv saqlandi va o'tkazildi": "Продажа сохранена и проведена"
 }

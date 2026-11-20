@@ -64,6 +64,34 @@ def sale_from_order(order, user):
 
 
 @transaction.atomic
+def sale_from_order_form(order, user, data, complete=True):
+    """Buyurtmadan sotuv — formada (buyurtma qiymatlari bilan oldindan to'ldirilgan, o'zgartirilgan) saqlanganda.
+    Qoralama yaratilmaydi: sotuv darhol o'tkaziladi (complete=True)."""
+    from apps.orders.models import Order
+
+    existing = order.sales.exclude(status=Sale.Status.CANCELLED).first()
+    if existing:
+        raise ValidationError(f"Bu buyurtma bo'yicha sotuv №{existing.number} allaqachon bor")
+    if order.status == Order.Status.CANCELLED:
+        raise ValidationError("Bekor qilingan buyurtmani sotib bo'lmaydi")
+    pending = order_production_pending(order)
+    if pending:
+        raise ValidationError(f"Ishlab chiqarish tugallanmagan ({', '.join(pending)}) — avval ishlab chiqarishni yakunlang")
+    items = data.pop("items", [])
+    if not items:
+        raise ValidationError("Sotuvda qatorlar yo'q")
+    data.pop("client", None)
+    data.pop("currency", None)
+    sale = Sale.objects.create(client=order.client, currency=order.currency, order=order,
+                               branch_id=order.branch_id or _branch_id(), seller=user, created_by=user, **data)
+    for pos, it in enumerate(items):
+        SaleItem.objects.create(sale=sale, order=order, position=pos, **it)
+    if complete:
+        complete_sale(sale)
+    return sale
+
+
+@transaction.atomic
 def complete_sale(sale):
     from apps.orders.models import Order
     from apps.warehouse.models import StockMove

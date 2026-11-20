@@ -542,6 +542,28 @@ class StockDocTests(TestCase):
         self.assertEqual(rows["cogs"], D("3000000"))
         self.assertEqual(rows["gross"], D("3000000"))
 
+    def test_sale_from_order_form_posts_immediately(self):
+        """Buyurtmadan sotuv formasi: qiymatlar o'zgartiriladi, saqlanganda qoralamasiz o'tkaziladi."""
+        with tenant_context(self.c):
+            prod = Material.objects.create(name="Deraza2", type="product", unit="pcs", currency="UZS")
+        set_context(None, None)
+        self.doc("enter", [{"material": prod.id, "qty": "5", "price": "1000000"}])
+        order = self.api.post("/api/orders/", {"client": self.cli.id, "currency": "UZS", "plan_date": str(T), "date": str(T),
+                                               "items": [{"product": prod.id, "qty": "3", "price": "2000000"}]}, format="json").json()
+        r = self.api.post("/api/sales/from_order/", {"order": order["id"], "warehouse": self.w1.id, "discount": "0", "note": "x",
+                                                     "items": [{"product": prod.id, "qty": "2", "price": "2100000"}]}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        sale = r.json()
+        self.assertEqual(sale["status"], "completed")
+        self.assertEqual(D(sale["total"]), D("4200000"))
+        self.assertEqual(sale["items"][0]["order"], order["id"])
+        from apps.warehouse.models import Stock
+
+        with tenant_context(self.c):
+            self.assertEqual(Stock.objects.get(material=prod).qty, D("3"))
+        r = self.api.post("/api/sales/from_order/", {"order": order["id"], "items": [{"product": prod.id, "qty": "1", "price": "1"}]}, format="json")
+        self.assertEqual(r.status_code, 400)
+
     def test_order_to_production_flow_audit_bulk(self):
         """Buyurtma → ishlab chiqarishga yuborish → boshlash (minusga ruxsat) → bosqichlar → buyurtma tayyor; tarix va ommaviy amallar."""
         from apps.production.models import Department, Operation, TechCard, TechCardMaterial, TechProcess, TechProcessStage

@@ -100,6 +100,24 @@ class SaleViewSet(viewsets.ModelViewSet):
         order = Order.objects.filter(pk=request.data.get("order")).first()
         if not order:
             raise serializers.ValidationError({"order": "Buyurtma topilmadi"})
+        if "items" in request.data:
+            # forma orqali: {order, warehouse, date, price_type, discount, note, items: [...], complete}
+            from django.core.exceptions import ValidationError as DjValidationError
+
+            ser = SaleSerializer(data={**request.data, "client": order.client_id, "currency": order.currency},
+                                 context=self.get_serializer_context())
+            ser.is_valid(raise_exception=True)
+            data = dict(ser.validated_data)
+            for k in ("order", "branch", "seller", "extra"):
+                data.pop(k, None)
+            try:
+                sale = services.sale_from_order_form(order, request.user, data,
+                                                     complete=request.data.get("complete", True) not in (False, "false", 0, "0"))
+            except DjValidationError as e:
+                raise serializers.ValidationError({"detail": "; ".join(e.messages)})
+            resp = self._detail(sale)
+            resp.status_code = 201
+            return resp
         sale, created = services.sale_from_order(order, request.user)
         resp = self._detail(sale)
         resp.status_code = 201 if created else 200

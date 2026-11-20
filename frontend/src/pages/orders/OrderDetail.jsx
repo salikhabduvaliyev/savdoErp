@@ -40,9 +40,10 @@ export default function OrderDetail() {
   }
   const makeSale = async () => {
     try {
-      const { data } = await api.post('/sales/from_order/', { order: o.id })
-      toast(`Sotuv №${data.number} ${data.status === 'draft' ? 'qoralamasi tayyor' : 'ochildi'}`)
-      nav(`/sales?open=${data.id}`)
+      // mavjud sotuv bo'lsa — ochiladi; aks holda buyurtma qiymatlari bilan yangi sotuv formasi
+      const { data } = await api.get('/sales/', { params: { order: o.id } })
+      const ex = (data.results || data).find((s) => s.status !== 'cancelled')
+      nav(ex ? `/sales?open=${ex.id}` : `/sales?from_order=${o.id}`)
     } catch (e) { toast(errorText(e), true) }
   }
   const sendToProduction = async () => {

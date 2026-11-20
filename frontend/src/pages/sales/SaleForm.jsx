@@ -15,17 +15,21 @@ import PartyBalance from '../../components/PartyBalance'
 
 const cur = curLabel
 
-export default function SaleForm({ sale, onClose, onSaved }) {
+/* order berilsa — buyurtmadan yangi sotuv: qiymatlar buyurtmadan (o'zgartirish mumkin), qoralamasiz — saqlanganda o'tkaziladi */
+export default function SaleForm({ sale, order, onClose, onSaved }) {
   const clients = useFetch('/crm/counterparties/', { is_active: true, with_debt: 1 })
   const warehouses = useFetch('/warehouse/warehouses/')
   const priceTypes = useFetch('/warehouse/price-types/')
-  const fromOrder = !!sale?.order
-  const [v, setV] = useState(() => ({
+  const fromOrder = !!sale?.order || !!order
+  const [v, setV] = useState(() => (order ? {
+    client: order.client, warehouse: '', price_type: '', currency: order.currency, date: todayISO(), discount: '0',
+    note: tr('Buyurtma №{n} asosida', { n: order.number }),
+  } : {
     client: sale?.client || '', warehouse: sale?.warehouse || '', price_type: sale?.price_type || '',
     currency: sale?.currency || baseCurrency(), date: sale?.date || todayISO(), discount: sale?.discount || '0', note: sale?.note || '',
   }))
   const orderLines = (sale?.items || []).filter((i) => i.order)
-  const [lines, setLines] = useState(() => (sale?.items || []).filter((i) => !i.order).map((i) => ({
+  const [lines, setLines] = useState(() => (order ? order.items : (sale?.items || []).filter((i) => !i.order)).map((i) => ({
     key: newKey(), product: i.product, name: i.name, code: '', unit: i.unit, qty: cleanNum(i.qty), price: cleanNum(i.price),
     discount_pct: cleanNum(i.discount_pct), stock: null,
   })))
@@ -37,7 +41,7 @@ export default function SaleForm({ sale, onClose, onSaved }) {
 
   // standart narx turi va ombor
   useEffect(() => {
-    if (!sale && priceTypes.data && !v.price_type) {
+    if (!sale && !order && priceTypes.data && !v.price_type) {
       const def = priceTypes.data.find((p) => p.is_default) || priceTypes.data[0]
       if (def) setV((s) => ({ ...s, price_type: def.id, currency: def.currency }))
     }
@@ -82,6 +86,11 @@ export default function SaleForm({ sale, onClose, onSaved }) {
     }))
     const payload = { ...v, warehouse: v.warehouse || null, price_type: v.price_type || null, items }
     try {
+      if (order) {
+        const { data } = await api.post('/sales/from_order/', { ...payload, order: order.id, complete: true })
+        onSaved(data.id, true)
+        return
+      }
       const { data } = sale ? await api.patch(`/sales/${sale.id}/`, payload) : await api.post('/sales/', payload)
       if (complete) await api.post(`/sales/${data.id}/complete/`)
       onSaved(data.id, complete)
@@ -94,18 +103,18 @@ export default function SaleForm({ sale, onClose, onSaved }) {
     <DocPage
       onClose={close}
       toolbar={<>
-        <button type="button" className="btn primary" disabled={!ok} onClick={() => submit(false)}><Icon name="save" size={16} /> {busy ? tr('Saqlanmoqda…') : tr('Saqlash')}</button>
-        <button type="button" className="btn success" disabled={!ok} onClick={() => submit(true)}><Icon name="check" size={16} /> {tr('Saqlash va yakunlash')}</button>
+        <button type="button" className="btn primary" disabled={!ok || (order && !lines.length)} onClick={() => submit(!!order)}><Icon name="save" size={16} /> {busy ? tr('Saqlanmoqda…') : tr('Saqlash')}</button>
+        {!order && <button type="button" className="btn success" disabled={!ok} onClick={() => submit(true)}><Icon name="check" size={16} /> {tr('Saqlash va yakunlash')}</button>}
         <button type="button" className="btn" onClick={close}>{tr('Yopish')}</button>
         <span className="grow" />
         {dirty && <span className="small muted">{tr("Saqlanmagan o'zgarishlar")}</span>}
       </>}
     >
       <DocTitle label="Sotuv" number={sale?.number} date={v.date} onDate={(d) => setF('date', d)}>
-        <Badge kind="draft">{tr('Qoralama')}</Badge>
+        {!order && <Badge kind="draft">{tr('Qoralama')}</Badge>}
       </DocTitle>
       {error && <div className="error">{error}</div>}
-      {fromOrder && <div className="hint" style={{ marginBottom: 10 }}>{tr('Buyurtma asosida:')} <b>№{sale.order_number}</b></div>}
+      {fromOrder && <div className="hint" style={{ marginBottom: 10 }}>{tr('Buyurtma asosida:')} <b>№{order ? order.number : sale.order_number}</b>{order && <> · {tr("qiymatlarni o'zgartirish mumkin; saqlanganda sotuv o'tkaziladi (tovar ombordan chiqadi)")}</>}</div>}
 
       <div className="doc-grid">
         <div>

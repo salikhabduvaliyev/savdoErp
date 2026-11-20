@@ -226,6 +226,8 @@ function SalesList() {
   const [form, setForm] = useState(false)
   const [selected, setSelected] = useState([])
   const openId = params.get('open')
+  const fromOrderId = params.get('from_order')
+  const fromOrder = useFetch(fromOrderId ? `/orders/${fromOrderId}/` : null)
   const q = useMemo(() => Object.fromEntries(Object.entries({ ...f, stamp }).filter(([, v]) => v !== '')), [f, stamp])
   const { data, error } = useFetch('/sales/', q)
   const clients = useFetch(showFilter ? '/crm/counterparties/' : null, { is_active: true })
@@ -341,6 +343,10 @@ function SalesList() {
         )}
         {pager}
       </div>
+      {fromOrderId && fromOrder.data && (
+        <SaleForm order={fromOrder.data} onClose={() => setParams({})}
+          onSaved={(id) => { refresh(); setParams({ open: id }); toast(tr("Sotuv saqlandi va o'tkazildi")) }} />
+      )}
       {form && <SaleForm onClose={() => setForm(false)} onSaved={(id, done) => { setForm(false); refresh(); setParams({ open: id }); toast(done ? 'Sotuv yakunlandi' : 'Qoralama saqlandi') }} />}
       {openId && <SaleCard id={openId} onClose={() => setParams({})} onChanged={refresh} />}
     </>

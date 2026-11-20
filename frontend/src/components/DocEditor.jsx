@@ -52,7 +52,7 @@ export function DocField({ label, required, children, wide }) {
 }
 
 /** Tovarni nomi/kodi/shtrix-kodi bo'yicha qidirib qo'shish (jadval ostidagi qator). */
-export function ProductSearch({ onPick, onFree, params, disabled }) {
+export function ProductSearch({ onPick, params, disabled }) {
   const [q, setQ] = useState('')
   const [items, setItems] = useState([])
   const [open, setOpen] = useState(false)
@@ -78,7 +78,6 @@ export function ProductSearch({ onPick, onFree, params, disabled }) {
   }, [])
 
   const pick = (p) => { onPick(p); setQ(''); setItems([]); setOpen(false) }
-  const free = () => { if (q.trim() && onFree) { onFree(q.trim()); setQ(''); setOpen(false) } }
   // yangi tovar oynasi (qidiruvda topilmasa): yaratilgach darhol pozitsiyaga qo'shiladi
   const create = async () => {
     const name = q.trim()
@@ -88,12 +87,12 @@ export function ProductSearch({ onPick, onFree, params, disabled }) {
     if (p) { onPick(p); setQ(''); setItems([]) }
   }
   const onKey = (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, items.length - (onFree ? 0 : 1))) }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, items.length)) }
     if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)) }
     if (e.key === 'Enter') {
       e.preventDefault()
       if (items[active]) pick(items[active])
-      else free()
+      else if (q.trim()) create() // topilmadi — yangi tovar oynasi
     }
     if (e.key === 'Escape') { e.stopPropagation(); setOpen(false) }
   }
@@ -113,14 +112,9 @@ export function ProductSearch({ onPick, onFree, params, disabled }) {
             </button>
           ))}
           {!items.length && <div className="psearch-empty">{t('Topilmadi')}</div>}
-          <button type="button" className="psearch-item free create" onClick={create}>
+          <button type="button" className={'psearch-item free create' + (active === items.length ? ' active' : '')} onMouseEnter={() => setActive(items.length)} onClick={create}>
             <Icon name="plus" size={15} /> {t('«{q}» — yangi tovar yaratish', { q: q.trim() })}
           </button>
-          {onFree && (
-            <button type="button" className={'psearch-item free' + (active === items.length ? ' active' : '')} onClick={free}>
-              <Icon name="plus" size={15} /> {t('«{q}» nomli qator qo\'shish', { q: q.trim() })}
-            </button>
-          )}
         </div>
       )}
     </div>
@@ -226,7 +220,7 @@ function ProductPicker({ onPick, onClose, params }) {
  * Pozitsiyalar jadvali (MoySklad: "Позиции").
  * lines: [{ key, product, name, code, unit, qty, price, discount_pct, stock }]
  */
-export function Positions({ lines, setLines, currency, priceOf, readOnly, showStock = true, allowFree = true, extraRows, searchParams,
+export function Positions({ lines, setLines, currency, priceOf, readOnly, showStock = true, extraRows, searchParams,
   showPrice = true, showDiscount = true, qtyLabel = 'Miqdor', stockLabel = 'Qoldiq', stockOf, warnShort = true, extraCols }) {
   const [picker, setPicker] = useState(false)
   const set = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)))
@@ -240,7 +234,6 @@ export function Positions({ lines, setLines, currency, priceOf, readOnly, showSt
       }]
     })
   }
-  const addFree = (name) => setLines((ls) => [...ls, { key: newKey(), product: null, name, code: '', unit: '', qty: '1', price: '', discount_pct: '0', stock: null }])
   const num = (v) => (v === '' || v === null || v === undefined ? '' : v)
 
   return (
@@ -292,7 +285,7 @@ export function Positions({ lines, setLines, currency, priceOf, readOnly, showSt
       </div>
       {!readOnly && (
         <div className="positions-add">
-          <ProductSearch onPick={add} onFree={allowFree ? addFree : null} params={searchParams} />
+          <ProductSearch onPick={add} params={searchParams} />
           <button type="button" className="btn" onClick={() => setPicker(true)}><Icon name="book" size={16} /> {t("Ma'lumotnomadan qo'shish")}</button>
         </div>
       )}

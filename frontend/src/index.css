@@ -934,3 +934,11 @@ tr.om-src td { background: var(--surface-2); font-size: 12.5px; color: var(--tex
 .party-total { font-weight: 600; }
 .est-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; flex-wrap: wrap; }
 .psearch-item.create { color: var(--primary); font-weight: 600; }
+
+/* Yaratish oynalari (yangi tovar / kontragent): keng, ekranga sig'adi, ichi aylanadi */
+.create-back { align-items: flex-start; padding: 4vh 16px; }
+.create-back .modal { max-width: 860px !important; max-height: 92vh; overflow-y: auto; }
+.create-back .form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.create-back .form .full { grid-column: 1 / -1; }
+@media (max-width: 760px) { .create-back .form { grid-template-columns: minmax(0, 1fr); } }
+.create-back .form .span2 { grid-column: span 2; }

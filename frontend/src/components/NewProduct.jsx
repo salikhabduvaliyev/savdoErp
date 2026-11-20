@@ -45,7 +45,7 @@ function Dialog({ initial, done }) {
     } catch (err) { setError(localizeError(err)); setBusy(false) }
   }
   return (
-    <div className="modal-back confirm-back" onMouseDown={(e) => e.target === e.currentTarget && done(null)}>
+    <div className="modal-back confirm-back create-back" onMouseDown={(e) => e.target === e.currentTarget && done(null)}>
       <div className="modal" role="dialog" aria-modal="true" style={{ maxWidth: 680 }}>
         <div className="modal-head"><h2 style={{ margin: 0 }}>{t('Yangi tovar')}</h2>
           <button className="x" type="button" onClick={() => done(null)} aria-label={t('Yopish')}>×</button></div>
@@ -59,7 +59,7 @@ function Dialog({ initial, done }) {
           <div className="field"><label>{t('Artikul')}</label><input value={v.sku} onChange={(e) => set('sku', e.target.value)} /></div>
           <div className="field"><label>{t('Shtrix-kod')}</label><input value={v.barcode} onChange={(e) => set('barcode', e.target.value)} /></div>
           {groups.length > 0 && (
-            <div className="field full"><label>{t('Guruh')}</label>
+            <div className="field span2"><label>{t('Guruh')}</label>
               <select value={v.group} onChange={(e) => set('group', e.target.value)}>
                 <option value="">{t('— guruhsiz —')}</option>
                 {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}

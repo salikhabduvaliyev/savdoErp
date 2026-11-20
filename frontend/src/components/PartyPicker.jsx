@@ -41,7 +41,7 @@ export default function PartyPicker({ value, onChange, counterparties = [], grou
             <div className="ss-search">
               <Icon name="search" size={15} />
               <input ref={input} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Qidirish…')}
-                onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false) } if (e.key === 'Enter' && list[0]) { e.preventDefault(); pick(list[0].value) } }} />
+                onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false) } if (e.key === 'Enter') { e.preventDefault(); if (list[0]) pick(list[0].value); else if (onCreate && q.trim()) { onCreate(q.trim()); setOpen(false); setQ('') } } }} />
             </div>
             <div className="ss-list">
               {empty !== undefined && <button type="button" className="ss-item muted" onClick={() => pick('')}><span>{empty}</span></button>}

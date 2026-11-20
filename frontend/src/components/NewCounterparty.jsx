@@ -36,7 +36,7 @@ function Dialog({ initial, done }) {
     } catch (err) { setError(localizeError(err)); setBusy(false) }
   }
   return (
-    <div className="modal-back confirm-back" onMouseDown={(e) => e.target === e.currentTarget && done(null)}>
+    <div className="modal-back confirm-back create-back" onMouseDown={(e) => e.target === e.currentTarget && done(null)}>
       <div className="modal" role="dialog" aria-modal="true" style={{ maxWidth: 620 }}>
         <div className="modal-head"><h2 style={{ margin: 0 }}>{t('Yangi kontragent')}</h2>
           <button className="x" type="button" onClick={() => done(null)} aria-label={t('Yopish')}>×</button></div>
@@ -49,7 +49,7 @@ function Dialog({ initial, done }) {
             </select></div>
           <div className="field"><label>{t('Telefon')}</label><input value={v.phone} placeholder="+998 90 000 00 00" onChange={(e) => set('phone', e.target.value)} /></div>
           {v.kind === 'legal' && <div className="field"><label>{t('STIR')}</label><input value={v.inn} onChange={(e) => set('inn', e.target.value)} /></div>}
-          <div className={'field' + (v.kind === 'legal' ? '' : ' full')}><label>{t('Manzil')}</label><input value={v.address} onChange={(e) => set('address', e.target.value)} /></div>
+          <div className={'field' + (v.kind === 'legal' ? ' full' : '')}><label>{t('Manzil')}</label><input value={v.address} onChange={(e) => set('address', e.target.value)} /></div>
           {groups.length > 0 && (
             <div className="field full"><label>{t('Guruhlar')}</label>
               <div className="filters">

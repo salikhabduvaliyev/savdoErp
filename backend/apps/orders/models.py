@@ -122,6 +122,7 @@ class Order(TenantModel, TimeStamped):
     currency = currency_field()
     amount = money_field()
     volume = qty_field(help_text="Hajm, m² — kalendar yuklamasi uchun")
+    reserve = models.BooleanField(default=False, help_text="Rezerv (MoySklad): tovar va materiallar shu buyurtma uchun band")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.NEW)
     state = models.ForeignKey(OrderState, null=True, blank=True, on_delete=models.PROTECT, related_name="orders",
                               help_text="Foydalanuvchi statusi; turi (kind) = status")

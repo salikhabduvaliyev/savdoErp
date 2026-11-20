@@ -100,6 +100,10 @@ def complete_sale(sale):
     sale = Sale.objects.select_for_update().get(pk=sale.pk)
     if sale.status != Sale.Status.DRAFT:
         raise ValidationError("Faqat qoralama sotuvni yakunlash mumkin")
+    if sale.order_id:
+        from apps.warehouse.services import release_order
+
+        release_order(sale.order)  # buyurtma rezervi — sotuvning o'zi uchun bo'shatiladi
     items = list(sale.items.select_related("product", "order"))
     if not items:
         raise ValidationError("Sotuvda qatorlar yo'q")

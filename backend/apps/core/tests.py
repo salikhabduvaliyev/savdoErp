@@ -542,6 +542,42 @@ class StockDocTests(TestCase):
         self.assertEqual(rows["cogs"], D("3000000"))
         self.assertEqual(rows["gross"], D("3000000"))
 
+    def test_order_reserve_checkbox(self):
+        """MoySklad "Rezerv": belgilansa tovar shu buyurtma uchun band, olib tashlansa bo'shaydi; sotuvda o'zi uchun ishlatiladi."""
+        from apps.warehouse.models import Stock
+
+        with tenant_context(self.c):
+            prod = Material.objects.create(name="Deraza-R", type="product", unit="pcs", currency="UZS")
+        set_context(None, None)
+        self.doc("enter", [{"material": prod.id, "qty": "5", "price": "1000000"}])
+        body = {"client": self.cli.id, "currency": "UZS", "plan_date": str(T), "date": str(T),
+                "items": [{"product": prod.id, "qty": "3", "price": "2000000"}]}
+
+        def reserved():
+            with tenant_context(self.c):
+                return Stock.objects.get(material=prod).reserved
+
+        order = self.api.post("/api/orders/", body, format="json").json()
+        self.assertEqual(reserved(), D("0"))  # belgilanmagan — band emas
+        o = self.api.patch(f"/api/orders/{order['id']}/", {"reserve": True}, format="json").json()
+        self.assertEqual(reserved(), D("3"))
+        self.assertEqual(D(o["reserved"][0]["qty"]), D("3"))
+        self.api.patch(f"/api/orders/{order['id']}/", {"reserve": False}, format="json")
+        self.assertEqual(reserved(), D("0"))
+        self.api.patch(f"/api/orders/{order['id']}/", {"reserve": True}, format="json")
+        # boshqa sotuv band qilingan tovarni ololmaydi (5 − 3 = 2 bo'sh)
+        with tenant_context(self.c):
+            s = Sale.objects.create(client=self.cli, warehouse=self.w1, currency="UZS")
+            SaleItem.objects.create(sale=s, product=prod, qty=3, price=1)
+            with self.assertRaises(Exception):
+                sales.complete_sale(s)
+        set_context(None, None)
+        # buyurtmaning o'z sotuvi — rezervni ishlatadi
+        r = self.api.post("/api/sales/from_order/", {"order": order["id"], "warehouse": self.w1.id,
+                                                     "items": [{"product": prod.id, "qty": "3", "price": "2000000"}]}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(reserved(), D("0"))
+
     def test_sale_from_order_form_posts_immediately(self):
         """Buyurtmadan sotuv formasi: qiymatlar o'zgartiriladi, saqlanganda qoralamasiz o'tkaziladi."""
         with tenant_context(self.c):

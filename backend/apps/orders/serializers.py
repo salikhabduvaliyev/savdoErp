@@ -49,12 +49,13 @@ class OrderSerializer(serializers.ModelSerializer):
             "paid", "debt", "status", "state", "state_color", "status_display", "stage", "progress",
             "plan_date", "production_date", "delivered_at", "is_overdue", "overdue_days",
             "manager", "manager_name", "operator", "operator_name", "note", "is_sold", "branch", "branch_name", "extra",
-            "items", "production_orders", "production_pending", "has_techcard",
+            "items", "production_orders", "production_pending", "has_techcard", "reserve", "reserved",
         ]
         read_only_fields = ["number", "delivered_at", "state"]
         extra_kwargs = {"amount": {"required": False}}
 
     items = OrderItemSerializer(many=True, required=False)
+    reserved = serializers.SerializerMethodField()
     production_orders = serializers.SerializerMethodField()
     production_pending = serializers.SerializerMethodField()
     has_techcard = serializers.SerializerMethodField()
@@ -102,15 +103,35 @@ class OrderSerializer(serializers.ModelSerializer):
             validated["amount"] = Decimal("0")
         order = super().create(validated)
         self._write_items(order, items)
+        if order.reserve:
+            from apps.warehouse.services import sync_order_reservation
+
+            sync_order_reservation(order)
         return order
 
     @transaction.atomic
     def update(self, instance, validated):
         items = validated.pop("items", None)
+        was = instance.reserve
         order = super().update(instance, validated)
         if items is not None:
             self._write_items(order, items)
+        if order.reserve or was:
+            from apps.warehouse.services import sync_order_reservation
+
+            sync_order_reservation(order)
         return order
+
+    def get_reserved(self, obj):
+        """Band qilingan tovar/materiallar (faqat kartochkada)."""
+        if self.context.get("view") is not None and getattr(self.context["view"], "action", None) == "list":
+            return None
+        rows = {}
+        for r in obj.reservations.select_related("material"):
+            x = rows.setdefault(r.material_id, {"material": r.material_id, "name": r.material.name,
+                                                "unit": r.material.get_unit_display(), "qty": Decimal("0")})
+            x["qty"] += r.qty
+        return [{**x, "qty": str(x["qty"])} for x in rows.values()]
 
     def get_paid(self, obj):
         return str(q2(obj.paid))

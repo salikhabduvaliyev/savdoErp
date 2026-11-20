@@ -35,6 +35,13 @@ export default function OrderDetail() {
   if (!o) return <Loading error={error} />
   const refresh = () => { reload(); setStamp((s) => s + 1) }
 
+  const toggleReserve = async (on) => {
+    try {
+      await api.patch(`/orders/${id}/`, { reserve: on })
+      toast(on ? tr('Rezerv qo\'yildi — tovarlar shu buyurtma uchun band') : tr('Rezerv olib tashlandi'))
+      refresh()
+    } catch (e) { toast(errorText(e), true) }
+  }
   const setStatus = async (state) => {
     try {
       await api.post(`/orders/${id}/set_status/`, { state })
@@ -73,6 +80,11 @@ export default function OrderDetail() {
         {o.stage && <span className="stage-chip current">● {tr('Hozir')}: {o.stage}</span>}
         {o.is_overdue && <span className="badge b-low">{o.overdue_days} kun kechikkan</span>}
         <span className="grow" />
+        {!['delivered', 'cancelled'].includes(o.status) && (
+          <label className="check posted-check" title={tr("Belgilansa — pozitsiyalardagi tovarlar va smeta materiallari shu buyurtma uchun omborda band qilinadi")}>
+            <input type="checkbox" checked={!!o.reserve} disabled={!canEdit(user, 'orders')} onChange={(e) => toggleReserve(e.target.checked)} /> {tr('Rezerv')}
+          </label>
+        )}
         <select className="chip" value={o.state || ''} onChange={(e) => setStatus(e.target.value)}>
           {states.map((s) => <option key={s.id} value={s.id}>{tr(s.name)}</option>)}
         </select>
@@ -119,6 +131,14 @@ export default function OrderDetail() {
         <Positions readOnly showStock={false} currency={o.currency} setLines={() => {}}
           lines={o.items.map((i) => ({ key: i.id, product: i.product, name: i.name, code: i.product_code || '', unit: i.unit, qty: i.qty, price: i.price, discount_pct: i.discount_pct }))} />
       ) : <div className="card empty">{tr("Pozitsiyalar yo'q — buyurtma umumiy summa bilan kiritilgan.")} <button className="link-btn" onClick={() => setEdit(true)}>{tr("Pozitsiya qo'shish")}</button></div>)}
+      {tab === 'items' && o.reserve && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <h3 style={{ marginBottom: 8 }}>{tr('Rezerv — shu buyurtma uchun band')}</h3>
+          {(o.reserved || []).length
+            ? <div className="small">{o.reserved.map((r) => <span key={r.material} className="stage-chip" style={{ marginRight: 6 }}>{r.name} <b>{qty(r.qty)}</b> {tr(r.unit)}</span>)}</div>
+            : <div className="muted small">{tr("Omborda bo'sh qoldiq yo'q — hech narsa band qilinmadi")}</div>}
+        </div>
+      )}
       {tab === 'estimate' && <Estimate key={stamp} order={o} onChanged={refresh} />}
       {tab === 'files' && <OrderFiles orderId={o.id} editable={canEdit(user, 'orders')} onChanged={() => setStamp((s) => s + 1)} />}
       {procJob && <ProcessJobModal order={o} onClose={() => setProcJob(false)} onSaved={() => { setProcJob(false); setTab('tasks'); refresh() }} />}

@@ -1467,5 +1467,10 @@
   "Avtomatik o'tish": "Автопереход",
   "Tur avtomatik o'tish hodisasiga qarab belgilanadi": "Тип задаётся событием автоперехода",
   "— bo'lim —": "— отдел —",
-  "«{n}»: bo'limni tanlang": "«{n}»: выберите отдел"
+  "«{n}»: bo'limni tanlang": "«{n}»: выберите отдел",
+  "Belgilansa — pozitsiyalardagi tovarlar va smeta materiallari shu buyurtma uchun omborda band qilinadi": "Если отмечено — товары позиций и материалы сметы резервируются на складе под этот заказ",
+  "Rezerv — shu buyurtma uchun band": "Резерв — зарезервировано под заказ",
+  "Omborda bo'sh qoldiq yo'q — hech narsa band qilinmadi": "Свободного остатка нет — ничего не зарезервировано",
+  "Rezerv qo'yildi — tovarlar shu buyurtma uchun band": "Резерв установлен — товары зарезервированы под заказ",
+  "Rezerv olib tashlandi": "Резерв снят"
 }

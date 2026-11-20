@@ -156,6 +156,52 @@ def _shortage_row(material, need, shortage):
     }
 
 
+def order_reserve_need(order):
+    """Rezerv ehtiyoji: pozitsiyalardagi tovarlar (sotilmagan qismi) + smeta materiallari (berilmagan qismi)."""
+    from apps.sales.models import Sale, SaleItem
+
+    need = {}
+    for it in order.items.select_related("product"):
+        if it.product_id and it.product.is_stocked:
+            need[it.product_id] = need.get(it.product_id, ZERO) + Decimal(it.qty)
+    sold = (SaleItem.objects.filter(order=order, sale__status=Sale.Status.COMPLETED, product__isnull=False)
+            .values("product_id").annotate(s=Sum("qty")))
+    for r in sold:
+        if r["product_id"] in need:
+            need[r["product_id"]] = max(ZERO, need[r["product_id"]] - r["s"])
+    for mid, q in material_need(order).items():
+        need[mid] = need.get(mid, ZERO) + q
+    return {k: v for k, v in need.items() if v > 0}
+
+
+@transaction.atomic
+def sync_order_reservation(order):
+    """Buyurtmadagi "Rezerv" belgisiga ko'ra band qilish yoki bo'shatish (zayavka yaratmaydi).
+    Belgilanmagan, topshirilgan yoki bekor qilingan buyurtmada rezerv bo'lmaydi."""
+    from apps.orders.models import Order
+
+    release_order(order)
+    if not order.reserve or order.status in (Order.Status.DELIVERED, Order.Status.CANCELLED):
+        return []
+    rows = []
+    for material_id, need in order_reserve_need(order).items():
+        material = Material.objects.get(pk=material_id)
+        left = need
+        for stock in Stock.objects.select_for_update().filter(material=material, qty__gt=0).order_by("-qty"):
+            if left <= 0:
+                break
+            take = min(stock.available, left)
+            if take <= 0:
+                continue
+            res, _ = Reservation.objects.get_or_create(order=order, material=material, warehouse=stock.warehouse)
+            res.qty += take
+            res.save()
+            _recalc_reserved(material, stock.warehouse)
+            left -= take
+        rows.append(_shortage_row(material, need, max(ZERO, left)))
+    return rows
+
+
 def release_order(order):
     for res in Reservation.objects.filter(order=order):
         material, wh = res.material, res.warehouse

@@ -114,6 +114,9 @@ export default function OrderForm({ refs, order: initial, fields: fieldsProp, on
         <button type="button" className="btn" onClick={close}>{t('Yopish')}</button>
         <span className="grow" />
         {dirty && <span className="small muted">{t("Saqlanmagan o'zgarishlar")}</span>}
+        <label className="check posted-check" title={t("Belgilansa — pozitsiyalardagi tovarlar va smeta materiallari shu buyurtma uchun omborda band qilinadi")}>
+          <input type="checkbox" checked={!!v.reserve} onChange={(e) => { setV((s) => ({ ...s, reserve: e.target.checked })); setDirty(true) }} /> {t('Rezerv')}
+        </label>
       </>}
     >
       <DocTitle label="Buyurtma" number={order?.number} date={v.date} onDate={(d) => { setV((s) => ({ ...s, date: d })); setDirty(true) }}>

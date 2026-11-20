@@ -370,6 +370,10 @@ def _apply_status(order, new, state=None):
     order.save()
     if new == Order.Status.CANCELLED:
         release_order(order)
+    elif order.reserve:
+        from apps.warehouse.services import sync_order_reservation
+
+        sync_order_reservation(order)  # topshirilganda bo'shaydi, qayta ochilsa yana band qilinadi
 
 
 class EstimateRowMixin:
@@ -388,6 +392,26 @@ class EstimateMaterialViewSet(EstimateRowMixin, viewsets.ModelViewSet):
         return EstimateMaterial.objects.select_related("material")
 
     serializer_class = EstimateMaterialSerializer
+
+    # smeta materiallari o'zgarsa — "Rezerv" belgilangan buyurtmada band qilish qayta hisoblanadi
+    def _resync(self, order):
+        if order.reserve:
+            from apps.warehouse.services import sync_order_reservation
+
+            sync_order_reservation(order)
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        self._resync(serializer.instance.estimate.order)
+
+    def perform_update(self, serializer):
+        serializer.save()
+        self._resync(serializer.instance.estimate.order)
+
+    def perform_destroy(self, instance):
+        order = instance.estimate.order
+        instance.delete()
+        self._resync(order)
 
 
 class EstimateServiceViewSet(EstimateRowMixin, viewsets.ModelViewSet):
